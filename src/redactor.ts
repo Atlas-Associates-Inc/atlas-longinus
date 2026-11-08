@@ -15,7 +15,7 @@ export interface LinePreservingRedactionResult {
  * Supports both SCREAMING_SNAKE_CASE, kebab-case, and camelCase identifiers across all 4 stacks.
  */
 export const SECRET_KEYWORD_GROUP =
-  '(?:PASS(?:WORD|WD)|SECRET|API[_-]?KEY|PRIVATE[_-]?KEY|ACCESS[_-]?TOKEN|AUTH[_-]?TOKEN|REFRESH[_-]?TOKEN|SESSION[_-]?TOKEN|ID[_-]?TOKEN|BEARER[_-]?TOKEN|API[_-]?TOKEN|GITHUB[_-]?TOKEN|SLACK[_-]?TOKEN|CLIENT[_-]?SECRET|MASTER[_-]?KEY|SIGNING[_-]?KEY|ENCRYPTION[_-]?KEY|ADMIN[_-]?KEY|SERVICE[_-]?ROLE|CREDENTIAL|WEBHOOK[_-]?SECRET|DATABASE[_-]?URL|CONNECTION[_-]?STRING|PRIVATE)';
+  '(?:PASS(?:WORD|WD)|PWD|DSN|SECRET|API[_-]?KEY|PRIVATE[_-]?KEY|ACCESS[_-]?TOKEN|AUTH[_-]?TOKEN|REFRESH[_-]?TOKEN|SESSION[_-]?TOKEN|ID[_-]?TOKEN|BEARER[_-]?TOKEN|API[_-]?TOKEN|GITHUB[_-]?TOKEN|SLACK[_-]?TOKEN|CLIENT[_-]?SECRET|MASTER[_-]?KEY|SIGNING[_-]?KEY|ENCRYPTION[_-]?KEY|ADMIN[_-]?KEY|SERVICE[_-]?ROLE|CREDENTIAL|WEBHOOK[_-]?SECRET|DATABASE[_-]?URL|CONNECTION[_-]?STRING|PRIVATE)';
 
 /**
  * Shared client-exposed environment variable detector used identically by redactor.ts and rules.ts.
@@ -61,10 +61,22 @@ const TOKEN_SHAPE_PATTERNS: readonly TokenShapePattern[] = [
     replacement: (_m: string, prefix: string) => `${prefix}[REDACTED_BEARER_TOKEN]`,
   },
   {
-    // Connection URLs with embedded user:password@host
-    regex: /\b([a-z][a-z0-9+.-]*:\/\/[^/\s:@'"]+:)(?!\[REDACTED)([^@\s/'"]+)(@)/gi,
+    // Connection URLs with embedded user:password@host or empty-user :password@host (e.g. redis://:pass@host)
+    regex: /\b([a-z][a-z0-9+.-]*:\/\/[^/\s:@'"]*:)(?!\[REDACTED)([^@\s/'"]+)(@)/gi,
     replacement: (_m: string, prefix: string, _secret: string, at: string) =>
       `${prefix}[REDACTED_URL_SECRET]${at}`,
+  },
+  {
+    // Semicolon-delimited connection string credentials after ';' (e.g. Host=db;Password=SECRET; or ;Pwd=SECRET)
+    regex:
+      /(;[ \t]*(?:Password|Passwd|Pwd|SharedAccessKey|AccountKey|SecretKey|AccessKey)\s*=\s*)(?!\[REDACTED|\$\{|\$\()([^;'"`\r\n]+)/gi,
+    replacement: (_m: string, prefix: string) => `${prefix}[REDACTED_CONN_SECRET]`,
+  },
+  {
+    // Semicolon-delimited connection string credentials at start followed by ';' (e.g. Password=SECRET;Host=db)
+    regex:
+      /\b((?:Password|Passwd|Pwd|SharedAccessKey|AccountKey|SecretKey|AccessKey)\s*=\s*)(?!\[REDACTED|\$\{|\$\()([^;'"`\s\r\n]+)(?=;)/gi,
+    replacement: (_m: string, prefix: string) => `${prefix}[REDACTED_CONN_SECRET]`,
   },
   {
     // Query-string secret parameters (?api_key=... or &access_token=...)
@@ -88,7 +100,16 @@ type MultilineSecretState =
   | { kind: 'quote'; delimiter: QuoteDelimiter }
   | { kind: 'backslash' }
   | { kind: 'yaml_block'; baseIndent: number }
-  | { kind: 'pending_rhs' };
+  | {
+      kind: 'pending_rhs';
+      operator: string;
+      baseIndent: number;
+      remainingLines: number;
+      inParens?: boolean;
+      awaitLeadingOp?: boolean;
+    }
+  | { kind: 'pending_call'; stage: 'await_key' | 'await_val'; remainingLines: number }
+  | { kind: 'pending_env_entry'; baseIndent: number; remainingLines: number };
 
 function detectOpeningQuote(text: string, index: number): QuoteDelimiter | null {
   if (text.startsWith('"""', index)) return '"""';
@@ -138,6 +159,7 @@ const LEADING_PURE_DYNAMIC_REF_RE =
 function isDynamicOrAlreadyRedacted(val: string): boolean {
   const trimmed = val.trim();
   if (!trimmed) return true;
+  if (/^(?:\\[nrt0])+$/.test(trimmed)) return true;
   if (trimmed.includes('[REDACTED')) return true;
   return PURE_DYNAMIC_REF_RE.test(trimmed);
 }
@@ -149,28 +171,127 @@ function isTrivialBenignEnvLiteral(val: string): boolean {
   );
 }
 
+function isBenignYamlScalar(val: string): boolean {
+  const trimmed = val.trim();
+  return (
+    trimmed === '' ||
+    trimmed === '{}' ||
+    trimmed === '[]' ||
+    trimmed === '{' ||
+    trimmed === '[' ||
+    /^(?:true|false|null|none|~|read|write|string|number|boolean|unknown|never|void|any|object|\d+(?:\.\d+)?|[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*)$/i.test(
+      trimmed,
+    )
+  );
+}
+
 const ENV_LINE_ASSIGNMENT_RE = /^(\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_.-]*)\s*=\s*)(.*)$/;
 
 /**
  * Matches secret-bearing LHS contexts:
- * 1. Quoted or unquoted object/config/env/bracket assignments, TS/Python type annotations,
- *    Go `:=` / `var x string =`, & fallback operators (`??`, `||`):
- *    `"NEXT_PUBLIC_ADMIN_KEY": `, `const NEXT_PUBLIC_ADMIN_KEY: string = `, `apiSecret := `
- * 2. Dockerfile `ENV SECRET_KEY ...` / `ARG SECRET_KEY=...`
+ * 1. Dockerfile `ENV SECRET_KEY ...` / `ARG SECRET_KEY=...`
+ * 2. Go explicit typed `var apiSecret string = ...` / `const apiSecret string = ...`
+ * 3. Quoted keys (`"auth.api_secret": ...`) allowing dots, or unquoted identifiers (`apiSecret := ...`,
+ *    `const NEXT_PUBLIC_ADMIN_KEY: string = ...`, `process.env.ADMIN_KEY ?? ...`) without member-chain false matches.
  */
 const SECRET_LHS_OPERATOR_RE = new RegExp(
-  `(?:^\\s*(?:ENV|ARG)\\s+([A-Za-z0-9_]*${SECRET_KEYWORD_GROUP}[A-Za-z0-9_]*)(\\s*=\\s*|\\s+)|(['"\`]?)([A-Za-z0-9_.-]*${SECRET_KEYWORD_GROUP}[A-Za-z0-9_.-]*)\\3(?:\\s*\\])?(?:\\s*:\\s*[^='"\\x60;{\\r\\n]{1,64}\\s*(=)|\\s+[A-Za-z0-9_.*\\[\\]]+\\s*(=)|\\s*(:=|\\?\\?|\\|\\||===|!==|==|!=|[:=])(?![=>]))\\s*)`,
+  `(?:^\\s*(?:ENV|ARG)\\s+([A-Za-z0-9_]*${SECRET_KEYWORD_GROUP}[A-Za-z0-9_]*)(\\s*=\\s*|\\s+)|\\b(?:var|const)\\s+([A-Za-z0-9_]*${SECRET_KEYWORD_GROUP}[A-Za-z0-9_]*)\\s+[A-Za-z0-9_.*\\[\\]]+\\s*(=)\\s*|(?:(['"\`])([A-Za-z0-9_.-]*${SECRET_KEYWORD_GROUP}[A-Za-z0-9_.-]*)\\5|([A-Za-z0-9_-]*${SECRET_KEYWORD_GROUP}[A-Za-z0-9_-]*))(?:\\s*\\])?(?:\\s*:\\s*[A-Za-z_][A-Za-z0-9_<>\\[\\]|&\\s.?]{0,48}\\s*(=)(?!=)|\\s*(:=|\\?\\?|\\|\\||===|!==|==|!=|[:=])(?![=>]))\\s*)`,
   'gi',
 );
 
+const QUOTED_STRING_CODE_EXTS = new Set([
+  '.ts',
+  '.tsx',
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.cjs',
+  '.py',
+  '.go',
+  '.dart',
+  '.rs',
+  '.java',
+  '.kt',
+  '.swift',
+]);
+
+const SECRET_CALL_FN_GROUP =
+  '(?:\\b(?:setString|Setenv|setenv|putenv|setItem|write|put|setHeader|environ\\.get|environ\\.setdefault|os\\.getenv|getenv)|\\.set)';
+
 /**
- * Matches setter calls passing a secret key name as 1st string arg and literal secret as 2nd string arg:
- * e.g. `prefs.setString('session_token', 'secret')`, `os.Setenv("API_KEY", "secret")`, `write(key: 'auth_token', value: 'secret')`
+ * Matches setter or env-default calls passing a secret key name as 1st string arg and literal/expression secret as 2nd arg:
+ * e.g. `prefs.setString('session_token', 'secret')`, `os.Setenv("API_KEY", "secret")`, `os.environ.get("API_KEY", "fallback")`, `headers.set("X-Api-Key", "secret")`
  */
 const SECRET_CALL_ARG_PAIR_RE = new RegExp(
-  `(\\b(?:setString|Setenv|setenv|putenv|setItem|write|put|setHeader)\\s*\\(\\s*(?:key\\s*:\\s*)?(['"\`])[A-Za-z0-9_.-]*(?:${SECRET_KEYWORD_GROUP}|TOKEN|AUTHORIZATION)[A-Za-z0-9_.-]*\\2\\s*,\\s*(?:value\\s*:\\s*)?)(?=['"\`])`,
+  `(${SECRET_CALL_FN_GROUP}\\s*\\(\\s*(?:key\\s*[:=]\\s*)?(['"\`])[A-Za-z0-9_.-]*(?:${SECRET_KEYWORD_GROUP}|TOKEN|AUTHORIZATION)[A-Za-z0-9_.-]*\\2\\s*,\\s*(?:(?:value|default)\\s*[:=]\\s*)?)`,
   'gi',
 );
+
+const SECRET_CALL_OPEN_EOL_RE = new RegExp(
+  `${SECRET_CALL_FN_GROUP}\\s*\\(\\s*(?:\\/\\/.*|#.*)?$`,
+  'i',
+);
+
+const SECRET_KEY_FIRST_ARG_LINE_RE = new RegExp(
+  `^(\\s*(?:key\\s*[:=]\\s*)?(['"\`])[A-Za-z0-9_.-]*(?:${SECRET_KEYWORD_GROUP}|TOKEN|AUTHORIZATION)[A-Za-z0-9_.-]*\\2)(.*)$`,
+  'i',
+);
+
+const YAML_ENV_NAME_LINE_RE = new RegExp(
+  `^(\\s*)(?:-\\s*)?['"\`]?(?:name|key)['"\`]?\\s*:\\s*['"\`]?([A-Za-z0-9_.-]*(?:${SECRET_KEYWORD_GROUP}|TOKEN|AUTHORIZATION)[A-Za-z0-9_.-]*)['"\`]?\\s*,?\\s*(?:#.*)?$`,
+  'i',
+);
+
+function hasTrailingContinuationOp(codeSegment: string, ext?: string): boolean {
+  const trimmed = codeSegment.trim();
+  if (!trimmed) return false;
+  if (/(?:\+\s*|\?\?\s*|\|\|\s*)$/.test(trimmed)) {
+    return true;
+  }
+  if (ext !== '.py') {
+    if (/(?<![?.])\?\s*$/.test(trimmed)) {
+      return true;
+    }
+    if (trimmed.includes('?') && /:\s*$/.test(trimmed)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function stripTrailingCodeComment(text: string): string {
+  let i = 0;
+  let activeQuote: QuoteDelimiter | null = null;
+  while (i < text.length) {
+    if (text[i] === '\\') {
+      i += 2;
+      continue;
+    }
+    if (activeQuote !== null) {
+      if (text.startsWith(activeQuote, i)) {
+        i += activeQuote.length;
+        activeQuote = null;
+        continue;
+      }
+      i += 1;
+      continue;
+    }
+    const opened = detectOpeningQuote(text, i);
+    if (opened !== null) {
+      activeQuote = opened;
+      i += opened.length;
+      continue;
+    }
+    if (text[i] === '/' && text[i + 1] === '/') {
+      return text.slice(0, i);
+    }
+    if (text[i] === '#' && (i === 0 || /\s/.test(text[i - 1] ?? ''))) {
+      return text.slice(0, i);
+    }
+    i += 1;
+  }
+  return text;
+}
 
 function applyTokenShapePatterns(line: string): { text: string; count: number } {
   let current = line;
@@ -256,9 +377,11 @@ function redactQuotedOrContinuationAt(
 function isLookupKeyContext(prefixBeforeQuote: string): boolean {
   return (
     /[A-Za-z0-9_$)\]]\s*\[\s*$/.test(prefixBeforeQuote) ||
-    /\b(?:getElementById|querySelector|querySelectorAll|getAttribute|Getenv|getenv|hasOwnProperty)\s*\(\s*$/i.test(
+    /\b(?:getElementById|querySelector|querySelectorAll|getAttribute|Getenv|getenv|hasOwnProperty|GetString|environ\.(?:get|setdefault)|(?:headers|cookies|params|searchParams|config|viper|settings|storage|Map)\.get)\s*\(\s*$/i.test(
       prefixBeforeQuote,
-    )
+    ) ||
+    /\.\s*(?:split|join)\s*\(\s*$/.test(prefixBeforeQuote) ||
+    /\btypeof\s+[A-Za-z0-9_$.[\]()]+?\s*(?:===|!==|==|!=)\s*$/.test(prefixBeforeQuote)
   );
 }
 
@@ -306,8 +429,8 @@ function redactQuotesInRhsExpression(
   countDelta: number;
   nextState: MultilineSecretState | null;
 } {
-  const trimmedStart = line.slice(exprStart).trimStart();
-  if (LEADING_PURE_DYNAMIC_REF_RE.test(trimmedStart)) {
+  const trimmedStart = line.slice(exprStart).trim().replace(/;$/, '').trim();
+  if (PURE_DYNAMIC_REF_RE.test(trimmedStart)) {
     return {
       handled: false,
       newLine: line,
@@ -394,11 +517,13 @@ function redactQuotesInRhsExpression(
 
 function redactGeneralCodeLine(
   inputLine: string,
+  ext?: string,
 ): { text: string; count: number; nextState: MultilineSecretState | null } {
   const shaped = applyTokenShapePatterns(inputLine);
   let current = shaped.text;
   let count = shaped.count;
   let nextState: MultilineSecretState | null = null;
+  const isQuotedCodeLang = ext !== undefined && QUOTED_STRING_CODE_EXTS.has(ext);
 
   // 1. Scan LHS secret assignments / properties / fallback operators left-to-right
   let searchPos = 0;
@@ -410,10 +535,10 @@ function redactGeneralCodeLine(
 
     const dockerIdent = match[1];
     const dockerOp = match[2];
-    const keyQuote = match[3] ?? '';
-    const typedEq = match[5];
-    const goTypedEq = match[6];
-    const generalOp = match[7] ?? '';
+    const goTypedEq = match[4];
+    const keyQuote = match[5] ?? '';
+    const typedEq = match[8];
+    const generalOp = match[9] ?? '';
     const operator = dockerIdent
       ? dockerOp?.includes('=')
         ? '='
@@ -438,11 +563,43 @@ function redactGeneralCodeLine(
         nextState = exprQuoted.nextState;
         return { text: current, count, nextState };
       }
+      const codeTail = stripTrailingCodeComment(current.slice(rhsStart)).trim();
+      if (codeTail.endsWith('(') || hasTrailingContinuationOp(codeTail, ext)) {
+        const baseIndent = (current.match(/^(\s*)/)?.[1] ?? '').length;
+        nextState = {
+          kind: 'pending_rhs',
+          operator,
+          baseIndent,
+          remainingLines: 6,
+          ...(codeTail.endsWith('(') ? { inParens: true } : {}),
+        };
+        return { text: current, count, nextState };
+      }
+      if (
+        isQuotedCodeLang &&
+        (operator === '=' || operator === ':=' || operator === '??' || operator === '||') &&
+        !codeTail.endsWith(';') &&
+        !codeTail.endsWith(',') &&
+        !codeTail.endsWith('}')
+      ) {
+        const baseIndent = (current.match(/^(\s*)/)?.[1] ?? '').length;
+        nextState = {
+          kind: 'pending_rhs',
+          operator,
+          baseIndent,
+          remainingLines: 4,
+          awaitLeadingOp: true,
+        };
+      }
       continue;
     }
 
     // 1b. YAML block scalar (`|`, `>`, `|-2`, `|2+`, etc.) on colon property
-    if (operator === ':' && /^[|>](?:[+-]?[1-9]?|[1-9]?[+-]?)\s*(?:#.*)?$/.test(rest)) {
+    if (
+      !isQuotedCodeLang &&
+      operator === ':' &&
+      /^[|>](?:[+-]?[1-9]?|[1-9]?[+-]?)\s*(?:#.*)?$/.test(rest)
+    ) {
       const indentMatch = current.match(/^(\s*)/);
       const baseIndent = indentMatch?.[1]?.length ?? 0;
       nextState = { kind: 'yaml_block', baseIndent };
@@ -450,41 +607,103 @@ function redactGeneralCodeLine(
       return { text: current, count, nextState };
     }
 
-    // 1c. Empty RHS at end of line (`"NEXT_PUBLIC_ADMIN_KEY":\n  "secret"`)
+    // 1b2. Dockerfile / shell empty-token backslash continuation (`ENV API_SECRET \` or `API_SECRET = \`)
+    if ((operator === '=' || operator === 'ENV') && /^\s*\\\s*(?:#.*)?$/.test(rest)) {
+      nextState = { kind: 'backslash' };
+      count += 1;
+      return { text: current, count, nextState };
+    }
+
+    // 1c. Empty RHS, open paren `(`, or multiline expression continuation at end of line
     if (
-      (operator === ':' || operator === '=' || operator === '??' || operator === '||') &&
-      /^\s*(?:\/\/.*|#.*)?$/.test(rest)
+      operator === ':' ||
+      operator === '=' ||
+      operator === ':=' ||
+      operator === '??' ||
+      operator === '||'
     ) {
-      // Avoid flagging TS interface/type lines (`foo?:` has `?` before `:`)
       const charBeforeMatch = match.index > 0 ? current[match.index - 1] : '';
-      if (charBeforeMatch !== '?') {
-        nextState = { kind: 'pending_rhs' };
+      const baseIndent = (current.match(/^(\s*)/)?.[1] ?? '').length;
+      if (/^\s*(?:\/\/.*|#.*)?$/.test(rest)) {
+        if (charBeforeMatch !== '?') {
+          nextState = { kind: 'pending_rhs', operator, baseIndent, remainingLines: 5 };
+        }
+        searchPos = current.length;
+        break;
       }
-      searchPos = current.length;
-      break;
+      const strippedRest = stripTrailingCodeComment(rest).trim();
+      if (/^\(\s*$/.test(strippedRest) && charBeforeMatch !== '?') {
+        nextState = {
+          kind: 'pending_rhs',
+          operator,
+          baseIndent,
+          remainingLines: 8,
+          inParens: true,
+        };
+        searchPos = current.length;
+        break;
+      }
+      if (
+        charBeforeMatch !== '?' &&
+        strippedRest &&
+        !strippedRest.endsWith(';') &&
+        !strippedRest.endsWith('{') &&
+        !strippedRest.endsWith('}')
+      ) {
+        if (hasTrailingContinuationOp(strippedRest, ext)) {
+          nextState = { kind: 'pending_rhs', operator, baseIndent, remainingLines: 5 };
+          searchPos = current.length;
+          break;
+        }
+        if (isQuotedCodeLang && (operator === '=' || operator === ':=')) {
+          nextState = {
+            kind: 'pending_rhs',
+            operator,
+            baseIndent,
+            remainingLines: 4,
+            awaitLeadingOp: true,
+          };
+          searchPos = current.length;
+          break;
+        }
+      }
     }
 
     // 1d. Unquoted RHS for `=`, `ENV`, or YAML `:`
-    if (operator === '=' || operator === 'ENV') {
-      const trimmedRest = rest.trim();
-      if (LEADING_PURE_DYNAMIC_REF_RE.test(trimmedRest)) {
-        searchPos = rhsStart + 2;
+    if ((operator === '=' && !isQuotedCodeLang) || operator === 'ENV') {
+      const commentSplit = rest.match(/^(.*?)(\s+#.*)?$/);
+      const rawBody = (commentSplit?.[1] ?? rest).trim();
+      const commentTail = commentSplit?.[2] ?? '';
+
+      if (!rawBody || isDynamicOrAlreadyRedacted(rawBody)) {
+        searchPos = rhsStart + Math.max(1, rest.length);
         continue;
       }
-      // Exclude code statements ending with `;` or function calls `(...)` or member chains `obj.prop`
-      const tokenMatch = rest.match(/^([^\s#'"`,;\\()]+)(.*)$/);
-      const rawToken = tokenMatch?.[1] ?? '';
-      const trailing = tokenMatch?.[2] ?? '';
-      const looksLikeCodeExpr =
-        trimmedRest.endsWith(';') ||
-        rawToken.includes('(') ||
-        /^(?:process\.env|os\.environ|os\.Getenv|true|false|null|undefined|None|nil|\d+|[A-Za-z_$][A-Za-z0-9_$]*\.[A-Za-z_$][A-Za-z0-9_$.]*)$/.test(
-          rawToken,
-        );
 
-      if (rawToken.length >= 3 && !looksLikeCodeExpr && !isDynamicOrAlreadyRedacted(rawToken)) {
+      // For Dockerfile `ENV KEY=val OTHER=2`, stop at whitespace when `=` was used without `;`
+      let candidateVal = rawBody;
+      let candidateTrailing = commentTail;
+      if (operator === 'ENV' || (!rawBody.includes(';') && /\s/.test(rawBody))) {
+        const wsSplit = rest.match(/^([^\s#'"`,\\()]+)(.*)$/);
+        candidateVal = wsSplit?.[1] ?? '';
+        candidateTrailing = wsSplit?.[2] ?? '';
+      }
+
+      const prefixBeforeLhs = current.slice(0, match.index);
+      const isCodeKeywordAssign = /\b(?:const|let|var|return)\s+$/.test(prefixBeforeLhs);
+      const looksLikeCodeExpr =
+        /^(?:process\.env|os\.environ|os\.Getenv|import\.meta\.env)\b/.test(candidateVal) ||
+        /^(?:true|false|null|undefined|None|nil|\d+(?:\.\d+)?)$/i.test(candidateVal) ||
+        /^[A-Za-z_$][A-Za-z0-9_$.]*\s*\(/.test(candidateVal) ||
+        /^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)+$/.test(candidateVal) ||
+        (isCodeKeywordAssign && /^[A-Za-z_$][A-Za-z0-9_$]*;?$/.test(candidateVal)) ||
+        (candidateVal.endsWith(';') && !/[=/:@]/.test(candidateVal.slice(0, -1)));
+
+      if (candidateVal.length >= 1 && !looksLikeCodeExpr && !isDynamicOrAlreadyRedacted(candidateVal)) {
         const hasBackslashCont = endsWithUnescapedBackslash(rest.trimEnd());
-        const replacement = hasBackslashCont ? '[REDACTED_SECRET] \\' : `[REDACTED_SECRET]${trailing}`;
+        const replacement = hasBackslashCont
+          ? '[REDACTED_SECRET] \\'
+          : `[REDACTED_SECRET]${candidateTrailing}`;
         current = `${current.slice(0, rhsStart)}${replacement}`;
         count += 1;
         if (hasBackslashCont) {
@@ -494,19 +713,26 @@ function redactGeneralCodeLine(
         searchPos = rhsStart + '[REDACTED_SECRET]'.length;
         continue;
       }
-    } else if (operator === ':' && keyQuote === '') {
-      // Unquoted YAML `api_secret: raw-value` (not ending with `;` or `,` or `{`)
-      const yamlValMatch = rest.match(/^([^\s#'"`,;{}[\]()]{4,})(\s*(?:#.*)?)$/);
-      const rawYamlVal = yamlValMatch?.[1] ?? '';
-      const yamlTrailing = yamlValMatch?.[2] ?? '';
-      const isTypeOrConst =
-        /^(?:true|false|null|string|number|boolean|unknown|never|void|any|object|\d+|[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*)$/i.test(
-          rawYamlVal,
-        );
-      if (rawYamlVal && !isTypeOrConst && !isDynamicOrAlreadyRedacted(rawYamlVal)) {
+    } else if (
+      !isQuotedCodeLang &&
+      ext !== '.css' &&
+      ext !== '.scss' &&
+      ext !== '.html' &&
+      operator === ':' &&
+      keyQuote === '' &&
+      /(?:^|[{,])\s*(?:-\s*)?$/.test(current.slice(0, match.index))
+    ) {
+      // Unquoted YAML/config scalar (`api_secret: ${API_SECRET:-fallback}`, `api_secret: p@ss(word)!`, `api_secret: raw value`)
+      const insideInlineMap = current.slice(0, match.index).includes('{');
+      const yamlSplit = insideInlineMap
+        ? rest.match(/^([^#}\r\n]*?)(\s*[},].*)?$/)
+        : rest.match(/^(.*?)(\s+#.*)?$/);
+      const rawYamlVal = (yamlSplit?.[1] ?? rest).trim();
+      const yamlTrailing = yamlSplit?.[2] ?? '';
+      if (rawYamlVal && !isBenignYamlScalar(rawYamlVal) && !isDynamicOrAlreadyRedacted(rawYamlVal)) {
         current = `${current.slice(0, rhsStart)}[REDACTED_SECRET]${yamlTrailing}`;
         count += 1;
-        searchPos = current.length;
+        searchPos = rhsStart + '[REDACTED_SECRET]'.length;
         continue;
       }
     }
@@ -514,7 +740,7 @@ function redactGeneralCodeLine(
     searchPos = rhsStart;
   }
 
-  // 2. Scan setter calls (`setString('session_token', 'secret')`, `Setenv("API_KEY", "secret")`)
+  // 2. Scan setter / env-default calls (`setString('session_token', 'secret')`, `os.environ.get("API_KEY", "fallback")`, `headers.set(...)`)
   let callPos = 0;
   while (callPos < current.length) {
     const callRe = new RegExp(SECRET_CALL_ARG_PAIR_RE.source, 'gi');
@@ -523,18 +749,41 @@ function redactGeneralCodeLine(
     if (!callMatch) break;
 
     const valStart = callMatch.index + callMatch[0].length;
-    const quoted = redactQuotedOrContinuationAt(current, valStart, '[REDACTED_SECRET]');
-    if (quoted.handled) {
-      current = quoted.newLine;
-      count += quoted.countDelta;
-      callPos = quoted.nextCursor;
-      if (quoted.nextState) {
-        nextState = quoted.nextState;
+    const afterMatch = current.slice(valStart);
+    if (/^\s*(?:\/\/.*|#.*)?$/.test(afterMatch)) {
+      nextState = { kind: 'pending_call', stage: 'await_val', remainingLines: 5 };
+      return { text: current, count, nextState };
+    }
+
+    const exprQuoted = redactQuotesInRhsExpression(current, valStart, true, null);
+    if (exprQuoted.handled) {
+      current = exprQuoted.newLine;
+      count += exprQuoted.countDelta;
+      callPos = Math.max(valStart + 1, exprQuoted.nextCursor);
+      if (exprQuoted.nextState) {
+        nextState = exprQuoted.nextState;
         return { text: current, count, nextState };
       }
       continue;
     }
     callPos = valStart + 1;
+  }
+
+  // 3. Detect multiline setter / env-default call opening `(` at end of line (`os.environ.get(\n "API_KEY",\n "SECRET")`)
+  if (nextState === null && SECRET_CALL_OPEN_EOL_RE.test(current)) {
+    nextState = { kind: 'pending_call', stage: 'await_key', remainingLines: 6 };
+  }
+
+  // 4. Detect Cloud Run / K8s YAML or JSON `- name: API_SECRET` followed by `value: "..."`
+  if (nextState === null) {
+    const envNameMatch = current.match(YAML_ENV_NAME_LINE_RE);
+    if (envNameMatch) {
+      nextState = {
+        kind: 'pending_env_entry',
+        baseIndent: (envNameMatch[1] ?? '').length,
+        remainingLines: 4,
+      };
+    }
   }
 
   return { text: current, count, nextState };
@@ -544,8 +793,22 @@ function redactEnvLine(
   inputLine: string,
 ): { text: string; count: number; nextState: MultilineSecretState | null } {
   const trimmed = inputLine.trim();
-  if (!trimmed || trimmed.startsWith('#')) {
+  if (!trimmed) {
     return { text: inputLine, count: 0, nextState: null };
+  }
+  if (trimmed.startsWith('#')) {
+    const commentLeadMatch = inputLine.match(/^(\s*#+\s*)(.*)$/);
+    const lead = commentLeadMatch?.[1] ?? '# ';
+    const body = commentLeadMatch?.[2] ?? '';
+    if (!body.trim()) {
+      return { text: inputLine, count: 0, nextState: null };
+    }
+    const innerRes = redactEnvLine(body);
+    return {
+      text: `${lead}${innerRes.text}`,
+      count: innerRes.count,
+      nextState: innerRes.nextState,
+    };
   }
 
   const envMatch = inputLine.match(ENV_LINE_ASSIGNMENT_RE);
@@ -559,8 +822,16 @@ function redactEnvLine(
   const isSecretKey = SECRET_IDENT_RE.test(keyName) || PUBLIC_ENV_SECRET_RE.test(keyName);
   const placeholder = isSecretKey ? '[REDACTED_SECRET]' : '[REDACTED_ENV_VALUE]';
 
-  if (!rhs.trim() || rhs.trim().startsWith('#')) {
+  if (!rhs.trim()) {
     return { text: inputLine, count: 0, nextState: null };
+  }
+  if (rhs.trim().startsWith('#')) {
+    const commentRes = redactEnvLine(rhs);
+    return {
+      text: `${prefix}${commentRes.text}`,
+      count: commentRes.count,
+      nextState: commentRes.nextState,
+    };
   }
 
   const rhsStart = prefix.length;
@@ -577,30 +848,69 @@ function redactEnvLine(
     }
 
     const inner = inputLine.slice(contentStart, closeIdx);
-    if (
-      isDynamicOrAlreadyRedacted(inner) ||
-      (!isSecretKey && isTrivialBenignEnvLiteral(inner))
-    ) {
-      return { text: inputLine, count: 0, nextState: null };
+    const skipFirst =
+      isDynamicOrAlreadyRedacted(inner) || (!isSecretKey && isTrivialBenignEnvLiteral(inner));
+    const firstPart = skipFirst
+      ? inputLine.slice(0, closeIdx + delim.length)
+      : `${prefix}${delim}${placeholder}${delim}`;
+    const firstCount = skipFirst ? 0 : 1;
+
+    const tailAfterClose = inputLine.slice(closeIdx + delim.length);
+    if (!tailAfterClose.trim()) {
+      return {
+        text: `${firstPart}${tailAfterClose}`,
+        count: firstCount,
+        nextState: null,
+      };
     }
 
-    const afterQuote = inputLine.slice(closeIdx);
+    const tailWsMatch = tailAfterClose.match(/^(\s*)(.*)$/);
+    const tailWs = tailWsMatch?.[1] ?? '';
+    const tailBody = tailWsMatch?.[2] ?? '';
+    const tailRes = redactEnvLine(tailBody);
     return {
-      text: `${prefix}${delim}${placeholder}${afterQuote}`,
-      count: 1,
-      nextState: null,
+      text: `${firstPart}${tailWs}${tailRes.text}`,
+      count: firstCount + tailRes.count,
+      nextState: tailRes.nextState,
     };
   }
 
-  // Unquoted .env value (strip optional inline ` # comment`)
+  // Unquoted multi-assignment on one line (`NODE_ENV=production NEXT_PUBLIC_API_SECRET=secret`)
+  const multiAssignMatch = rhs.match(/^([^\s#'"`\\]+)(\s+(?:export\s+)?[A-Za-z_][A-Za-z0-9_.-]*=.*)$/);
+  if (multiAssignMatch) {
+    const firstTok = multiAssignMatch[1] ?? '';
+    const restAssign = multiAssignMatch[2] ?? '';
+    const skipFirst =
+      isDynamicOrAlreadyRedacted(firstTok) ||
+      (!isSecretKey && isTrivialBenignEnvLiteral(firstTok));
+    const firstRendered = skipFirst ? `${prefix}${firstTok}` : `${prefix}${placeholder}`;
+    const firstCount = skipFirst ? 0 : 1;
+    const wsSplit = restAssign.match(/^(\s+)(.*)$/);
+    const tailRes = redactEnvLine(wsSplit?.[2] ?? restAssign.trimStart());
+    return {
+      text: `${firstRendered}${wsSplit?.[1] ?? ' '}${tailRes.text}`,
+      count: firstCount + tailRes.count,
+      nextState: tailRes.nextState,
+    };
+  }
+
+  // Unquoted .env value (strip optional inline ` # comment` and redact secrets inside comments too)
   const commentMatch = rhs.match(/^(.*?)(\s+#.*)?$/);
   const rawVal = (commentMatch?.[1] ?? rhs).trimEnd();
-  const commentSuffix = commentMatch?.[2] ?? '';
+  const rawCommentSuffix = commentMatch?.[2] ?? '';
+  let renderedComment = rawCommentSuffix;
+  let commentCount = 0;
+  if (rawCommentSuffix) {
+    const wsLead = rawCommentSuffix.match(/^(\s+)/)?.[1] ?? ' ';
+    const cRes = redactEnvLine(rawCommentSuffix.trimStart());
+    renderedComment = `${wsLead}${cRes.text}`;
+    commentCount = cRes.count;
+  }
 
   if (endsWithUnescapedBackslash(rawVal)) {
     return {
-      text: `${prefix}${placeholder} \\${commentSuffix}`,
-      count: 1,
+      text: `${prefix}${placeholder} \\${renderedComment}`,
+      count: 1 + commentCount,
       nextState: { kind: 'backslash' },
     };
   }
@@ -609,12 +919,16 @@ function redactEnvLine(
     isDynamicOrAlreadyRedacted(rawVal) ||
     (!isSecretKey && isTrivialBenignEnvLiteral(rawVal))
   ) {
-    return { text: inputLine, count: 0, nextState: null };
+    return {
+      text: `${prefix}${rawVal}${renderedComment}`,
+      count: commentCount,
+      nextState: null,
+    };
   }
 
   return {
-    text: `${prefix}${placeholder}${commentSuffix}`,
-    count: 1,
+    text: `${prefix}${placeholder}${renderedComment}`,
+    count: 1 + commentCount,
     nextState: null,
   };
 }
@@ -626,9 +940,10 @@ function redactEnvLine(
  */
 export function redactSecretsPreserveLines(
   input: string,
-  options?: { isEnvFile?: boolean },
+  options?: { isEnvFile?: boolean; ext?: string },
 ): LinePreservingRedactionResult {
   const isEnvFile = options?.isEnvFile === true;
+  const ext = options?.ext;
   const rawLines = input.split(/\r?\n/);
   const redactedLines: string[] = [];
   const redactedLineNumbers: number[] = [];
@@ -644,11 +959,70 @@ export function redactSecretsPreserveLines(
     }
   };
 
+  const pushRedactedKeepingState = (rawLine: string, lineNo: number): void => {
+    if (!rawLine.trim()) {
+      redactedLines.push(rawLine);
+      return;
+    }
+    const subRes = isEnvFile ? redactEnvLine(rawLine) : redactGeneralCodeLine(rawLine, ext);
+    if (subRes.count > 0) {
+      markLineRedacted(lineNo, subRes.count);
+    }
+    redactedLines.push(subRes.text);
+  };
+
+  const evalPendingQuotedLine = (
+    rawLine: string,
+    exprStart: number,
+    stopAtComma: boolean,
+  ): {
+    handled: boolean;
+    newLine: string;
+    countDelta: number;
+    nextState: MultilineSecretState | null;
+  } => {
+    const shaped = applyTokenShapePatterns(rawLine);
+    const exprRes = redactQuotesInRhsExpression(shaped.text, exprStart, stopAtComma, null);
+    if (!exprRes.handled) {
+      return {
+        handled: false,
+        newLine: rawLine,
+        countDelta: 0,
+        nextState: null,
+      };
+    }
+    if (exprRes.nextState !== null || exprRes.nextCursor >= exprRes.newLine.length) {
+      return {
+        handled: true,
+        newLine: exprRes.newLine,
+        countDelta: shaped.count + exprRes.countDelta,
+        nextState: exprRes.nextState,
+      };
+    }
+    const prefix = exprRes.newLine.slice(0, exprRes.nextCursor);
+    const suffix = exprRes.newLine.slice(exprRes.nextCursor);
+    if (!suffix.trim()) {
+      return {
+        handled: true,
+        newLine: exprRes.newLine,
+        countDelta: shaped.count + exprRes.countDelta,
+        nextState: null,
+      };
+    }
+    const suffixRes = isEnvFile ? redactEnvLine(suffix) : redactGeneralCodeLine(suffix, ext);
+    return {
+      handled: true,
+      newLine: `${prefix}${suffixRes.text}`,
+      countDelta: shaped.count + exprRes.countDelta + suffixRes.count,
+      nextState: suffixRes.nextState,
+    };
+  };
+
   for (let idx = 0; idx < rawLines.length; idx++) {
     const lineNo = idx + 1;
     const line = rawLines[idx] ?? '';
 
-    // 1. Handle active multiline states first
+    // 1. Handle active multiline block/string states first (pem, quote, backslash, yaml_block)
     if (state !== null) {
       if (state.kind === 'pem') {
         markLineRedacted(lineNo, state.counted ? 0 : 1);
@@ -674,7 +1048,9 @@ export function redactSecretsPreserveLines(
           redactedLines.push(`${closedPrefix}${remainder}`);
           continue;
         }
-        const tailRes = isEnvFile ? redactEnvLine(remainder) : redactGeneralCodeLine(remainder);
+        const tailRes = isEnvFile
+          ? redactEnvLine(remainder)
+          : redactGeneralCodeLine(remainder, ext);
         if (tailRes.count > 0) {
           redactionCount += tailRes.count;
         }
@@ -709,38 +1085,333 @@ export function redactSecretsPreserveLines(
         }
         // Dedented back out of YAML block scalar — fall through to normal processing
         state = null;
-      } else if (state.kind === 'pending_rhs') {
-        state = null;
-        const firstNonWs = line.search(/\S/);
-        if (firstNonWs >= 0 && detectOpeningQuote(line, firstNonWs) !== null) {
-          const quoted = redactQuotedOrContinuationAt(line, firstNonWs, '[REDACTED_SECRET]');
-          if (quoted.handled) {
-            markLineRedacted(lineNo, Math.max(1, quoted.countDelta));
-            state = quoted.nextState;
-            redactedLines.push(quoted.newLine);
+      }
+    }
+
+    // 2. Detect start of PEM / Private Key block (takes priority over any pending_* lookahead state)
+    if (PEM_BEGIN_RE.test(line)) {
+      const beginPos = line.search(PEM_BEGIN_RE);
+      const prefixPart =
+        beginPos > 0
+          ? (isEnvFile
+              ? redactEnvLine(line.slice(0, beginPos))
+              : redactGeneralCodeLine(line.slice(0, beginPos), ext)
+            ).text
+          : '';
+      markLineRedacted(lineNo, 1);
+      redactedLines.push(`${prefixPart}[REDACTED_PRIVATE_KEY]`);
+      state = PEM_END_RE.test(line) ? null : { kind: 'pem', counted: true };
+      continue;
+    }
+
+    // 3. Handle pending lookahead states (pending_rhs, pending_call, pending_env_entry) with full token/comment redaction
+    if (state !== null) {
+      if (state.kind === 'pending_rhs') {
+        const rhsState: Extract<MultilineSecretState, { kind: 'pending_rhs' }> = state;
+        const trimmedLine = line.trim();
+        if (!trimmedLine || /^(?:\/\/|#|\*)/.test(trimmedLine)) {
+          if (rhsState.remainingLines > 1) {
+            state = {
+              kind: 'pending_rhs',
+              operator: rhsState.operator,
+              baseIndent: rhsState.baseIndent,
+              remainingLines: rhsState.remainingLines - 1,
+              ...(rhsState.inParens ? { inParens: true } : {}),
+              ...(rhsState.awaitLeadingOp ? { awaitLeadingOp: true } : {}),
+            };
+            pushRedactedKeepingState(line, lineNo);
             continue;
+          }
+          state = null;
+        } else if (
+          rhsState.awaitLeadingOp &&
+          !/^(?:\?(?!\.)|:|\+|\|\||\?\?)/.test(trimmedLine)
+        ) {
+          // Next line does not begin with a continuation operator — fall through cleanly
+          state = null;
+        } else {
+          const indentLen = (line.match(/^(\s*)/)?.[1] ?? '').length;
+          if (
+            rhsState.operator === ':' &&
+            !rhsState.inParens &&
+            !rhsState.awaitLeadingOp &&
+            indentLen <= rhsState.baseIndent &&
+            /^[A-Za-z0-9_.'" -]+\s*:/.test(trimmedLine)
+          ) {
+            // Dedented back to a sibling YAML/object key — fall through to normal processing
+            state = null;
+          } else if (rhsState.inParens && /^\)\s*;?\s*(?:\/\/.*|#.*)?$/.test(trimmedLine)) {
+            state = null;
+          } else {
+            const firstNonWs = line.search(/\S/);
+            const exprRes =
+              firstNonWs >= 0
+                ? evalPendingQuotedLine(
+                    line,
+                    firstNonWs,
+                    rhsState.operator === ':' && !rhsState.inParens && !rhsState.awaitLeadingOp,
+                  )
+                : null;
+            if (exprRes && exprRes.handled) {
+              if (exprRes.countDelta > 0) {
+                markLineRedacted(lineNo, exprRes.countDelta);
+              }
+              const strippedNew = stripTrailingCodeComment(exprRes.newLine).trim();
+              const closesParens = rhsState.inParens && /\)\s*;?\s*$/.test(strippedNew);
+              if (exprRes.nextState) {
+                state = exprRes.nextState;
+              } else if (
+                rhsState.inParens &&
+                !closesParens &&
+                rhsState.remainingLines > 1
+              ) {
+                state = {
+                  kind: 'pending_rhs',
+                  operator: rhsState.operator,
+                  baseIndent: rhsState.baseIndent,
+                  remainingLines: rhsState.remainingLines - 1,
+                  inParens: true,
+                };
+              } else if (
+                hasTrailingContinuationOp(strippedNew, ext) &&
+                rhsState.remainingLines > 1
+              ) {
+                state = {
+                  kind: 'pending_rhs',
+                  operator: rhsState.operator,
+                  baseIndent: rhsState.baseIndent,
+                  remainingLines: rhsState.remainingLines - 1,
+                };
+              } else if (
+                !strippedNew.endsWith(';') &&
+                !strippedNew.endsWith(',') &&
+                rhsState.remainingLines > 1
+              ) {
+                state = {
+                  kind: 'pending_rhs',
+                  operator: rhsState.operator,
+                  baseIndent: rhsState.baseIndent,
+                  remainingLines: rhsState.remainingLines - 1,
+                  awaitLeadingOp: true,
+                };
+              } else {
+                state = null;
+              }
+              redactedLines.push(exprRes.newLine);
+              continue;
+            }
+            const strippedOrig = stripTrailingCodeComment(line).trim();
+            if (
+              !strippedOrig.endsWith(';') &&
+              (rhsState.inParens || hasTrailingContinuationOp(strippedOrig, ext)) &&
+              rhsState.remainingLines > 1
+            ) {
+              state = {
+                kind: 'pending_rhs',
+                operator: rhsState.operator,
+                baseIndent: rhsState.baseIndent,
+                remainingLines: rhsState.remainingLines - 1,
+                ...(rhsState.inParens && !/\)\s*$/.test(strippedOrig)
+                  ? { inParens: true }
+                  : {}),
+              };
+              pushRedactedKeepingState(line, lineNo);
+              continue;
+            }
+            const isQuotedCode = ext !== undefined && QUOTED_STRING_CODE_EXTS.has(ext);
+            if (!isQuotedCode && rhsState.operator === ':' && indentLen > rhsState.baseIndent) {
+              const yamlSplit = trimmedLine.match(/^(.*?)(\s+#.*)?$/);
+              const rawYamlVal = (yamlSplit?.[1] ?? trimmedLine).trim();
+              const yamlTrailing = yamlSplit?.[2] ?? '';
+              if (
+                rawYamlVal &&
+                !isBenignYamlScalar(rawYamlVal) &&
+                !isDynamicOrAlreadyRedacted(rawYamlVal)
+              ) {
+                const tailRes = yamlTrailing
+                  ? redactGeneralCodeLine(yamlTrailing, ext)
+                  : { text: '', count: 0 };
+                markLineRedacted(lineNo, 1 + tailRes.count);
+                state = null;
+                redactedLines.push(`${' '.repeat(indentLen)}[REDACTED_SECRET]${tailRes.text}`);
+                continue;
+              }
+            }
+            state = null;
+          }
+        }
+      } else if (state.kind === 'pending_call') {
+        const callState: Extract<MultilineSecretState, { kind: 'pending_call' }> = state;
+        const trimmedLine = line.trim();
+        if (!trimmedLine || /^(?:\/\/|#|\*)/.test(trimmedLine)) {
+          if (callState.remainingLines > 1) {
+            state = {
+              kind: 'pending_call',
+              stage: callState.stage,
+              remainingLines: callState.remainingLines - 1,
+            };
+            pushRedactedKeepingState(line, lineNo);
+            continue;
+          }
+          state = null;
+        } else if (callState.stage === 'await_key') {
+          const keyMatch = line.match(SECRET_KEY_FIRST_ARG_LINE_RE);
+          if (!keyMatch) {
+            state = null;
+          } else {
+            const keyPrefix = keyMatch[1] ?? '';
+            const afterKey = keyMatch[3] ?? '';
+            const commaMatch = afterKey.match(
+              /^(\s*,\s*(?:(?:value|default)\s*[:=]\s*)?)(.*)$/,
+            );
+            if (!commaMatch) {
+              state = null;
+              if (afterKey.includes(')')) {
+                pushRedactedKeepingState(line, lineNo);
+                continue;
+              }
+            } else {
+              const afterCommaRest = commaMatch[2] ?? '';
+              if (/^\s*(?:\/\/.*|#.*)?$/.test(afterCommaRest)) {
+                state = {
+                  kind: 'pending_call',
+                  stage: 'await_val',
+                  remainingLines: Math.max(1, callState.remainingLines - 1),
+                };
+                pushRedactedKeepingState(line, lineNo);
+                continue;
+              }
+              if (/^\s*\)/.test(afterCommaRest)) {
+                state = null;
+                pushRedactedKeepingState(line, lineNo);
+                continue;
+              }
+              const valStart = keyPrefix.length + (commaMatch[1]?.length ?? 0);
+              const exprRes = evalPendingQuotedLine(line, valStart, true);
+              if (exprRes.handled) {
+                if (exprRes.countDelta > 0) {
+                  markLineRedacted(lineNo, exprRes.countDelta);
+                }
+                state = exprRes.nextState;
+                redactedLines.push(exprRes.newLine);
+                continue;
+              }
+              state = null;
+            }
+          }
+        } else {
+          // callState.stage === 'await_val'
+          if (trimmedLine.startsWith(')')) {
+            state = null;
+          } else {
+            const namedPrefixMatch = line.match(/^(\s*(?:(?:value|default)\s*[:=]\s*)?)/);
+            const valStart = namedPrefixMatch?.[1]?.length ?? 0;
+            const exprRes = evalPendingQuotedLine(line, valStart, true);
+            if (exprRes.handled) {
+              if (exprRes.countDelta > 0) {
+                markLineRedacted(lineNo, exprRes.countDelta);
+              }
+              if (exprRes.nextState) {
+                state = exprRes.nextState;
+              } else if (
+                hasTrailingContinuationOp(stripTrailingCodeComment(exprRes.newLine), ext) &&
+                callState.remainingLines > 1
+              ) {
+                state = {
+                  kind: 'pending_call',
+                  stage: 'await_val',
+                  remainingLines: callState.remainingLines - 1,
+                };
+              } else {
+                state = null;
+              }
+              redactedLines.push(exprRes.newLine);
+              continue;
+            }
+            if (
+              !trimmedLine.includes(')') &&
+              hasTrailingContinuationOp(stripTrailingCodeComment(line), ext) &&
+              callState.remainingLines > 1
+            ) {
+              state = {
+                kind: 'pending_call',
+                stage: 'await_val',
+                remainingLines: callState.remainingLines - 1,
+              };
+              pushRedactedKeepingState(line, lineNo);
+              continue;
+            }
+            state = null;
+          }
+        }
+      } else if (state.kind === 'pending_env_entry') {
+        const envEntryState: Extract<MultilineSecretState, { kind: 'pending_env_entry' }> = state;
+        const trimmedLine = line.trim();
+        if (!trimmedLine || /^(?:\/\/|#|\*)/.test(trimmedLine)) {
+          if (envEntryState.remainingLines > 1) {
+            state = {
+              kind: 'pending_env_entry',
+              baseIndent: envEntryState.baseIndent,
+              remainingLines: envEntryState.remainingLines - 1,
+            };
+            pushRedactedKeepingState(line, lineNo);
+            continue;
+          }
+          state = null;
+        } else {
+          const indentLen = (line.match(/^(\s*)/)?.[1] ?? '').length;
+          const valLineMatch = line.match(/^(\s*['"`]?(?:value|default)['"`]?\s*:\s*)(.*)$/i);
+          if (valLineMatch && indentLen >= envEntryState.baseIndent) {
+            const origPrefix = valLineMatch[1] ?? '';
+            const valRhs = valLineMatch[2] ?? '';
+            const syntheticPrefix = 'api_secret: ';
+            const synthRes = redactGeneralCodeLine(`${syntheticPrefix}${valRhs}`, ext);
+            if (synthRes.count > 0 || synthRes.nextState !== null) {
+              if (synthRes.count > 0) {
+                markLineRedacted(lineNo, synthRes.count);
+              }
+              const rewrittenTail = synthRes.text.startsWith(syntheticPrefix)
+                ? synthRes.text.slice(syntheticPrefix.length)
+                : valRhs;
+              if (synthRes.nextState?.kind === 'yaml_block') {
+                state = { kind: 'yaml_block', baseIndent: indentLen };
+              } else if (synthRes.nextState?.kind === 'pending_rhs') {
+                state = {
+                  kind: 'pending_rhs',
+                  operator: ':',
+                  baseIndent: indentLen,
+                  remainingLines: synthRes.nextState.remainingLines,
+                };
+              } else {
+                state = synthRes.nextState;
+              }
+              redactedLines.push(`${origPrefix}${rewrittenTail}`);
+              continue;
+            }
+            state = null;
+          } else if (
+            indentLen < envEntryState.baseIndent ||
+            /^-\s/.test(trimmedLine) ||
+            /^['"`]?valueFrom['"`]?\s*:/i.test(trimmedLine)
+          ) {
+            state = null;
+          } else if (envEntryState.remainingLines > 1) {
+            state = {
+              kind: 'pending_env_entry',
+              baseIndent: envEntryState.baseIndent,
+              remainingLines: envEntryState.remainingLines - 1,
+            };
+            pushRedactedKeepingState(line, lineNo);
+            continue;
+          } else {
+            state = null;
           }
         }
       }
     }
 
-    // 2. Detect start of PEM / Private Key block
-    if (PEM_BEGIN_RE.test(line)) {
-      const beginPos = line.search(PEM_BEGIN_RE);
-      const prefixPart =
-        beginPos > 0
-          ? (isEnvFile ? redactEnvLine(line.slice(0, beginPos)) : redactGeneralCodeLine(line.slice(0, beginPos))).text
-          : '';
-      markLineRedacted(lineNo, 1);
-      redactedLines.push(`${prefixPart}[REDACTED_PRIVATE_KEY]`);
-      if (!PEM_END_RE.test(line)) {
-        state = { kind: 'pem', counted: true };
-      }
-      continue;
-    }
-
-    // 3. Standard line-level & multiline-opening lexical redaction
-    const res = isEnvFile ? redactEnvLine(line) : redactGeneralCodeLine(line);
+    // 4. Standard line-level & multiline-opening lexical redaction
+    const res = isEnvFile ? redactEnvLine(line) : redactGeneralCodeLine(line, ext);
     if (res.count > 0) {
       markLineRedacted(lineNo, res.count);
     }
@@ -759,7 +1430,10 @@ export function redactSecretsPreserveLines(
 /**
  * Convenience wrapper for string-level redaction.
  */
-export function redactSecrets(input: string, options?: { isEnvFile?: boolean }): RedactionResult {
+export function redactSecrets(
+  input: string,
+  options?: { isEnvFile?: boolean; ext?: string },
+): RedactionResult {
   const res = redactSecretsPreserveLines(input, options);
   return {
     redactedText: res.redactedText,
@@ -784,6 +1458,16 @@ res.setHeader('Vary', 'Origin, Sec-Fetch-Site');
 if (req.headers.origin && ALLOWED_ORIGINS.has(req.headers.origin)) {
   res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
 }`,
+  SQL_PARAMETERIZED_BINDING: `// 防御パッチ: 文字列補間クエリを廃止し、プリペアドステートメント（プレースホルダ束縛）を徹底
+const rows = await db.query('SELECT id, role FROM users WHERE email = $1', [validatedEmail]);`,
+  SSRF_EGRESS_ALLOWLIST: `// 防御パッチ: 接続先ホストの固定 Allowlist 検証 + メタデータ/内部 IP (169.254.169.254, 127.0.0.0/8) 遮断
+const parsedUrl = new URL(candidateUrl);
+if (parsedUrl.protocol !== 'https:' || !ALLOWED_UPSTREAM_HOSTS.has(parsedUrl.hostname)) {
+  throw new Error('Blocked outbound host by egress policy.');
+}`,
+  CSPRNG_AND_SHA256_CRYPTO: `// 防御パッチ: Math.random / MD5 / SHA-1 を廃止し、暗号論的乱数 (crypto.randomBytes) と SHA-256 以上を使用
+import crypto from 'node:crypto';
+const capabilityNonce = crypto.randomBytes(32).toString('hex');`,
   FIRESTORE_DENY_BY_DEFAULT: `rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -812,7 +1496,7 @@ gcloud run services update service-name --no-allow-unauthenticated --ingress=int
 srv := &http.Server{ Addr: "127.0.0.1:8080", Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, MaxHeaderBytes: 1 << 16 }`,
   SECRET_MANAGER_ROTATION: `# 防御パッチ: ハードコードされた鍵を即時失効・ローテーションし Secret Manager 実行時注入へ移行
 # .gitignore に .env* を登録し、クライアント公開プレフィックス (NEXT_PUBLIC_ 等) から秘密鍵を完全排除`,
-  GITHUB_ACTIONS_SHA_PIN: `# 防御パッチ: pull_request_target を排除し、最小 permissions と 40桁フルコミット SHA 固定を適用
+  GITHUB_ACTIONS_SHA_PIN: `# 防御パッチ: pull_request_target・直接式展開を排除し、env 中間変数 + 40桁フルコミット SHA 固定を適用
 permissions:
   contents: read
 steps:

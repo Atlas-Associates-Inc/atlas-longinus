@@ -1,4 +1,7 @@
 import crypto from 'node:crypto';
+import { constants as fsConstants } from 'node:fs';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { GoogleGenAI } from '@google/genai';
 import { z } from 'zod';
 import {
@@ -8,16 +11,22 @@ import {
 } from './redactor.js';
 import {
   buildStackSummaries,
+  openPinnedSafeTargetDirectory,
+  resolveSafeTargetDirectory,
   runStaticRepositoryScan,
+  SafeClientError,
   type ScanOptions,
   type StaticScanResult,
 } from './scanner.js';
 import type {
   AnalysisMode,
   AuditReport,
+  PortfolioRepoSummary,
+  PortfolioReport,
   ReasoningLevel,
   RoadmapStep,
   SecurityFinding,
+  StackDomain,
   StrideCategory,
   StrideScoreItem,
 } from './types.js';
@@ -239,6 +248,7 @@ const THREAT_MODEL_JSON_SCHEMA = {
     },
     strideMatrix: {
       type: 'array',
+      maxItems: 6,
       items: {
         type: 'object',
         additionalProperties: false,
@@ -276,6 +286,7 @@ const THREAT_MODEL_JSON_SCHEMA = {
     },
     priorityRoadmap: {
       type: 'array',
+      maxItems: 6,
       items: {
         type: 'object',
         additionalProperties: false,
@@ -298,6 +309,7 @@ const THREAT_MODEL_JSON_SCHEMA = {
     },
     architecturalFindings: {
       type: 'array',
+      maxItems: 6,
       items: {
         type: 'object',
         additionalProperties: false,
@@ -426,7 +438,8 @@ export interface GeminiValidationContext {
 }
 
 function sanitizeDisplayLabel(raw: string): string {
-  return raw.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 64) || 'repository';
+  const redacted = redactSecrets(raw).redactedText;
+  return redacted.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 64) || 'repository';
 }
 
 /**
@@ -794,7 +807,7 @@ export async function executeDefensiveAudit(params: {
 
   const report: AuditReport = {
     auditId: crypto.randomUUID(),
-    targetPath: scan.canonicalRoot,
+    targetPath: redactSecrets(scan.canonicalRoot).redactedText,
     repoName: sanitizeDisplayLabel(scan.repoName),
     auditedAt: new Date().toISOString(),
     durationMs,
@@ -823,4 +836,196 @@ export async function executeDefensiveAudit(params: {
   }
 
   return report;
+}
+
+const MAX_PORTFOLIO_ENTRIES = 80;
+const MAX_PORTFOLIO_REPOS = 25;
+
+function sanitizePortfolioDirName(raw: string): string {
+  const cleaned = redactSecrets(raw).redactedText.replace(/[\u0000-\u001F\u007F]/g, '').trim();
+  return cleaned.slice(0, 64) || 'repository';
+}
+
+/**
+ * Performs a strictly read-only, 0-token deterministic defensive posture audit across
+ * direct child repositories of `portfolioRoot`. Returns zero source snippets.
+ */
+export async function scanPortfolioDirectory(params: {
+  portfolioRoot: string;
+  selfProjectRoot?: string;
+}): Promise<PortfolioReport> {
+  const startedAt = performance.now();
+  const canonicalSelf = params.selfProjectRoot
+    ? await resolveSafeTargetDirectory(params.selfProjectRoot).catch(() => '')
+    : '';
+
+  const openFlags =
+    fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW;
+  let portfolioRootFh: fs.FileHandle | undefined;
+  let canonicalRoot = '';
+  const repos: PortfolioRepoSummary[] = [];
+
+  try {
+    const pinnedPortfolio = await openPinnedSafeTargetDirectory(params.portfolioRoot);
+    canonicalRoot = pinnedPortfolio.canonicalRoot;
+    portfolioRootFh = pinnedPortfolio.handle;
+    const portfolioStat = pinnedPortfolio.stat;
+
+    const candidateNames: string[] = [];
+    const dirHandle = await fs.opendir(canonicalRoot);
+    let inspected = 0;
+    try {
+      for await (const dirent of dirHandle) {
+        inspected += 1;
+        if (inspected > MAX_PORTFOLIO_ENTRIES) break;
+        if (
+          !dirent.name ||
+          dirent.name.startsWith('.') ||
+          dirent.name.includes('/') ||
+          dirent.name.includes('\\') ||
+          dirent.name.includes('\0')
+        ) {
+          continue;
+        }
+        if (dirent.isSymbolicLink() || !dirent.isDirectory()) continue;
+        if (redactSecrets(dirent.name).redactionCount > 0) continue;
+        candidateNames.push(dirent.name);
+        if (candidateNames.length >= MAX_PORTFOLIO_REPOS) break;
+      }
+    } finally {
+      await dirHandle.close().catch(() => undefined);
+    }
+
+    const postListStat = await fs.lstat(canonicalRoot).catch(() => null);
+    if (
+      !postListStat ||
+      postListStat.isSymbolicLink() ||
+      !postListStat.isDirectory() ||
+      postListStat.dev !== portfolioStat.dev ||
+      postListStat.ino !== portfolioStat.ino
+    ) {
+      throw new SafeClientError('ポートフォリオディレクトリの境界検証で競合を検出しました。');
+    }
+
+    candidateNames.sort((a, b) => a.localeCompare(b));
+
+    for (const name of candidateNames) {
+      const fullPath = path.join(canonicalRoot, name);
+      let childFh: fs.FileHandle | undefined;
+      let childDev = 0;
+      let childIno = 0;
+      try {
+        const lstat = await fs.lstat(fullPath);
+        if (!lstat.isDirectory() || lstat.isSymbolicLink()) {
+          continue;
+        }
+        childFh = await fs.open(fullPath, openFlags);
+        const childStat = await childFh.stat();
+        if (
+          !childStat.isDirectory() ||
+          childStat.dev !== lstat.dev ||
+          childStat.ino !== lstat.ino
+        ) {
+          continue;
+        }
+        childDev = childStat.dev;
+        childIno = childStat.ino;
+      } catch {
+        continue;
+      } finally {
+        if (childFh) {
+          await childFh.close().catch(() => undefined);
+        }
+      }
+
+      const isSelf = canonicalSelf !== '' && fullPath === canonicalSelf;
+      try {
+        const report = await executeDefensiveAudit({
+          targetPath: fullPath,
+          mode: 'deterministic',
+          ...(isSelf ? { excludeRelativePrefixes: ['test'] } : {}),
+          scanOptions: {
+            expectedRootIdentity: {
+              dev: childDev,
+              ino: childIno,
+              parentDev: portfolioStat.dev,
+              parentIno: portfolioStat.ino,
+            },
+          },
+        });
+
+        if (report.scannedFiles === 0 && report.findings.length === 0) {
+          continue;
+        }
+
+        const criticalCount = report.findings.filter((f) => f.severity === 'critical').length;
+        const highCount = report.findings.filter((f) => f.severity === 'high').length;
+        const mediumCount = report.findings.filter((f) => f.severity === 'medium').length;
+        const lowCount = report.findings.filter((f) => f.severity === 'low').length;
+        const verifiedControlsCount = report.stackSummaries.reduce(
+          (acc, s) => acc + s.verifiedControls.length,
+          0,
+        );
+
+        const topStackSummary = [...report.stackSummaries].sort(
+          (a, b) => b.detectedFiles - a.detectedFiles,
+        )[0];
+        const primaryStack: StackDomain =
+          report.findings[0]?.stack ?? topStackSummary?.stack ?? 'ts-web-api';
+
+        const topAction = report.findings[0]
+          ? `${report.findings[0].ruleId}: ${report.findings[0].title}`
+          : '✓ 重大な静的露出なし（CI ゲート継続監視）';
+
+        repos.push({
+          dirName: sanitizePortfolioDirName(name),
+          repoName: report.repoName,
+          targetPath: report.targetPath,
+          overallDefenseScore: report.overallDefenseScore,
+          scannedFiles: report.scannedFiles,
+          scanTruncated: report.scanTruncated,
+          criticalCount,
+          highCount,
+          mediumCount,
+          lowCount,
+          redactedSecretsCount: report.redactedSecretsCount,
+          verifiedControlsCount,
+          primaryStack,
+          topAction,
+        });
+      } catch {
+        // Skip inaccessible or concurrently swapped child directory safely
+      }
+    }
+  } finally {
+    if (portfolioRootFh) {
+      await portfolioRootFh.close().catch(() => undefined);
+    }
+  }
+
+  repos.sort(
+    (a, b) =>
+      a.overallDefenseScore - b.overallDefenseScore ||
+      b.criticalCount - a.criticalCount ||
+      a.dirName.localeCompare(b.dirName),
+  );
+
+  const totalRepos = repos.length;
+  const averageDefenseScore =
+    totalRepos > 0
+      ? Math.round(repos.reduce((sum, r) => sum + r.overallDefenseScore, 0) / totalRepos)
+      : 100;
+  const criticalReposCount = repos.filter((r) => r.criticalCount > 0).length;
+  const totalRedactedSecrets = repos.reduce((sum, r) => sum + r.redactedSecretsCount, 0);
+
+  return {
+    portfolioRootLabel: sanitizeDisplayLabel(path.basename(canonicalRoot)),
+    scannedAt: new Date().toISOString(),
+    durationMs: Math.max(1, Math.round(performance.now() - startedAt)),
+    totalRepos,
+    averageDefenseScore,
+    criticalReposCount,
+    totalRedactedSecrets,
+    repos,
+  };
 }

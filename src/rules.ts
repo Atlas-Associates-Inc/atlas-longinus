@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { PUBLIC_ENV_SECRET_RE } from './redactor.js';
+import { PUBLIC_ENV_SECRET_RE, redactSecrets } from './redactor.js';
 import type { SecurityFinding, SeverityLevel, StackDomain, StrideCategory } from './types.js';
 
 export interface FileContext {
@@ -9,6 +9,7 @@ export interface FileContext {
   redactedContent: string;
   redactedLines: readonly string[];
   redactedLineNumbers: readonly number[];
+  skipSelfPatternDefinitions?: boolean;
 }
 
 export interface StaticRule {
@@ -190,6 +191,89 @@ window.addEventListener('message', (event) => {
   // Zod 等で event.data のスキーマを検証してから処理
 });`,
     verificationHint: 'postMessage 呼び出しの第2引数がすべて固定オリジン定数であることを確認。',
+  },
+  {
+    ruleId: 'LNG-TS-006',
+    title: 'SQL クエリへのテンプレート文字列補間または Unsafe Raw 実行（SQL 注入露出）',
+    stack: 'ts-web-api',
+    severity: 'critical',
+    stride: 'Tampering',
+    cwe: 'CWE-89',
+    owaspAsvs: 'V5.3.4 Parameterized Database Queries',
+    appliesTo: (ctx) => JS_TS_EXTS.has(ctx.ext),
+    evaluate: (ctx) =>
+      findMatchingLines(
+        ctx,
+        (line) =>
+          /\b(?:\$queryRawUnsafe|\$executeRawUnsafe)\s*\(/.test(line) ||
+          /\.\s*(?:query|execute|raw)\s*\(\s*`\s*(?:SELECT|INSERT|UPDATE|DELETE|WITH)\b[^`]*\$\{/i.test(
+            line,
+          ),
+      ),
+    rootCause:
+      'クエリ文字列へ `${...}` 補間や Unsafe Raw メソッドを直接使用すると、境界外入力が SQL 構文木そのものを書き換え、全レコード漏洩や改ざんに繋がります。',
+    defensivePatch: `// 防御パッチ: プレースホルダ束縛（Parameterized Query）または型付きタグテンプレートへ統一
+const result = await db.query('SELECT id, email FROM users WHERE id = $1', [validatedUserId]);
+// Prisma の場合: await prisma.$queryRaw\`SELECT id FROM users WHERE id = \${validatedUserId}\`;`,
+    verificationHint:
+      '$queryRawUnsafe / $executeRawUnsafe および SQL テンプレート補間が 0 件であることを静的検査で確認。',
+  },
+  {
+    ruleId: 'LNG-TS-007',
+    title: 'トークン・署名用途での非暗号論的乱数または脆弱ハッシュアルゴリズム使用',
+    stack: 'ts-web-api',
+    severity: 'high',
+    stride: 'Spoofing',
+    cwe: 'CWE-338',
+    owaspAsvs: 'V6.2.1 & V6.3.1 Cryptographic Randomness & Approved Digests',
+    appliesTo: (ctx) => JS_TS_EXTS.has(ctx.ext),
+    evaluate: (ctx) =>
+      findMatchingLines(
+        ctx,
+        (line) =>
+          /\bcreateHash\s*\(\s*['"](?:md5|sha1)['"]\s*\)/i.test(line) ||
+          (/\bMath\.random\s*\(\s*\)/.test(line) &&
+            /\b(?:token|nonce|csrf|secret|session|otp|apiKey|password|salt)\b/i.test(line)),
+      ),
+    rootCause:
+      '`Math.random()` は内部状態を予測可能であり、`MD5` / `SHA-1` は衝突耐性が破綻しているため、セッショントークン・Nonce・署名ダイジェストの偽造リスクがあります。',
+    defensivePatch: `// 防御パッチ: CSPRNG (crypto.randomBytes / crypto.randomUUID) と SHA-256 以上を使用
+import crypto from 'node:crypto';
+const csrfToken = crypto.randomBytes(32).toString('hex');
+const digest = crypto.createHash('sha256').update(payload).digest('hex');`,
+    verificationHint:
+      '認証・Nonce・ダイジェスト処理で Math.random / md5 / sha1 が使用されていないことを確認。',
+  },
+  {
+    ruleId: 'LNG-TS-008',
+    title: '未検証リクエストパラメータを用いた外部 URL フェッチ・リダイレクト（SSRF 露出）',
+    stack: 'ts-web-api',
+    severity: 'high',
+    stride: 'Spoofing',
+    cwe: 'CWE-918',
+    owaspAsvs: 'V10.2.3 Server-Side Request Forgery & Egress Allowlisting',
+    appliesTo: (ctx) => JS_TS_EXTS.has(ctx.ext),
+    evaluate: (ctx) =>
+      findMatchingLines(
+        ctx,
+        (line) =>
+          /\b(?:fetch|axios(?:\.(?:get|post|request))?)\s*\(\s*(?:req\.(?:query|body|params)\b|searchParams\.get\s*\()/.test(
+            line,
+          ) ||
+          /\bres\.redirect\s*\(\s*(?:req\.(?:query|body|params)\b|searchParams\.get\s*\()/.test(
+            line,
+          ),
+      ),
+    rootCause:
+      'クライアント制御パラメータをそのまま `fetch` や `redirect` に渡すと、クラウドメタデータ（`169.254.169.254`）読取や内部ネットワーク走査・フィッシング転送に悪用されます。',
+    defensivePatch: `// 防御パッチ: HTTPS スキーム強制 + 許可ホスト Allowlist + 内部/メタデータ IP 拒否
+const ALLOWED_HOSTS = new Set(['api.trusted-partner.example']);
+const parsed = new URL(rawTargetUrl);
+if (parsed.protocol !== 'https:' || !ALLOWED_HOSTS.has(parsed.hostname)) {
+  throw new Error('Blocked outbound URL by SSRF allowlist policy.');
+}`,
+    verificationHint:
+      '169.254.169.254・127.0.0.1・未登録外部ドメインを渡した際にリクエスト送信前に拒否されることをテストで確認。',
   },
 
   // =========================================================================
@@ -464,6 +548,35 @@ srv := &http.Server{
 }`,
     verificationHint: 'go vet / gosec で G402 (TLS InsecureSkipVerify) と G114 (http.ListenAndServe) が 0 件であることを確認。',
   },
+  {
+    ruleId: 'LNG-CLD-005',
+    title: 'Python / Go における SQL クエリ文字列フォーマット結合（SQL 注入露出）',
+    stack: 'python-go-cloud',
+    severity: 'critical',
+    stride: 'Tampering',
+    cwe: 'CWE-89',
+    owaspAsvs: 'V5.3.4 Parameterized Database Queries',
+    appliesTo: (ctx) => ctx.ext === '.py' || ctx.ext === '.go',
+    evaluate: (ctx) =>
+      findMatchingLines(
+        ctx,
+        (line) =>
+          /\.\s*(?:execute|executemany)\s*\(\s*f['"](?:SELECT|INSERT|UPDATE|DELETE|WITH)\b[^'"]*\{/i.test(
+            line,
+          ) ||
+          /\.\s*(?:Query|QueryRow|QueryContext|Exec|ExecContext)\s*\([^)]*fmt\.Sprintf\s*\(\s*["'`](?:SELECT|INSERT|UPDATE|DELETE|WITH)\b/i.test(
+            line,
+          ),
+      ),
+    rootCause:
+      'Python の f-string や Go の `fmt.Sprintf` で SQL 文を直接構築すると、境界外パラメータによりクエリ構造が改変されます。',
+    defensivePatch: `# 防御パッチ (Python): プレースホルダ束縛タプルを使用
+cursor.execute("SELECT id, role FROM accounts WHERE email = %s", (validated_email,))
+
+// 防御パッチ (Go): プリペアドプレースホルダ ($1 / ?) を使用
+rows, err := db.QueryContext(ctx, "SELECT id, role FROM accounts WHERE email = $1", validatedEmail)`,
+    verificationHint: 'execute(f"...") および db.Query(fmt.Sprintf(...)) が 0 件であることを確認。',
+  },
 
   // =========================================================================
   // 4. Supply-Chain & Secrets (supply-chain-secrets)
@@ -479,8 +592,7 @@ srv := &http.Server{
     appliesTo: (ctx) =>
       ctx.ext !== '.lock' &&
       ctx.baseName !== 'pnpm-lock.yaml' &&
-      ctx.baseName !== 'package-lock.json' &&
-      !ctx.relativePath.endsWith('redactor.ts'),
+      ctx.baseName !== 'package-lock.json',
     evaluate: (ctx) => {
       const hits: Array<{ line: number; snippet: string }> = [];
       for (const lineNum of ctx.redactedLineNumbers) {
@@ -531,19 +643,49 @@ steps:
   - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2 pinned SHA`,
     verificationHint: '.github/workflows 配下の全 uses が 40 桁 16進 SHA に固定され、permissions が明示宣言されていることを確認。',
   },
+  {
+    ruleId: 'LNG-SEC-004',
+    title: 'GitHub Actions シェル実行への外部イベント入力直接展開（CI コマンド注入露出）',
+    stack: 'supply-chain-secrets',
+    severity: 'critical',
+    stride: 'Elevation of Privilege',
+    cwe: 'CWE-78',
+    owaspAsvs: 'V14.2.3 CI/CD Untrusted Context Isolation',
+    appliesTo: (ctx) =>
+      ctx.relativePath.includes('.github/workflows/') && (ctx.ext === '.yml' || ctx.ext === '.yaml'),
+    evaluate: (ctx) =>
+      findMatchingLines(ctx, (line) => {
+        if (/^\s*[A-Z_][A-Z0-9_]*\s*:\s*['"]?\$\{\{[^}]+\}\}['"]?\s*$/.test(line)) {
+          return false;
+        }
+        return /\$\{\{\s*github\.event\.(?:issue\.(?:title|body)|pull_request\.(?:title|body|head\.ref|head\.label)|comment\.body|review\.body|discussion\.(?:title|body)|commits\[[^\]]+\]\.message|head_commit\.message|pages\[[^\]]+\]\.page_name)\s*\}\}/.test(
+          line,
+        );
+      }),
+    rootCause:
+      'PR タイトル・Issue 本文・ブランチ名などの外部入力（`github.event.*`）を `run:` スクリプト内で直接 `${{ ... }}` 展開すると、シェル実行前に文字列展開されて CI トークン窃取・任意コマンド実行が成立します。',
+    defensivePatch: `# 防御パッチ: env: 中間環境変数へ束縛し、シェル側では二重引用符付き "$PR_TITLE" として参照
+- name: Validate PR metadata safely
+  env:
+    PR_TITLE: \${{ github.event.pull_request.title }}
+  run: |
+    printf '%s\\n' "$PR_TITLE" | head -c 120`,
+    verificationHint: 'run: ブロック内に github.event.* の直接 ${{ }} 展開が 0 件であり、すべて env: 経由であることを確認。',
+  },
 ];
 
 export function evaluateFileRules(ctx: FileContext): SecurityFinding[] {
-  if (ctx.relativePath.endsWith('src/rules.ts') || ctx.relativePath.endsWith('src/redactor.ts')) {
+  if (ctx.skipSelfPatternDefinitions === true) {
     return [];
   }
+  const safeFilePath = redactSecrets(ctx.relativePath).redactedText;
   const findings: SecurityFinding[] = [];
   for (const rule of STATIC_RULES) {
     if (!rule.appliesTo(ctx)) continue;
     const matches = rule.evaluate(ctx);
     for (const match of matches) {
       findings.push({
-        id: `${rule.ruleId}:${ctx.relativePath}:${match.line}`,
+        id: `${rule.ruleId}:${safeFilePath}:${match.line}`,
         ruleId: rule.ruleId,
         title: rule.title,
         stack: rule.stack,
@@ -551,7 +693,7 @@ export function evaluateFileRules(ctx: FileContext): SecurityFinding[] {
         stride: rule.stride,
         cwe: rule.cwe,
         owaspAsvs: rule.owaspAsvs,
-        filePath: ctx.relativePath,
+        filePath: safeFilePath,
         line: match.line,
         snippetRedacted: match.snippet,
         rootCause: rule.rootCause,

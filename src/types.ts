@@ -108,3 +108,31 @@ export interface AuditReport {
   };
   findings: SecurityFinding[];
 }
+
+export interface PortfolioRepoSummary {
+  dirName: string;
+  repoName: string;
+  targetPath: string;
+  overallDefenseScore: number;
+  scannedFiles: number;
+  scanTruncated: boolean;
+  criticalCount: number;
+  highCount: number;
+  mediumCount: number;
+  lowCount: number;
+  redactedSecretsCount: number;
+  verifiedControlsCount: number;
+  primaryStack: StackDomain;
+  topAction: string;
+}
+
+export interface PortfolioReport {
+  portfolioRootLabel: string;
+  scannedAt: string;
+  durationMs: number;
+  totalRepos: number;
+  averageDefenseScore: number;
+  criticalReposCount: number;
+  totalRedactedSecrets: number;
+  repos: PortfolioRepoSummary[];
+}

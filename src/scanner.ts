@@ -1,6 +1,7 @@
-import { constants as fsConstants, type Dirent, type Stats } from 'node:fs';
+import fsSync, { constants as fsConstants, type Dirent, type Stats } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { redactSecrets, redactSecretsPreserveLines } from './redactor.js';
 import { classifyFileStack, evaluateFileRules, type FileContext } from './rules.js';
 import type {
@@ -37,10 +38,25 @@ const IGNORED_DIRS = new Set([
   'node_modules',
   'dist',
   'build',
+  'out',
+  '.build',
+  'DerivedData',
   '.next',
+  '.svelte-kit',
+  '.output',
+  '.nuxt',
+  '.astro',
+  '.vercel',
+  '.firebase',
+  '.wrangler',
+  '.parcel-cache',
+  '.cache',
   '.dart_tool',
+  '.pub-cache',
+  'ephemeral',
   '.gradle',
   'Pods',
+  'target',
   '__pycache__',
   '.venv',
   'venv',
@@ -48,10 +64,60 @@ const IGNORED_DIRS = new Set([
   '.turbo',
 ]);
 
+const KNOWN_MEDIA_ARCHIVE_EXTS = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+  '.avif',
+  '.ico',
+  '.icns',
+  '.woff',
+  '.woff2',
+  '.ttf',
+  '.otf',
+  '.eot',
+  '.mp3',
+  '.mp4',
+  '.wav',
+  '.ogg',
+  '.webm',
+  '.mov',
+  '.pdf',
+  '.wasm',
+  '.zip',
+  '.gz',
+  '.tar',
+  '.tgz',
+  '.aab',
+  '.apk',
+  '.ipa',
+]);
+
+const KEYSTORE_BINARY_EXTS = new Set(['.jks', '.keystore', '.p12', '.pfx']);
+
+const INITIAL_CWD = process.cwd();
+const __scannerDirname = path.dirname(fileURLToPath(import.meta.url));
+const LONGINUS_PROJECT_ROOT = fsSync.realpathSync(
+  path.resolve(
+    __scannerDirname,
+    __scannerDirname.includes(`${path.sep}dist${path.sep}`) ? '../..' : '..',
+  ),
+);
+
 const DEFAULT_MAX_FILE_BYTES = 512 * 1024; // 512 KB per file
-const DEFAULT_MAX_OPENED_FILES = 1500; // Includes binary & text open attempts
-const DEFAULT_MAX_INSPECTED_ENTRIES = 3500; // Total directory/file entries visited
+const DEFAULT_MAX_OPENED_FILES = 2500; // Includes binary & text open attempts
+const DEFAULT_MAX_INSPECTED_ENTRIES = 6000; // Total directory/file entries visited
 const DEFAULT_MAX_TOTAL_BYTES = 24 * 1024 * 1024; // 24 MB cumulative read cap
+const DEFAULT_MAX_DIRECTORY_DEPTH = 48; // Bounds recursion depth while keeping O(1) open FDs
+
+export interface ExpectedRootIdentity {
+  dev: number;
+  ino: number;
+  parentDev: number;
+  parentIno: number;
+}
 
 export interface ScanOptions {
   excludeRelativePrefixes?: string[];
@@ -59,6 +125,8 @@ export interface ScanOptions {
   maxOpenedFiles?: number;
   maxInspectedEntries?: number;
   maxTotalBytes?: number;
+  maxDirectoryDepth?: number;
+  expectedRootIdentity?: ExpectedRootIdentity;
 }
 
 export interface StaticScanResult {
@@ -94,6 +162,8 @@ export interface ReadableFileHandleLike {
 export type BoundedFileReadResult =
   | { status: 'ok'; buffer: Buffer; bytesRead: number }
   | { status: 'skipped'; bytesRead: number }
+  | { status: 'oversize'; bytesRead: number }
+  | { status: 'read_error'; bytesRead: number }
   | { status: 'budget_exceeded'; bytesRead: number };
 
 let activeScanQueue: Promise<void> = Promise.resolve();
@@ -155,7 +225,7 @@ export async function readBoundedFromHandle(params: {
       return { status: 'skipped', bytesRead: 0 };
     }
     if (fdStat.size > params.maxFileBytes) {
-      return { status: 'skipped', bytesRead: 0 };
+      return { status: 'oversize', bytesRead: 0 };
     }
     if (fdStat.size > params.remainingTotalBudget) {
       return { status: 'budget_exceeded', bytesRead: 0 };
@@ -186,7 +256,7 @@ export async function readBoundedFromHandle(params: {
       return { status: 'budget_exceeded', bytesRead: bytesReadSoFar };
     }
     if (bytesReadSoFar > params.maxFileBytes) {
-      return { status: 'skipped', bytesRead: bytesReadSoFar };
+      return { status: 'oversize', bytesRead: bytesReadSoFar };
     }
 
     return {
@@ -195,7 +265,7 @@ export async function readBoundedFromHandle(params: {
       bytesRead: bytesReadSoFar,
     };
   } catch {
-    return { status: 'skipped', bytesRead: bytesReadSoFar };
+    return { status: 'read_error', bytesRead: bytesReadSoFar };
   }
 }
 
@@ -224,9 +294,21 @@ async function readSingleComponentSafeFile(params: {
       maxFileBytes: params.maxFileBytes,
       remainingTotalBudget: params.remainingTotalBudget,
     });
-  } catch {
-    // ELOOP (symlink rejected by O_NOFOLLOW), EACCES, ENOENT, etc.
-    return { status: 'skipped', bytesRead: 0 };
+  } catch (err) {
+    const errCode =
+      typeof err === 'object' && err !== null && 'code' in err
+        ? String((err as { code?: unknown }).code)
+        : '';
+    if (
+      errCode === 'ELOOP' ||
+      errCode === 'ENOENT' ||
+      errCode === 'EISDIR' ||
+      errCode === 'ENXIO' ||
+      errCode === 'EOPNOTSUPP'
+    ) {
+      return { status: 'skipped', bytesRead: 0 };
+    }
+    return { status: 'read_error', bytesRead: 0 };
   } finally {
     if (fh) {
       await fh.close().catch(() => undefined);
@@ -234,31 +316,93 @@ async function readSingleComponentSafeFile(params: {
   }
 }
 
+export interface PinnedSafeDirectory {
+  canonicalRoot: string;
+  handle: fs.FileHandle;
+  stat: Stats;
+}
+
 /**
- * Safely validates and canonicalizes a local directory path.
- * Strictly read-only; rejects NUL bytes, non-existent paths, and non-directories.
+ * Validates, canonicalizes, and returns an ALREADY-PINNED O_RDONLY | O_DIRECTORY | O_NOFOLLOW
+ * file handle with verified `(dev, ino)` continuity so zero close-then-reopen TOCTOU gap exists.
  */
-export async function resolveSafeTargetDirectory(rawTargetPath: string): Promise<string> {
-  if (!rawTargetPath || rawTargetPath.includes('\0')) {
+export async function openPinnedSafeTargetDirectory(
+  rawTargetPath: string,
+): Promise<PinnedSafeDirectory> {
+  if (typeof rawTargetPath !== 'string' || !rawTargetPath.trim() || rawTargetPath.includes('\0')) {
     throw new SafeClientError('無効な監査対象パスです。');
   }
-  const resolved = path.resolve(rawTargetPath.trim());
-  let canonical: string;
+  const { oNoFollow, oDirectory } = assertPosixNoFollowFlags();
+  const resolved = path.resolve(INITIAL_CWD, rawTargetPath.trim());
+
+  let lstatResolved: Stats;
   try {
-    canonical = await fs.realpath(resolved);
+    lstatResolved = await fs.lstat(resolved);
   } catch {
     throw new SafeClientError('監査対象パスが存在しないかアクセスできません。');
   }
-  let stat: Stats;
-  try {
-    stat = await fs.lstat(canonical);
-  } catch {
-    throw new SafeClientError('監査対象パスが存在しないかアクセスできません。');
-  }
-  if (!stat.isDirectory() || stat.isSymbolicLink()) {
+  if (!lstatResolved.isDirectory() || lstatResolved.isSymbolicLink()) {
     throw new SafeClientError('監査対象パスはローカルディレクトリである必要があります。');
   }
-  return canonical;
+
+  let resolvedFh: fs.FileHandle | undefined;
+  let canonicalFh: fs.FileHandle | undefined;
+  let handedOff = false;
+  try {
+    try {
+      resolvedFh = await fs.open(resolved, fsConstants.O_RDONLY | oDirectory | oNoFollow);
+    } catch {
+      throw new SafeClientError('監査対象パスはローカルディレクトリである必要があります。');
+    }
+    const resolvedStat = await resolvedFh.stat();
+    if (
+      !resolvedStat.isDirectory() ||
+      resolvedStat.dev !== lstatResolved.dev ||
+      resolvedStat.ino !== lstatResolved.ino
+    ) {
+      throw new SafeClientError('監査対象パスはローカルディレクトリである必要があります。');
+    }
+
+    let canonical: string;
+    try {
+      canonical = await fs.realpath(resolved);
+    } catch {
+      throw new SafeClientError('監査対象パスが存在しないかアクセスできません。');
+    }
+
+    try {
+      canonicalFh = await fs.open(canonical, fsConstants.O_RDONLY | oDirectory | oNoFollow);
+    } catch {
+      throw new SafeClientError('監査対象パスはローカルディレクトリである必要があります。');
+    }
+    const canonicalStat = await canonicalFh.stat();
+    if (
+      !canonicalStat.isDirectory() ||
+      canonicalStat.dev !== resolvedStat.dev ||
+      canonicalStat.ino !== resolvedStat.ino
+    ) {
+      throw new SafeClientError('監査対象パスはローカルディレクトリである必要があります。');
+    }
+    handedOff = true;
+    return { canonicalRoot: canonical, handle: canonicalFh, stat: canonicalStat };
+  } finally {
+    if (!handedOff && canonicalFh) {
+      await canonicalFh.close().catch(() => undefined);
+    }
+    if (resolvedFh) {
+      await resolvedFh.close().catch(() => undefined);
+    }
+  }
+}
+
+/**
+ * Safely validates and canonicalizes a local directory path.
+ * Strictly read-only; rejects NUL bytes, non-existent paths, leaf symlinks, and non-directories.
+ */
+export async function resolveSafeTargetDirectory(rawTargetPath: string): Promise<string> {
+  const pinned = await openPinnedSafeTargetDirectory(rawTargetPath);
+  await pinned.handle.close().catch(() => undefined);
+  return pinned.canonicalRoot;
 }
 
 export async function runStaticRepositoryScan(
@@ -267,13 +411,12 @@ export async function runStaticRepositoryScan(
 ): Promise<StaticScanResult> {
   return withScanMutex(async () => {
     const { oNoFollow, oDirectory, oNonBlock } = assertPosixNoFollowFlags();
-    const canonicalRoot = await resolveSafeTargetDirectory(targetPath);
-    const repoName = path.basename(canonicalRoot);
     const excludePrefixes = options?.excludeRelativePrefixes ?? [];
     const maxFileBytes = options?.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
     const maxOpenedFiles = options?.maxOpenedFiles ?? DEFAULT_MAX_OPENED_FILES;
     const maxInspectedEntries = options?.maxInspectedEntries ?? DEFAULT_MAX_INSPECTED_ENTRIES;
     const maxTotalBytes = options?.maxTotalBytes ?? DEFAULT_MAX_TOTAL_BYTES;
+    const maxDirectoryDepth = options?.maxDirectoryDepth ?? DEFAULT_MAX_DIRECTORY_DEPTH;
 
     let scannedFiles = 0;
     let openedFiles = 0;
@@ -310,14 +453,17 @@ export async function runStaticRepositoryScan(
 
     const savedCwd = process.cwd();
     let rootDirFh: fs.FileHandle | undefined;
+    let canonicalRoot = '';
+    let repoName = 'repository';
 
     try {
-      // Pin canonicalRoot directory FD so its (dev, ino) cannot be recycled during scan
-      rootDirFh = await fs.open(canonicalRoot, fsConstants.O_RDONLY | oDirectory | oNoFollow);
-      const rootStat = await rootDirFh.stat();
-      if (!rootStat.isDirectory()) {
-        throw new SafeClientError('監査対象パスはローカルディレクトリである必要があります。');
-      }
+      // Continuously hold the exact FD verified during realpath resolution (zero reopen gap)
+      const pinnedRoot = await openPinnedSafeTargetDirectory(targetPath);
+      canonicalRoot = pinnedRoot.canonicalRoot;
+      repoName = path.basename(canonicalRoot);
+      rootDirFh = pinnedRoot.handle;
+      const rootStat = pinnedRoot.stat;
+      const isLonginusSelfRoot = canonicalRoot === LONGINUS_PROJECT_ROOT;
 
       process.chdir(canonicalRoot);
       const rootDot = await fs.lstat('.');
@@ -326,9 +472,27 @@ export async function runStaticRepositoryScan(
         throw new DirectoryRaceAbortError();
       }
 
+      if (options?.expectedRootIdentity) {
+        const exp = options.expectedRootIdentity;
+        const parentDotDot = await fs.lstat('..').catch(() => null);
+        if (
+          rootStat.dev !== exp.dev ||
+          rootStat.ino !== exp.ino ||
+          !parentDotDot ||
+          parentDotDot.dev !== exp.parentDev ||
+          parentDotDot.ino !== exp.parentIno
+        ) {
+          throw new SafeClientError('監査対象ディレクトリの境界検証で競合を検出しました。');
+        }
+      }
+
       const ancestorInodes = new Set<string>([`${rootStat.dev}:${rootStat.ino}`]);
 
-      const walkPinnedDir = async (relDirPrefix: string, currentDirStat: Stats): Promise<void> => {
+      const walkPinnedDir = async (
+        relDirPrefix: string,
+        currentDirStat: Stats,
+        depth: number,
+      ): Promise<void> => {
         if (abortAllWork) return;
 
         // Stream directory entries from '.' (pinned AT_FDCWD) bounded strictly by maxInspectedEntries
@@ -337,6 +501,7 @@ export async function runStaticRepositoryScan(
         try {
           dirHandle = await fs.opendir('.');
         } catch {
+          markTruncated('一部ディレクトリの読取権限またはFD上限により部分監査となりました。');
           return;
         }
 
@@ -346,6 +511,7 @@ export async function runStaticRepositoryScan(
               markTruncated(
                 `走査エントリ上限 (${maxInspectedEntries} 件) に達したため部分監査となりました。`,
               );
+              abortAllWork = true;
               break;
             }
             inspectedEntries += 1;
@@ -373,9 +539,16 @@ export async function runStaticRepositoryScan(
 
           if (entry.isDirectory()) {
             if (IGNORED_DIRS.has(entry.name)) continue;
-            if (scanTruncated) continue;
+            if (depth + 1 > maxDirectoryDepth) {
+              markTruncated(
+                `ディレクトリ階層上限 (${maxDirectoryDepth} 階層) に達したため部分監査となりました。`,
+              );
+              continue;
+            }
 
-            // Step into child directory via single-component O_NOFOLLOW + AT_FDCWD inode pin check
+            // Step into child directory via serialized single-component process.chdir under withScanMutex
+            // paired with O_NOFOLLOW + immediate lstat('.') / lstat('..') (dev, ino) verification
+            // (Node.js standard fs does not expose POSIX fchdir(fd); close childFh after verification so FDs stay O(1)).
             let childFh: fs.FileHandle | undefined;
             try {
               childFh = await fs.open(
@@ -395,9 +568,12 @@ export async function runStaticRepositoryScan(
                 throw new DirectoryRaceAbortError();
               }
 
+              await childFh.close().catch(() => undefined);
+              childFh = undefined;
+
               ancestorInodes.add(inodeKey);
               try {
-                await walkPinnedDir(relPath, childStat);
+                await walkPinnedDir(relPath, childStat, depth + 1);
               } finally {
                 ancestorInodes.delete(inodeKey);
               }
@@ -413,6 +589,13 @@ export async function runStaticRepositoryScan(
               }
             } catch (err) {
               if (err instanceof DirectoryRaceAbortError) throw err;
+              const errCode =
+                typeof err === 'object' && err !== null && 'code' in err
+                  ? String((err as { code?: unknown }).code)
+                  : '';
+              if (errCode !== 'ELOOP' && errCode !== 'ENOTDIR' && errCode !== 'ENOENT') {
+                markTruncated('一部サブディレクトリへのアクセス制限により部分監査となりました。');
+              }
               const verifyDot = await fs.lstat('.').catch(() => null);
               if (
                 !verifyDot ||
@@ -431,7 +614,13 @@ export async function runStaticRepositoryScan(
           }
 
           if (!entry.isFile()) continue;
-          manifestSet.add(relPath);
+          const safeRelPath = redactSecrets(relPath).redactedText;
+          manifestSet.add(safeRelPath);
+
+          const entryExt = path.extname(entry.name).toLowerCase();
+          if (KNOWN_MEDIA_ARCHIVE_EXTS.has(entryExt) || KEYSTORE_BINARY_EXTS.has(entryExt)) {
+            continue;
+          }
 
           if (openedFiles >= maxOpenedFiles) {
             markTruncated(
@@ -458,7 +647,7 @@ export async function runStaticRepositoryScan(
             oNonBlock,
           });
 
-          // Account for ALL bytes read regardless of ok / skipped / budget_exceeded
+          // Account for ALL bytes read regardless of ok / skipped / oversize / read_error / budget_exceeded
           totalBytesRead += readRes.bytesRead;
 
           if (readRes.status === 'budget_exceeded' || totalBytesRead > maxTotalBytes) {
@@ -467,6 +656,16 @@ export async function runStaticRepositoryScan(
             );
             abortAllWork = true;
             break;
+          }
+          if (readRes.status === 'oversize') {
+            markTruncated(
+              `単一ファイルサイズ上限 (${formatByteBudgetLabel(maxFileBytes)}) を超えるファイルが存在したため部分監査となりました。`,
+            );
+            continue;
+          }
+          if (readRes.status === 'read_error') {
+            markTruncated('一部ファイルの読取権限またはFD上限により部分監査となりました。');
+            continue;
           }
           if (readRes.status === 'skipped') {
             continue;
@@ -479,25 +678,29 @@ export async function runStaticRepositoryScan(
 
           scannedFiles += 1;
           const rawContent = buf.toString('utf8');
-          const stack = classifyFileStack(relPath);
+          const stack = classifyFileStack(safeRelPath);
           stackFileCounts[stack] += 1;
 
           const isEnvFile = entry.name === '.env' || entry.name.startsWith('.env.');
-          const redaction = redactSecretsPreserveLines(rawContent, { isEnvFile });
-          if (!relPath.endsWith('src/redactor.ts') && !relPath.endsWith('src/rules.ts')) {
+          const redaction = redactSecretsPreserveLines(rawContent, { isEnvFile, ext: entryExt });
+          const isLonginusSelfPatternFile =
+            isLonginusSelfRoot &&
+            (safeRelPath === 'src/redactor.ts' || safeRelPath === 'src/rules.ts');
+          if (!isLonginusSelfPatternFile) {
             redactedSecretsCount += redaction.redactionCount;
           }
 
           // Evaluate positive controls & static rules strictly on full-file-redacted text
-          detectVerifiedControls(relPath, redaction.redactedText, verifiedControlsByStack);
+          detectVerifiedControls(safeRelPath, redaction.redactedText, verifiedControlsByStack);
 
           const ctx: FileContext = {
-            relativePath: relPath,
-            baseName: entry.name,
-            ext: path.extname(entry.name).toLowerCase(),
+            relativePath: safeRelPath,
+            baseName: redactSecrets(entry.name).redactedText,
+            ext: entryExt,
             redactedContent: redaction.redactedText,
             redactedLines: redaction.redactedLines,
             redactedLineNumbers: redaction.redactedLineNumbers,
+            ...(isLonginusSelfPatternFile ? { skipSelfPatternDefinitions: true } : {}),
           };
 
           const fileFindings = evaluateFileRules(ctx);
@@ -505,7 +708,7 @@ export async function runStaticRepositoryScan(
         }
       };
 
-      await walkPinnedDir('', rootStat);
+      await walkPinnedDir('', rootStat, 0);
     } catch (err) {
       if (!(err instanceof DirectoryRaceAbortError)) {
         throw err;
@@ -514,7 +717,11 @@ export async function runStaticRepositoryScan(
       try {
         process.chdir(savedCwd);
       } catch {
-        // Ignore if savedCwd became unavailable
+        try {
+          process.chdir(INITIAL_CWD);
+        } catch {
+          // Ignore if fallback cwd is also unavailable
+        }
       }
       if (rootDirFh) {
         await rootDirFh.close().catch(() => undefined);
@@ -562,8 +769,8 @@ export async function runStaticRepositoryScan(
     });
 
     const result: StaticScanResult = {
-      canonicalRoot,
-      repoName,
+      canonicalRoot: redactSecrets(canonicalRoot).redactedText,
+      repoName: redactSecrets(repoName).redactedText,
       scannedFiles,
       inspectedEntries,
       totalBytesRead,
@@ -671,6 +878,46 @@ pnpm install --frozen-lockfile`,
       verificationHint: 'pnpm-lock.yaml または package-lock.json がリポジトリルートに存在することを確認。',
       source: 'static-rule',
     });
+  }
+
+  if (
+    (manifests.has('pubspec.yaml') && manifests.has('pubspec.lock')) ||
+    (manifests.has('go.mod') && manifests.has('go.sum')) ||
+    (manifests.has('pyproject.toml') && (manifests.has('uv.lock') || manifests.has('poetry.lock')))
+  ) {
+    supplyChainControls.add('Deterministic Language Lockfile Present');
+  }
+
+  for (const relPath of manifests) {
+    const ext = path.extname(relPath).toLowerCase();
+    const base = path.basename(relPath);
+    if (
+      KEYSTORE_BINARY_EXTS.has(ext) ||
+      base === 'serviceAccountKey.json' ||
+      /-firebase-adminsdk-[a-z0-9-]+\.json$/i.test(base)
+    ) {
+      const safeRel = redactSecrets(relPath).redactedText;
+      findings.push({
+        id: `LNG-SEC-005:${safeRel}:1`,
+        ruleId: 'LNG-SEC-005',
+        title: 'リポジトリ内に配置された署名鍵ストアまたはサービスアカウント鍵ファイル',
+        stack: 'supply-chain-secrets',
+        severity: 'critical',
+        stride: 'Information Disclosure',
+        cwe: 'CWE-522',
+        owaspAsvs: 'V2.10.4 Keystore & Service Account Key Segregation',
+        filePath: safeRel,
+        line: 1,
+        snippetRedacted: `[REDACTED_KEYSTORE_ARTIFACT: ${redactSecrets(base).redactedText}]`,
+        rootCause:
+          'モバイル署名用キーストア（.jks / .keystore / .p12）や Firebase Admin 秘密鍵 JSON がワークツリー内に存在すると、誤コミットやバックアップ経由で署名偽造・管理者権限奪取に直結します。',
+        defensivePatch: `# 防御パッチ: キーストア・サービスアカウント鍵をリポジトリ外へ即時退避し Workload Identity / CI Secret 注入へ移行
+# .gitignore に *.jks, *.keystore, *.p12, *.pfx, *firebase-adminsdk*.json を追加`,
+        verificationHint:
+          'git ls-files およびワークツリー内に .jks / .keystore / .p12 / サービスアカウント JSON が存在しないことを確認。',
+        source: 'static-rule',
+      });
+    }
   }
 }
 
@@ -783,7 +1030,9 @@ function buildStructuralZeroSnippetDigest(params: {
   findings: SecurityFinding[];
   manifestPaths: readonly string[];
 }): string {
-  const safeRepoLabel = params.repoName.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 64) || 'repository';
+  const redactedRepoName = redactSecrets(params.repoName).redactedText;
+  const safeRepoLabel =
+    redactedRepoName.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 64) || 'repository';
   const safeSamplePaths = params.manifestPaths
     .filter((p) => SAFE_MANIFEST_PATH_RE.test(p))
     .map((p) => redactSecrets(p).redactedText)

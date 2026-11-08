@@ -68,6 +68,18 @@ Longinus は、ローカルリポジトリのソースコードおよびイン�
   - 対象ファイル: `test/scanner.test.ts`, `test/fixtures/sample-polyglot-app/*`, `.agents/pixel-visual-gate.json`
   - 内容: 4スタックの脆弱な設定例（安全なダミー設定のみ）を含む検証用 Fixture、機密マスク・パストラバーサル拒否・CSP/ヘッダ検証・Gemini スキーマ検証のユニットテスト、およびモバイル/デスクトップ両画面の Pixel Visual Gate 検証を実施する。
   - やらないこと: 実在の認証情報や攻撃スクリプトのテストデータ化。
+- [x] **Task-6: 実プロダクト横断監査に基づく機密マスク精度強化 & 深層静的防御ルール拡張**
+  - 対象ファイル: `src/redactor.ts`, `src/rules.ts`, `src/scanner.ts`
+  - 内容: 実リポジトリ走査で判明した生成成果物ディレクトリ（`out`, `.build`, `DerivedData` 等）・バイナリアセット除外最適化と、Python 変数識別子 / HTML `type="password"` / 環境変数ルックアップ呼び出しの誤検知排除、および SQL Injection（`CWE-89`）・SSRF/Open Redirect（`CWE-918`）・脆弱乱数/ハッシュ（`CWE-338`/`CWE-328`）・GitHub Actions Script Injection（`CWE-78`）・署名鍵バイナリ混入（`CWE-522`）の予防ルール追加を行う。
+  - やらないこと: 既存の多行機密マスク不変条件や `AT_FDCWD` シンボリックリンク遮断の弱体化。
+- [x] **Task-7: OASIS SARIF 2.1.0 出力 & CI 閾値ゲート（`--sarif` / `--fail-on` / `--portfolio`）実装**
+  - 対象ファイル: `src/sarif.ts`, `src/cli.ts`, `src/types.ts`
+  - 内容: GitHub Code Scanning / IDE 互換の決定論的 SARIF 2.1.0 エクスポータ（スニペット二重マスク保証）、深刻度閾値に応じた CI 終了コード制御（`--fail-on critical|high|medium|low` → 検出時 exit `2`）、および CLI ポートフォリオ一括読取専用監査モードを実装する。
+  - やらないこと: 外部通信を伴うテレメトリ送信や監査対象リポジトリへのファイル書込み。
+- [x] **Task-8: ローカル全プロダクト横断・防御姿勢一覧比較マトリクス & 前回比スコア推移 UI 実装**
+  - 対象ファイル: `src/server.ts`, `public/app.js`, `public/styles.css`, `test/scanner.test.ts`
+  - 内容: サーバー起動時に固定された親ワークスペース直下リポジトリを完全読取専用・0トークンで一括診断する `/api/portfolio`（`Host` + `Origin` + `Sec-Fetch-Site` + `X-Longinus-Csrf` 保護・コード抜粋ゼロ）と、LVMH Quiet Luxury コンテナクエリ対応比較表・1クリック詳細ドリルダウン・SARIF ダウンロード・再監査時の前回比スコアデルタ表示、および回帰テスト一式を実装する。
+  - やらないこと: 任意親ディレクトリの外部指定受付（ディレクトリ列挙オラクル化防止）や `innerHTML` の使用。
 
 ---
 

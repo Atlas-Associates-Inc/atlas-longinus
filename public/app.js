@@ -3,9 +3,12 @@
 
   /** @type {any | null} */
   let latestReport = null;
+  let latestExcludeFixtures = false;
   let activeStackFilter = 'all';
   let presets = { selfPath: '', fixturePath: '', envApiKeyConfigured: false };
   let excludeFixturesFlag = false;
+  /** @type {Map<string, { score: number, findingIds: Set<string> }>} */
+  const baselineHistory = new Map();
 
   const csrfMeta = document.querySelector('meta[name="longinus-csrf"]');
   const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') || '' : '';
@@ -24,6 +27,9 @@
   const roadmapList = /** @type {HTMLElement} */ (document.getElementById('roadmap-list'));
   const strideTbody = /** @type {HTMLElement} */ (document.getElementById('stride-tbody'));
   const findingsTbody = /** @type {HTMLElement} */ (document.getElementById('findings-tbody'));
+  const portfolioSection = /** @type {HTMLElement} */ (document.getElementById('portfolio-section'));
+  const portfolioKpis = /** @type {HTMLElement} */ (document.getElementById('portfolio-kpis'));
+  const portfolioTbody = /** @type {HTMLElement} */ (document.getElementById('portfolio-tbody'));
 
   const dialog = /** @type {HTMLDialogElement} */ (document.getElementById('patch-dialog'));
   const dialogMetaKicker = /** @type {HTMLElement} */ (document.getElementById('dialog-meta-kicker'));
@@ -128,6 +134,36 @@
       : 'Deterministic STRIDE + Static Shield (0 Tokens)';
 
     clearChildren(telemetryStrip);
+    const currentFindingIds = new Set(report.findings.map(/** @param {any} f */ (f) => String(f.id)));
+    const prevSnapshot = baselineHistory.get(report.targetPath);
+    if (prevSnapshot) {
+      const scoreDelta = report.overallDefenseScore - prevSnapshot.score;
+      let resolvedCount = 0;
+      prevSnapshot.findingIds.forEach((oldId) => {
+        if (!currentFindingIds.has(oldId)) resolvedCount += 1;
+      });
+      let newCount = 0;
+      currentFindingIds.forEach((curId) => {
+        if (!prevSnapshot.findingIds.has(curId)) newCount += 1;
+      });
+      const sign = scoreDelta >= 0 ? `+${scoreDelta}` : `${scoreDelta}`;
+      const deltaClass =
+        scoreDelta >= 0 && newCount === 0
+          ? 'telemetry-item telemetry-delta-up'
+          : 'telemetry-item telemetry-delta-down';
+      telemetryStrip.appendChild(
+        el(
+          'span',
+          deltaClass,
+          `前回比: ${sign} pts（解消 ${resolvedCount} 件 / 新規 ${newCount} 件）`,
+        ),
+      );
+    }
+    baselineHistory.set(report.targetPath, {
+      score: report.overallDefenseScore,
+      findingIds: currentFindingIds,
+    });
+
     const metrics = [
       `検出指摘: ${report.findings.length} 件`,
       `ローカル機密マスク保護: ${report.redactedSecretsCount} 箇所`,
@@ -473,6 +509,7 @@
         setStatus(`エラー: ${json.error || '監査リクエストに失敗しました。'}`, true);
         return;
       }
+      latestExcludeFixtures = Boolean(reqData.excludeFixtures);
       renderReport(json);
     } catch (err) {
       setStatus(`通信エラー: ${err instanceof Error ? err.message : String(err)}`, true);
@@ -541,6 +578,116 @@
     });
   }
 
+  /**
+   * @param {any} portfolio
+   */
+  function renderPortfolioMatrix(portfolio) {
+    if (!portfolioSection || !portfolioKpis || !portfolioTbody) return;
+    portfolioSection.hidden = false;
+
+    clearChildren(portfolioKpis);
+    const fleetMetrics = [
+      `対象プロダクト: ${portfolio.totalRepos} 件`,
+      `平均防御スコア: ${portfolio.averageDefenseScore} / 100`,
+      `Critical 要対処: ${portfolio.criticalReposCount} リポジトリ`,
+      `ローカル保護機密: ${portfolio.totalRedactedSecrets} 箇所`,
+    ];
+    for (const item of fleetMetrics) {
+      portfolioKpis.appendChild(el('span', 'telemetry-item', item));
+    }
+
+    clearChildren(portfolioTbody);
+    for (const repo of portfolio.repos) {
+      const tr = el('tr');
+
+      const th = el('th', '', repo.dirName);
+      th.setAttribute('scope', 'row');
+      tr.appendChild(th);
+
+      const tdScore = el('td');
+      const scoreBadgeClass =
+        repo.overallDefenseScore >= 85
+          ? 'pill pill-emerald'
+          : repo.overallDefenseScore >= 60
+            ? 'pill pill-amber'
+            : 'pill pill-crimson';
+      tdScore.appendChild(el('span', scoreBadgeClass, `${repo.overallDefenseScore} / 100`));
+      tr.appendChild(tdScore);
+
+      const truncTag = repo.scanTruncated ? ' (部分走査)' : '';
+      tr.appendChild(el('td', '', `${repo.scannedFiles} files${truncTag}`));
+
+      const tdCounts = el(
+        'td',
+        '',
+        repo.criticalCount + repo.highCount > 0
+          ? `⚠️ C:${repo.criticalCount} / H:${repo.highCount} / M:${repo.mediumCount}`
+          : `✓ C:0 / H:0 / M:${repo.mediumCount}`,
+      );
+      tr.appendChild(tdCounts);
+
+      tr.appendChild(el('td', '', repo.topAction));
+
+      const tdAction = el('td');
+      const inspectBtn = /** @type {HTMLButtonElement} */ (
+        el('button', 'btn btn-outline btn-sm', '詳細分析')
+      );
+      inspectBtn.type = 'button';
+      inspectBtn.addEventListener('click', () => {
+        const isSelf = repo.targetPath === presets.selfPath;
+        excludeFixturesFlag = isSelf;
+        targetInput.value = repo.targetPath;
+        void runAuditRequest({
+          targetPath: repo.targetPath,
+          mode: modeSelect.value,
+          ...(isSelf ? { excludeFixtures: true } : {}),
+          ...(apiKeyInput.value.trim() ? { apiKey: apiKeyInput.value.trim() } : {}),
+        });
+        overallScoreEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      tdAction.appendChild(inspectBtn);
+      tr.appendChild(tdAction);
+
+      portfolioTbody.appendChild(tr);
+    }
+  }
+
+  const portfolioBtn = document.getElementById('preset-portfolio-btn');
+  if (portfolioBtn) {
+    portfolioBtn.addEventListener('click', async () => {
+      setStatus('ローカル全プロダクトの読取専用・0トークン予防姿勢監査を実行中...', false);
+      try {
+        const res = await fetch('/api/portfolio', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Longinus-Csrf': csrfToken,
+          },
+          body: '{}',
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          setStatus(`エラー: ${json.error || '一括監査リクエストに失敗しました。'}`, true);
+          return;
+        }
+        renderPortfolioMatrix(json);
+        setStatus(
+          `全 ${json.totalRepos} プロダクトの一括防御姿勢監査が完了しました（平均スコア ${json.averageDefenseScore}/100 • ${json.durationMs}ms）。`,
+          false,
+        );
+      } catch (err) {
+        setStatus(`通信エラー: ${err instanceof Error ? err.message : String(err)}`, true);
+      }
+    });
+  }
+
+  const closePortfolioBtn = document.getElementById('close-portfolio-btn');
+  if (closePortfolioBtn && portfolioSection) {
+    closePortfolioBtn.addEventListener('click', () => {
+      portfolioSection.hidden = true;
+    });
+  }
+
   // Export Markdown Hardening Plan
   const exportBtn = document.getElementById('export-md-btn');
   if (exportBtn) {
@@ -588,6 +735,45 @@
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+    });
+  }
+
+  // Export SARIF 2.1.0 Report via canonical server serializer
+  const exportSarifBtn = document.getElementById('export-sarif-btn');
+  if (exportSarifBtn) {
+    exportSarifBtn.addEventListener('click', async () => {
+      if (!latestReport) return;
+      try {
+        const res = await fetch('/api/sarif', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Longinus-Csrf': csrfToken,
+          },
+          body: JSON.stringify({
+            targetPath: latestReport.targetPath,
+            mode: 'deterministic',
+            excludeFixtures: latestExcludeFixtures,
+          }),
+        });
+        if (!res.ok) {
+          setStatus('エラー: SARIF レポート生成に失敗しました。', true);
+          return;
+        }
+        const sarifText = await res.text();
+        const blob = new Blob([sarifText], { type: 'application/sarif+json;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `longinus-defense-report-${latestReport.repoName}.sarif`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setStatus(`SARIF 2.1.0 レポートを出力しました (${latestReport.repoName})`, false);
+      } catch (err) {
+        setStatus(`通信エラー: ${err instanceof Error ? err.message : String(err)}`, true);
+      }
     });
   }
 

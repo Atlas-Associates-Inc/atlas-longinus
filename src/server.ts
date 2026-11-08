@@ -1,31 +1,50 @@
 import crypto from 'node:crypto';
+import fsSync from 'node:fs';
 import fs from 'node:fs/promises';
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import { executeDefensiveAudit } from './geminiAnalyzer.js';
+import { executeDefensiveAudit, scanPortfolioDirectory } from './geminiAnalyzer.js';
+import { buildSarifReport } from './sarif.js';
 import { SafeClientError } from './scanner.js';
 import type { AnalysisMode } from './types.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = path.resolve(
+const RAW_PROJECT_ROOT = path.resolve(
   __dirname,
   __dirname.includes(`${path.sep}dist${path.sep}`) ? '../..' : '..',
 );
+const PROJECT_ROOT = fsSync.realpathSync(RAW_PROJECT_ROOT);
+const DEFAULT_PORTFOLIO_ROOT = path.dirname(PROJECT_ROOT);
 const PUBLIC_DIR = path.join(PROJECT_ROOT, 'public');
 const FIXTURE_DIR = path.join(PROJECT_ROOT, 'test', 'fixtures', 'sample-polyglot-app');
 
 const MAX_JSON_BODY_BYTES = 32 * 1024;
+const MAX_DRAIN_BODY_BYTES = 1024 * 1024;
 
-const AuditRequestSchema = z.object({
-  targetPath: z.string().min(1).max(1024),
-  mode: z.enum(['gemini-3.8-flash', 'gemini-4-argon', 'deterministic']).default('gemini-3.8-flash'),
-  apiKey: z.string().max(256).optional(),
-  excludeFixtures: z.boolean().optional(),
-});
+export class PayloadTooLargeError extends SafeClientError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PayloadTooLargeError';
+  }
+}
+
+const AuditRequestSchema = z
+  .object({
+    targetPath: z.string().min(1).max(1024),
+    mode: z
+      .enum(['gemini-3.8-flash', 'gemini-4-argon', 'deterministic'])
+      .default('gemini-3.8-flash'),
+    apiKey: z.string().max(256).optional(),
+    excludeFixtures: z.boolean().optional(),
+  })
+  .strict();
+
+const EmptyObjectSchema = z.object({}).strict();
 
 function applyHardenedHeaders(res: ServerResponse, nonce?: string): void {
+  res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Vary', 'Host, Origin, Sec-Fetch-Dest, Sec-Fetch-Mode, Sec-Fetch-Site');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -78,7 +97,11 @@ function isAllowedDocumentNavigation(req: IncomingMessage): boolean {
   const mode = req.headers['sec-fetch-mode'];
   const dest = req.headers['sec-fetch-dest'];
 
-  if (!site || typeof site !== 'string') return true;
+  if (Array.isArray(site) || Array.isArray(mode) || Array.isArray(dest)) {
+    return false;
+  }
+
+  if (site === undefined) return true;
   if (site === 'same-origin' || site === 'none') return true;
 
   if (
@@ -97,7 +120,7 @@ function isAllowedDocumentNavigation(req: IncomingMessage): boolean {
 
 /**
  * Strict Zero-Trust verification for API endpoints (/api/*):
- * - Rejects any cross-site or same-site Sec-Fetch-Site header.
+ * - Requires explicit Sec-Fetch-Site: same-origin (rejects missing, array, cross-site, or same-site).
  * - Requires cryptographic X-Longinus-Csrf capability token rendered in same-origin HTML.
  * - For state/audit POSTs, requires explicit Origin === http://127.0.0.1:<port>.
  */
@@ -108,12 +131,15 @@ function isAuthorizedApiCall(
   requireOrigin: boolean,
 ): boolean {
   const site = req.headers['sec-fetch-site'];
-  if (typeof site === 'string' && site !== 'same-origin') {
+  if (typeof site !== 'string' || site !== 'same-origin') {
     return false;
   }
 
   const expectedOrigin = `http://127.0.0.1:${boundPort}`;
   const origin = req.headers.origin;
+  if (Array.isArray(origin)) {
+    return false;
+  }
   if (requireOrigin) {
     if (origin !== expectedOrigin) return false;
   } else if (origin !== undefined && origin !== expectedOrigin) {
@@ -124,21 +150,48 @@ function isAuthorizedApiCall(
 }
 
 async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+  const declaredLen = req.headers['content-length'];
+  if (typeof declaredLen === 'string' && /^\d+$/.test(declaredLen.trim())) {
+    const parsedLen = Number(declaredLen.trim());
+    if (parsedLen > MAX_JSON_BODY_BYTES) {
+      let drained = 0;
+      req.on('data', (chunk: Buffer) => {
+        drained += chunk.length;
+        if (drained > MAX_DRAIN_BODY_BYTES) {
+          req.destroy();
+        }
+      });
+      throw new PayloadTooLargeError('リクエストボディがサイズ上限を超えています。');
+    }
+  }
+
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let total = 0;
+    let rejectedTooLarge = false;
 
     req.on('data', (chunk: Buffer) => {
       total += chunk.length;
+      if (rejectedTooLarge) {
+        if (total > MAX_DRAIN_BODY_BYTES) {
+          req.destroy();
+        }
+        return;
+      }
       if (total > MAX_JSON_BODY_BYTES) {
-        reject(new SafeClientError('リクエストボディがサイズ上限を超えています。'));
-        req.destroy();
+        rejectedTooLarge = true;
+        chunks.length = 0;
+        reject(new PayloadTooLargeError('リクエストボディがサイズ上限を超えています。'));
+        if (total > MAX_DRAIN_BODY_BYTES) {
+          req.destroy();
+        }
         return;
       }
       chunks.push(chunk);
     });
 
     req.on('end', () => {
+      if (rejectedTooLarge) return;
       try {
         const raw = Buffer.concat(chunks).toString('utf8');
         resolve(raw ? JSON.parse(raw) : {});
@@ -147,7 +200,11 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
       }
     });
 
-    req.on('error', reject);
+    req.on('error', (err) => {
+      if (!rejectedTooLarge) {
+        reject(err);
+      }
+    });
   });
 }
 
@@ -189,9 +246,11 @@ function renderIndexHtml(nonce: string, csrfToken: string): string {
           <h2 id="scan-form-heading" class="section-title">監査対象リポジトリ &amp; 推論モード指定</h2>
         </div>
         <div class="preset-group" role="group" aria-label="クイック監査プリセット">
+          <button type="button" class="btn btn-outline" id="preset-portfolio-btn">全プロダクト一括監査</button>
           <button type="button" class="btn btn-ghost" id="preset-fixture-btn">4スタック脆弱サンプル検証</button>
           <button type="button" class="btn btn-ghost" id="preset-self-btn">Longinus 自己防御監査</button>
-          <button type="button" class="btn btn-outline" id="export-md-btn">防御レポート出力 (.md)</button>
+          <button type="button" class="btn btn-outline" id="export-md-btn">レポート出力 (.md)</button>
+          <button type="button" class="btn btn-outline" id="export-sarif-btn">SARIF出力 (.sarif)</button>
         </div>
       </div>
 
@@ -235,6 +294,35 @@ function renderIndexHtml(nonce: string, csrfToken: string): string {
       </form>
 
       <p class="status-banner" id="status-banner" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="card isolated-region" id="portfolio-section" hidden aria-labelledby="portfolio-heading">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">PORTFOLIO FLEET SHIELD</p>
+          <h2 id="portfolio-heading" class="section-title">ローカル全プロダクト・予防防御姿勢一覧比較表</h2>
+        </div>
+        <div class="preset-group">
+          <div class="telemetry-strip" id="portfolio-kpis"></div>
+          <button type="button" class="btn btn-ghost btn-sm" id="close-portfolio-btn">一覧を閉じる</button>
+        </div>
+      </div>
+      <div tabindex="0" role="region" aria-labelledby="portfolio-table-caption" class="table-wrapper">
+        <table class="luxury-table portfolio-table">
+          <caption id="portfolio-table-caption" class="sr-only">ローカル全プロダクト防御スコア一覧比較表</caption>
+          <thead>
+            <tr>
+              <th scope="col">プロダクト</th>
+              <th scope="col">防御スコア</th>
+              <th scope="col">走査ファイル</th>
+              <th scope="col">深刻度内訳 (C / H / M)</th>
+              <th scope="col">最優先予防ハードニング項目</th>
+              <th scope="col">詳細分析</th>
+            </tr>
+          </thead>
+          <tbody id="portfolio-tbody"></tbody>
+        </table>
+      </div>
     </section>
 
     <section class="hero-metrics" aria-label="総合防御スコアと監査サマリ">
@@ -384,8 +472,13 @@ function renderIndexHtml(nonce: string, csrfToken: string): string {
 </html>`;
 }
 
-export function createLonginusServer(): http.Server {
+export interface LonginusServerOptions {
+  portfolioRoot?: string;
+}
+
+export function createLonginusServer(options?: LonginusServerOptions): http.Server {
   const bootCsrfToken = crypto.randomBytes(32).toString('hex');
+  const pinnedPortfolioRoot = options?.portfolioRoot ?? DEFAULT_PORTFOLIO_ROOT;
 
   const server = http.createServer(async (req, res) => {
     try {
@@ -483,9 +576,75 @@ export function createLonginusServer(): http.Server {
         return;
       }
 
+      if (req.method === 'POST' && pathname === '/api/sarif') {
+        const contentType = req.headers['content-type'] ?? '';
+        if (!contentType.toLowerCase().startsWith('application/json')) {
+          sendJson(res, 415, { error: 'Content-Type must be application/json.' });
+          return;
+        }
+
+        const rawBody = await readJsonBody(req);
+        const parsed = AuditRequestSchema.safeParse(rawBody);
+        if (!parsed.success) {
+          sendJson(res, 400, { error: 'SARIF 出力リクエストの形式が不正です。' });
+          return;
+        }
+
+        const { targetPath, excludeFixtures } = parsed.data;
+        const report = await executeDefensiveAudit({
+          targetPath,
+          mode: 'deterministic',
+          ...(excludeFixtures ? { excludeRelativePrefixes: ['test'] } : {}),
+        });
+        const sarif = buildSarifReport(report);
+        applyHardenedHeaders(res);
+        res.writeHead(200, { 'Content-Type': 'application/sarif+json; charset=utf-8' });
+        res.end(JSON.stringify(sarif, null, 2));
+        return;
+      }
+
+      if (req.method === 'POST' && pathname === '/api/portfolio') {
+        const contentType = req.headers['content-type'] ?? '';
+        if (!contentType.toLowerCase().startsWith('application/json')) {
+          sendJson(res, 415, { error: 'Content-Type must be application/json.' });
+          return;
+        }
+
+        const rawBody = await readJsonBody(req);
+        const parsed = EmptyObjectSchema.safeParse(rawBody);
+        if (!parsed.success) {
+          sendJson(res, 400, { error: 'ポートフォリオ監査リクエストには追加パラメータを指定できません。' });
+          return;
+        }
+
+        const portfolio = await scanPortfolioDirectory({
+          portfolioRoot: pinnedPortfolioRoot,
+          selfProjectRoot: PROJECT_ROOT,
+        });
+        sendJson(res, 200, portfolio);
+        return;
+      }
+
       sendJson(res, 404, { error: 'Not Found' });
     } catch (err) {
-      if (err instanceof SafeClientError) {
+      if (res.headersSent) {
+        if (!req.destroyed) req.destroy();
+        return;
+      }
+      if (err instanceof PayloadTooLargeError) {
+        res.shouldKeepAlive = false;
+        res.setHeader('Connection', 'close');
+        sendJson(res, 413, { error: err.message });
+        req.resume();
+        const destroyTimer = setTimeout(() => {
+          if (!req.destroyed) {
+            req.destroy();
+          }
+        }, 250);
+        destroyTimer.unref();
+        req.once('end', () => clearTimeout(destroyTimer));
+        req.once('close', () => clearTimeout(destroyTimer));
+      } else if (err instanceof SafeClientError) {
         sendJson(res, 400, { error: err.message });
       } else {
         sendJson(res, 500, { error: '監査処理中に内部エラーが発生しました。' });
@@ -503,8 +662,9 @@ export function createLonginusServer(): http.Server {
 
 export async function startLonginusServer(
   port = 4310,
+  options?: LonginusServerOptions,
 ): Promise<{ server: http.Server; url: string }> {
-  const server = createLonginusServer();
+  const server = createLonginusServer(options);
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
     server.listen(port, '127.0.0.1', () => resolve());

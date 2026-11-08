@@ -51,6 +51,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .sr-only {
   position: absolute;
   inline-size: 1px;
@@ -391,6 +395,20 @@ body {
   overflow-wrap: anywhere;
 }
 
+.telemetry-delta-up {
+  background: var(--emerald-soft);
+  color: var(--emerald-ink);
+  border: 1px solid rgba(5, 150, 105, 0.25);
+  font-weight: 500;
+}
+
+.telemetry-delta-down {
+  background: var(--crimson-soft);
+  color: var(--crimson-ink);
+  border: 1px solid rgba(225, 29, 72, 0.25);
+  font-weight: 500;
+}
+
 /* 4-Stack Grid */
 .stack-grid {
   display: grid;
@@ -635,6 +653,14 @@ body {
   --label-6: "防御パッチ";
 }
 
+.portfolio-table {
+  --label-2: "防御スコア";
+  --label-3: "走査ファイル";
+  --label-4: "深刻度内訳";
+  --label-5: "最優先対策";
+  --label-6: "詳細分析";
+}
+
 @container (width < 680px) {
   .luxury-table,
   .luxury-table thead,
@@ -659,6 +685,7 @@ body {
   .luxury-table tbody th {
     position: sticky;
     inset-block-start: 0;
+    z-index: 2;
     background: var(--bg-subtle);
     border-block-end: 1px solid var(--border-hairline);
   }
