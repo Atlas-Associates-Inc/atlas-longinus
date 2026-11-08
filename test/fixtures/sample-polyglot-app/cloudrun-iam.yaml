@@ -1,0 +1,5 @@
+# Synthetic Cloud Run IAM policy fixture
+bindings:
+  - role: roles/run.invoker
+    members:
+      - allUsers

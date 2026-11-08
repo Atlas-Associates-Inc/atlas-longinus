@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "defaults": {
+    "expectedStatus": 200,
+    "requireWebgl": false,
+    "maxHorizontalOverflowPx": 1,
+    "timeoutMs": 15000,
+    "settleMs": 1200
+  },
+  "scenarios": [
+    {
+      "name": "dashboard",
+      "path": "/",
+      "expectedPathPrefix": "/",
+      "viewports": ["desktop_hd", "pixel_9_pro"],
+      "requiredSelectors": [
+        "#audit-form",
+        "#overall-score",
+        "#stack-grid",
+        "#trust-map-container",
+        "#stride-tbody",
+        "#findings-tbody"
+      ],
+      "expectedText": [
+        "LONGINUS",
+        "STRIDE",
+        "OVERALL DEFENSE POSTURE"
+      ],
+      "printPdf": {
+        "enabled": true,
+        "minPages": 1,
+        "maxPages": 6
+      }
+    }
+  ]
+}
