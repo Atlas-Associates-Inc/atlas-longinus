@@ -4,7 +4,9 @@
   <img src="public/longinus-icon.svg" alt="LONGINUS Icon" width="96" height="96" />
 </p>
 
-> 🌐 **Language / 言語**: **[日本語 (Japanese)](#日本語)** · **[English](#english)** — Apache-2.0 · Node.js `>=22.18.0` · **0 npm dependencies (`npm install` 不要)** · Loopback Web UI: `npm start` (`http://127.0.0.1:4310`)
+> 🌐 **20 Languages / 20言語ナビゲーション**: **[日本語](#日本語)** · **[English](#english)** · **[简体中文](#zh-hans)** · **[繁體中文](#zh-hant)** · **[한국어](#ko)** · **[Español](#es)** · **[Português](#pt)** · **[Français](#fr)** · **[Deutsch](#de)** · **[Italiano](#it)** · **[Русский](#ru)** · **[Українська](#uk)** · **[Polski](#pl)** · **[Nederlands](#nl)** · **[Türkçe](#tr)** · **[العربية](#ar)** · **[हिन्दी](#hi)** · **[Bahasa Indonesia](#id)** · **[Tiếng Việt](#vi)** · **[ไทย](#th)**
+>
+> Apache-2.0 · Node.js `>=22.18.0` · **0 npm dependencies (`npm install` 不要)** · Loopback Web UI: `npm start` (`http://127.0.0.1:4310`)
 
 ---
 
@@ -151,14 +153,10 @@ Defaults are `--format table`, `--fail-on high`, `--lang en` (or `ATLAS_LANG=en|
 
 When an enterprise representative loads **`Atlas Sovereign`** into their company's internal AI agent (such as Gemini CLI, Antigravity, or Vertex AI), that internal AI immediately acquires the methodology, cross-boundary graph engine, 5-pillar maturity scorecard, and remediation patterns of a top-tier cloud & AI consulting firm—**completely eliminating the need to hire external consultants (`$0` open-source self-service)**.
 
-**Copy-Paste Prompt to Turn Your Company's AI into an Instant Consulting AI (`Apache-2.0 — $0`)**
+**1-Line Copy-Paste Prompt for Your AI Agent (`Apache-2.0 — $0`, Zero Commands or Options to Type)**
 
 ```text
-Read ATLAS.md and README.md in this Atlas Sovereign repository and act as our in-house Principal Cloud, DX & AI Security Consulting AI (replacing external consulting firms). Execute the following 4 steps strictly in read-only / review-first mode against our target repository (<TARGET_REPO_PATH>):
-1. Run `node bin/atlas-sovereign.mjs mcp-config --client gemini` and present the read-only MCP Airlock wrapper configuration for our cloud/security tools.
-2. Run `node bin/atlas-sovereign.mjs audit <TARGET_REPO_PATH> --format blueprint --emit-patch --lang en` and present the Executive Risk Summary, the 5-Pillar Architecture Maturity Scorecard, the Estimated External Consulting Equivalent Saved, the 30/60/90-Day Autonomous Remediation Roadmap, and all reachable cross-boundary attack paths.
-3. Explain each review-only unified diff proposed by `--emit-patch` (Firebase Rules, Terraform Cloud Run/Cloud SQL/GKE/BigQuery, IAM least privilege, and GitHub Actions WIF pinning) and wait for human approval before applying any file edits.
-4. Prepare a pull-request CI workflow using `uses: ./` with `fail-on: high` so future regressions are blocked deterministically without external consultants.
+Run https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
 | Approach | Cost & Duration | How It Works | Cloud Credential Handover |
@@ -417,14 +415,10 @@ npx @atlas-sec/sovereign audit . --lang ja
 
 各企業の担当者は、この **`Atlas Sovereign`** リポジトリを自社の AI エージェント（Gemini CLI、Antigravity、Vertex AI 等）に読み込ませるだけで、**高額な外部の DX・クラウドコンサルティングファームを雇うことなく、自社専用の「超一流コンサル AI」を一瞬で構築し、完全無料（¥0）で内製強化を完結**できます。
 
-**自社AIを一瞬で「社内専属コンサルAI」に変えるコピペ用プロンプト（`Apache-2.0 — ¥0 完全自走・コンサル不要`）**
+**自社AIにそのまま貼るだけの1行プロンプト（`Apache-2.0 — ¥0 完全自走・コマンドも説明文も不要`）**
 
 ```text
-この Atlas Sovereign リポジトリの ATLAS.md と README.md を読み込み、当社の「社内専属プリンシパル DX・クラウド・AI セキュリティコンサル AI」（外部コンサルファーム代替）として振る舞ってください。自社の対象リポジトリ（<TARGET_REPO_PATH>）に対して、必ず読み取り専用・レビュー優先モードで以下の4ステップを実行してください。
-1. `node bin/atlas-sovereign.mjs mcp-config --client gemini` を実行し、社内クラウド／セキュリティツール向けの読み取り専用 MCP Airlock ラッパー設定を提示すること。
-2. `node bin/atlas-sovereign.mjs audit <TARGET_REPO_PATH> --format blueprint --emit-patch --lang ja` を実行し、エグゼクティブリスク要約（経営・情シス向け要約）、5領域アーキテクチャ成熟度スコアカード、外部コンサル削減効果試算、30/60/90日の自律改修ロードマップ、および到達可能なすべてのクロス境界攻撃経路を日本語で提示すること。
-3. `--emit-patch` が提案したレビュー専用の unified diff（Firebase Rules、Terraform Cloud Run/Cloud SQL/GKE/BigQuery、IAM 最小権限化、GitHub Actions WIF リポジトリ固定）を1件ずつ解説し、人間の承認を得るまでファイル変更を適用しないこと。
-4. 外部コンサルに一切依存せず今後の設定退行を決定論的にブロックするため、`uses: ./`（`fail-on: high`）を用いた Pull Request CI ワークフロー案を作成すること。
+https://github.com/Atlas-Associates-Inc/atlas-longinus を実行して
 ```
 
 | 導入形態 | 費用・期間 | 仕組み・特徴 | クラウド認証情報の引き渡し |
@@ -593,3 +587,291 @@ npm test
 ```
 
 決定論的なパーサーの実時間上限テストが他のテストワーカーと競合しないよう、テストファイルは直列実行します。アサーションとヒープ上限は有効なまま維持します。
+
+---
+
+<a id="zh-hans"></a>
+## 简体中文 (Simplified Chinese)
+
+> 🌐 **语言切换**: [日本語](#日本語) | [English](#english) | **简体中文**
+
+无需记忆或输入任何命令与参数，只需将以下 **1 行文本**粘贴到您的 AI 代理（**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** 等）中即可自动执行只读审计：
+
+```text
+运行 https://github.com/Atlas-Associates-Inc/atlas-longinus
+```
+
+- **核心能力**: 离线 GCP × Firebase 跨边界攻击路径分析（支持 CEL 函数与 `let` 绑定 AST 解析、管理员受控公开资产零误报、作用域级扣分去重）、4-Stack 源码与密钥护盾（1,529 种密钥模式脱敏）、5 大领域架构成熟度评分卡（0–100 分）、30/60/90 天修复路线图、只读 MCP Airlock 及本地 Web 控制台（`http://127.0.0.1:4310`）。
+- **技术规格与安全边界**: Apache-2.0 开源免费（0 外部 npm 依赖，Node.js `>=22.18.0`）。权威技术规范与安全边界以 [English](#english) 与 [日本語](#日本語) 章节为准。
+
+---
+
+<a id="zh-hant"></a>
+## 繁體中文 (Traditional Chinese)
+
+> 🌐 **語言切換**: [日本語](#日本語) | [English](#english) | **繁體中文**
+
+無需記憶或輸入任何指令與參數，只需將以下 **1 行文字**貼上到您的 AI 代理（**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** 等）即可自動執行唯讀審計：
+
+```text
+執行 https://github.com/Atlas-Associates-Inc/atlas-longinus
+```
+
+- **核心能力**: 離線 GCP × Firebase 跨邊界攻擊路徑分析（支援 CEL 函式與 `let` 綁定 AST 解析、管理員受控公開資產零誤報、消除三重扣分）、4-Stack 原始碼與金鑰護盾、5 大領域架構成熟度評分卡（0–100 分）、30/60/90 天修復藍圖、唯讀 MCP Airlock 及本機 Web 儀表板（`http://127.0.0.1:4310`）。
+- **技術規範與安全邊界**: Apache-2.0 開源免費（0 外部 npm 相依性，Node.js `>=22.18.0`）。正式技術規範與安全邊界以 [English](#english) 與 [日本語](#日本語) 章節為準。
+
+---
+
+<a id="ko"></a>
+## 한국어 (Korean)
+
+> 🌐 **언어 전환**: [日本語](#日本語) | [English](#english) | **한국어**
+
+명령어나 옵션을 한 글자도 외울 필요 없이 AI 에이전트(**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** 등)에 아래 **한 줄만 붙여넣으면** 읽기 전용 감사가 자동 실행됩니다:
+
+```text
+https://github.com/Atlas-Associates-Inc/atlas-longinus 실행해줘
+```
+
+- **핵심 기능**: 오프라인 GCP × Firebase 교차 경계 공격 경로 분석(CEL 함수 및 `let` 바인딩 AST 해석, 관리자 전용 공개 에셋 오탐 제로, 3중 감점 폐지), 4-Stack 코드 실드, 5대 영역 아키텍처 성숙도 스코어카드(0–100점), 30/60/90일 개선 로드맵, 읽기 전용 MCP Airlock 및 로컬 웹 UI(`http://127.0.0.1:4310`).
+- **기술 사양 및 보안 경계**: Apache-2.0 오픈소스(npm 의존성 0개, Node.js `>=22.18.0`). 공식 기술 사양은 [English](#english) 및 [日本語](#日本語) 섹션을 따릅니다.
+
+---
+
+<a id="es"></a>
+## Español (Spanish)
+
+> 🌐 **Idioma**: [日本語](#日本語) | [English](#english) | **Español**
+
+No necesita memorizar ni escribir ningún comando ni opción; simplemente pegue esta **1 línea** en su agente de IA (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, etc.):
+
+```text
+Ejecuta https://github.com/Atlas-Associates-Inc/atlas-longinus
+```
+
+- **Capacidades clave**: Analizador offline de rutas de ataque GCP × Firebase (resolución AST de funciones CEL, cero falsos positivos en activos públicos restringidos a administradores y eliminación de penalización triple), 4-Stack Code Shield, tarjeta de puntuación de 5 pilares (0–100), hoja de ruta de 30/60/90 días, MCP Airlock de solo lectura y panel web local (`http://127.0.0.1:4310`).
+- **Límites y especificaciones**: Apache-2.0, Node.js `>=22.18.0`, 0 dependencias npm. Regido por las secciones [English](#english) y [日本語](#日本語).
+
+---
+
+<a id="pt"></a>
+## Português (Portuguese)
+
+> 🌐 **Idioma**: [日本語](#日本語) | [English](#english) | **Português**
+
+Você não precisa memorizar nenhum comando ou opção; basta colar esta **1 linha** no seu agente de IA (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, etc.):
+
+```text
+Execute https://github.com/Atlas-Associates-Inc/atlas-longinus
+```
+
+- **Principais recursos**: Analisador offline de caminhos de ataque GCP × Firebase (resolução AST de funções CEL, zero falsos positivos em ativos públicos restritos a administradores e fim da penalidade tripla), 4-Stack Code Shield, scorecard de maturidade em 5 pilares (0–100), roteiro de 30/60/90 dias, MCP Airlock somente leitura e painel web local (`http://127.0.0.1:4310`).
+- **Especificações oficiais**: Apache-2.0, Node.js `>=22.18.0`, 0 dependências npm. Regido pelas seções [English](#english) e [日本語](#日本語).
+
+---
+
+<a id="fr"></a>
+## Français (French)
+
+> 🌐 **Langue**: [日本語](#日本語) | [English](#english) | **Français**
+
+Aucune commande ni option à mémoriser : collez simplement cette **seule ligne** dans votre agent IA (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, etc.) :
+
+```text
+Exécute https://github.com/Atlas-Associates-Inc/atlas-longinus
+```
+
+- **Fonctionnalités clés**: Analyseur hors ligne de chemins d'attaque GCP × Firebase (résolution AST des fonctions CEL, zéro faux positif sur les ressources publiques gérées par les administrateurs, suppression de la triple pénalité), 4-Stack Code Shield, tableau de bord à 5 piliers (0–100), feuille de route 30/60/90 jours, MCP Airlock en lecture seule et interface web locale (`http://127.0.0.1:4310`).
+- **Spécifications officielles**: Apache-2.0, Node.js `>=22.18.0`, 0 dépendance npm. Régi par les sections [English](#english) et [日本語](#日本語).
+
+---
+
+<a id="de"></a>
+## Deutsch (German)
+
+> 🌐 **Sprache**: [日本語](#日本語) | [English](#english) | **Deutsch**
+
+Sie müssen sich kein einziges Kommando merken – fügen Sie einfach diese **eine Zeile** in Ihren KI-Agenten (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** usw.) ein:
+
+```text
+Führe https://github.com/Atlas-Associates-Inc/atlas-longinus aus
+```
+
+- **Kernfunktionen**: Offline-Angriffspfad-Analysator für GCP × Firebase (CEL-Funktions-AST-Auflösung, null Fehlalarme bei schreibgeschützten öffentlichen Assets, keine Dreifach-Abzüge), 4-Stack Code Shield, 5-Säulen-Scorecard (0–100), 30/60/90-Tage-Roadmap, schreibgeschützter MCP-Airlock und lokales Web-Dashboard (`http://127.0.0.1:4310`).
+- **Spezifikationen**: Apache-2.0, Node.js `>=22.18.0`, 0 npm-Abhängigkeiten. Maßgeblich sind die Abschnitte [English](#english) und [日本語](#日本語).
+
+---
+
+<a id="it"></a>
+## Italiano (Italian)
+
+> 🌐 **Lingua**: [日本語](#日本語) | [English](#english) | **Italiano**
+
+Non serve memorizzare alcun comando o opzione: incolla semplicemente questa **singola riga** nel tuo agente IA (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, ecc.):
+
+```text
+Esegui https://github.com/Atlas-Associates-Inc/atlas-longinus
+```
+
+- **Funzionalità principali**: Analizzatore offline dei percorsi di attacco GCP × Firebase (risoluzione AST delle funzioni CEL, zero falsi positivi sugli asset pubblici protetti in scrittura, eliminazione della tripla penalità), 4-Stack Code Shield, scorecard a 5 pilastri (0–100), roadmap a 30/60/90 giorni, MCP Airlock in sola lettura e interfaccia web locale (`http://127.0.0.1:4310`).
+- **Specifiche ufficiali**: Apache-2.0, Node.js `>=22.18.0`, 0 dipendenze npm. Regolato dalle sezioni [English](#english) e [日本語](#日本語).
+
+---
+
+<a id="ru"></a>
+## Русский (Russian)
+
+> 🌐 **Язык**: [日本語](#日本語) | [English](#english) | **Русский**
+
+Не нужно запоминать команды или флаги — просто вставьте эту **одну строку** в ваш ИИ-агент (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** и др.):
+
+```text
+Запусти https://github.com/Atlas-Associates-Inc/atlas-longinus
+```
+
+- **Ключевые возможности**: Офлайн-анализатор путей атак GCP × Firebase (AST-анализ функций CEL, отсутствие ложных срабатываний на публичных ресурсах с защитой от записи, устранение тройного штрафа), 4-Stack Code Shield, оценка зрелости по 5 направлениям (0–100), план на 30/60/90 дней, MCP Airlock только для чтения и локальный веб-интерфейс (`http://127.0.0.1:4310`).
+- **Спецификации**: Apache-2.0, Node.js `>=22.18.0`, 0 зависимостей npm. Определяется разделами [English](#english) и [日本語](#日本語).
+
+---
+
+<a id="uk"></a>
+## Українська (Ukrainian)
+
+> 🌐 **Мова**: [日本語](#日本語) | [English](#english) | **Українська**
+
+Не потрібно запам'ятовувати жодної команди — просто вставте цей **один рядок** у ваш ШІ-агент (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** тощо):
+
+```text
+Запусти https://github.com/Atlas-Associates-Inc/atlas-longinus
+```
+
+- **Основні можливості**: Офлайн-аналізатор шляхів атак GCP × Firebase (AST-аналіз функцій CEL, нуль хибних спрацьовувань на публічних ресурсах із захистом запису, скасування потрійного штрафу), 4-Stack Code Shield, оцінка за 5 напрямами (0–100), план на 30/60/90 днів, MCP Airlock лише для читання та локальний вебінтерфейс (`http://127.0.0.1:4310`).
+- **Специфікації**: Apache-2.0, Node.js `>=22.18.0`, 0 залежностей npm. Регулюється розділами [English](#english) і [日本語](#日本語).
+
+---
+
+<a id="pl"></a>
+## Polski (Polish)
+
+> 🌐 **Język**: [日本語](#日本語) | [English](#english) | **Polski**
+
+Nie musisz pamiętać żadnych poleceń ani opcji — po prostu wklej tę **jedną linię** do swojego agenta AI (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** itp.):
+
+```text
+Uruchom https://github.com/Atlas-Associates-Inc/atlas-longinus
+```
+
+- **Główne funkcje**: Analizator ścieżek ataków offline GCP × Firebase (analiza AST funkcji CEL, zero fałszywych alarmów dla publicznych zasobów chronionych przed zapisem, brak potrójnej kary), 4-Stack Code Shield, karta wyników 5 filarów (0–100), plan 30/60/90 dni, MCP Airlock tylko do odczytu oraz lokalny panel WWW (`http://127.0.0.1:4310`).
+- **Specyfikacja**: Apache-2.0, Node.js `>=22.18.0`, 0 zależności npm. Określone w sekcjach [English](#english) i [日本語](#日本語).
+
+---
+
+<a id="nl"></a>
+## Nederlands (Dutch)
+
+> 🌐 **Taal**: [日本語](#日本語) | [English](#english) | **Nederlands**
+
+U hoeft geen enkel commando te onthouden — plak gewoon deze **ene regel** in uw AI-agent (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, enz.):
+
+```text
+Voer https://github.com/Atlas-Associates-Inc/atlas-longinus uit
+```
+
+- **Belangrijkste functies**: Offline GCP × Firebase aanvalspad-analyser (CEL-functie AST-analyse, nul fout-positieven op schrijfbeveiligde publieke assets, geen drievoudige strafpunten), 4-Stack Code Shield, 5-pijlerscorecard (0–100), 30/60/90-dagen-routekaart, alleen-lezen MCP Airlock en lokaal webdashboard (`http://127.0.0.1:4310`).
+- **Specificaties**: Apache-2.0, Node.js `>=22.18.0`, 0 npm-afhankelijkheden. Bepaald door de secties [English](#english) en [日本語](#日本語).
+
+---
+
+<a id="tr"></a>
+## Türkçe (Turkish)
+
+> 🌐 **Dil**: [日本語](#日本語) | [English](#english) | **Türkçe**
+
+Tek bir komut veya seçenek ezberlemenize gerek yok — AI ajanınıza (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** vb.) yalnızca şu **1 satırı** yapıştırın:
+
+```text
+https://github.com/Atlas-Associates-Inc/atlas-longinus çalıştır
+```
+
+- **Temel Özellikler**: Çevrimdışı GCP × Firebase saldırı yolu analizcisi (CEL fonksiyonu AST çözümlemesi, yazma korumalı genel varlıklarda sıfır yanlış pozitif, üçlü ceza kaldırıldı), 4-Stack Code Shield, 5 sütunlu puan kartı (0–100), 30/60/90 günlük yol haritası, salt okunur MCP Airlock ve yerel web arayüzü (`http://127.0.0.1:4310`).
+- **Resmi Teknik Özellikler**: Apache-2.0, Node.js `>=22.18.0`, 0 npm bağımlılığı. [English](#english) ve [日本語](#日本語) bölümleriyle belirlenir.
+
+---
+
+<a id="ar"></a>
+## العربية (Arabic)
+
+> 🌐 **اللغة**: [日本語](#日本語) | [English](#english) | **العربية**
+
+لا حاجة لحفظ أي أمر أو خيار على الإطلاق — فقط الصق هذا **السطر الواحد** في وكيل الذكاء الاصطناعي الخاص بك (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** إلخ):
+
+```text
+شغّل https://github.com/Atlas-Associates-Inc/atlas-longinus
+```
+
+- **القدرات الأساسية**: محلل مسارات الهجوم عبر حدود GCP × Firebase دون اتصال (تحليل AST لدوال CEL، صفر إنذارات كاذبة للأصول العامة المحمية ضد الكتابة، وإلغاء العقوبة الثلاثية)، ودرع الكود رباعي الطبقات (4-Stack Code Shield)، وبطاقة الأداء الخماسية (0–100)، وخارطة طريق 30/60/90 يوماً، وحاجز MCP Airlock للقراءة فقط، ولوحة تحكم محلية (`http://127.0.0.1:4310`).
+- **المواصفات المعتمدة**: ترخيص Apache-2.0، وNode.js `>=22.18.0`، و0 تبعيات npm. محكوم بقسمي [English](#english) و[日本語](#日本語).
+
+---
+
+<a id="hi"></a>
+## हिन्दी (Hindi)
+
+> 🌐 **भाषा**: [日本語](#日本語) | [English](#english) | **हिन्दी**
+
+आपको कोई भी कमांड या विकल्प याद रखने की आवश्यकता नहीं है—बस अपने AI एजेंट (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** आदि) में यह **1 पंक्ति** पेस्ट करें:
+
+```text
+https://github.com/Atlas-Associates-Inc/atlas-longinus चलाएँ
+```
+
+- **मुख्य विशेषताएँ**: ऑफ़लाइन GCP × Firebase अटैक-पाथ विश्लेषक (CEL फ़ंक्शन AST विश्लेषण, एडमिन-नियंत्रित पब्लिक एसेट्स पर शून्य फ़ॉल्स पॉज़िटिव, और तिहरे दंड की समाप्ति), 4-Stack Code Shield, 5-पिलर स्कोरकार्ड (0–100), 30/60/90-दिन का रोडमैप, रीड-ओनली MCP Airlock और लोकल वेब डैशबोर्ड (`http://127.0.0.1:4310`)।
+- **आधिकारिक विनिर्देश**: Apache-2.0, Node.js `>=22.18.0`, 0 npm निर्भरताएँ। [English](#english) और [日本語](#日本語) अनुभागों द्वारा शासित।
+
+---
+
+<a id="id"></a>
+## Bahasa Indonesia (Indonesian)
+
+> 🌐 **Bahasa**: [日本語](#日本語) | [English](#english) | **Bahasa Indonesia**
+
+Anda tidak perlu menghafal satu karakter perintah pun—cukup tempel **1 baris** ini ke agen AI Anda (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, dll.):
+
+```text
+Jalankan https://github.com/Atlas-Associates-Inc/atlas-longinus
+```
+
+- **Fitur Utama**: Penganalisis jalur serangan GCP × Firebase offline (resolusi AST fungsi CEL, nol positif palsu pada aset publik yang dibatasi tulis, dan penghapusan penalti ganda tiga), 4-Stack Code Shield, kartu skor 5 pilar (0–100), peta jalan 30/60/90 hari, MCP Airlock khusus-baca, dan dasbor web lokal (`http://127.0.0.1:4310`).
+- **Spesifikasi Resmi**: Apache-2.0, Node.js `>=22.18.0`, 0 dependensi npm. Diatur oleh bagian [English](#english) dan [日本語](#日本語).
+
+---
+
+<a id="vi"></a>
+## Tiếng Việt (Vietnamese)
+
+> 🌐 **Ngôn ngữ**: [日本語](#日本語) | [English](#english) | **Tiếng Việt**
+
+Bạn không cần nhớ bất kỳ câu lệnh hay tùy chọn nào—chỉ cần dán **1 dòng** này vào AI agent (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, v.v.):
+
+```text
+Chạy https://github.com/Atlas-Associates-Inc/atlas-longinus
+```
+
+- **Tính năng cốt lõi**: Bộ phân tích đường dẫn tấn công GCP × Firebase ngoại tuyến (phân tích AST hàm CEL, không báo động giả trên tài sản công khai chỉ-admin-ghi, loại bỏ phạt 3 lần), 4-Stack Code Shield, bảng điểm 5 trụ cột (0–100), lộ trình 30/60/90 ngày, MCP Airlock chỉ đọc và bảng điều khiển web cục bộ (`http://127.0.0.1:4310`).
+- **Quy chuẩn chính thức**: Apache-2.0, Node.js `>=22.18.0`, 0 phụ thuộc npm. Quy định bởi phần [English](#english) và [日本語](#日本語).
+
+---
+
+<a id="th"></a>
+## ไทย (Thai)
+
+> 🌐 **ภาษา**: [日本語](#日本語) | [English](#english) | **ไทย**
+
+ไม่ต้องจำคำสั่งหรือออปชันแม้แต่ตัวเดียว เพียงวาง **1 บรรทัด** นี้ลงใน AI Agent ของคุณ (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** ฯลฯ):
+
+```text
+รัน https://github.com/Atlas-Associates-Inc/atlas-longinus
+```
+
+- **ความสามารถหลัก**: ตัววิเคราะห์เส้นทางการโจมตี GCP × Firebase แบบออฟไลน์ (การวิเคราะห์ AST ของฟังก์ชัน CEL, ลดการแจ้งเตือนผิดพลาดเป็นศูนย์สำหรับไฟล์สาธารณะที่จำกัดสิทธิ์เขียนเฉพาะแอดมิน, ยกเลิกการหักคะแนนซ้ำ 3 ต่อ), 4-Stack Code Shield, คะแนนความพร้อม 5 เสาหลัก (0–100), แผนงาน 30/60/90 วัน, MCP Airlock แบบอ่านอย่างเดียว และเว็บแดชบอร์ดในเครื่อง (`http://127.0.0.1:4310`)
+- **ข้อกำหนดอย่างเป็นทางการ**: Apache-2.0, Node.js `>=22.18.0`, 0 การพึ่งพา npm กำหนดโดยส่วน [English](#english) และ [日本語](#日本語)
