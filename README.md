@@ -1,6 +1,6 @@
-# Atlas Sovereign v0.6.0
+# LONGINUS v0.6.0
 
-> 🌐 **Language / 言語**: **[English](#english)** · **[日本語](#日本語)** — CLI: `--lang en` / `--lang ja` (`ATLAS_LANG=en|ja`) · `--audience enterprise|municipal|sme`
+> 🌐 **Language / 言語**: **[English](#english)** · **[日本語](#日本語)** — CLI: `--lang en` / `--lang ja` (`ATLAS_LANG=en|ja`) · `--audience enterprise|municipal|sme` · Web UI: `npm start` (`http://127.0.0.1:4310`)
 
 <details>
 <summary><strong>Global Overview (20 Languages) / 20言語クイック概要</strong></summary>
@@ -346,6 +346,8 @@ AI SecOps には別の境界もあります。アシスタントは攻撃用の�
 Node.js **>=22.18.0** で、この checkout から実行できます。インストール・ビルドは不要です。`--lang ja`（または環境変数 `ATLAS_LANG=ja`）を指定すると日本語、`--lang en` で英語で出力されます。
 
 ```sh
+npm start
+npm run audit:portfolio
 node bin/atlas-sovereign.mjs audit . --lang ja
 node bin/atlas-sovereign.mjs audit /path/to/repository --format blueprint --emit-patch --lang ja
 node bin/atlas-sovereign.mjs audit /path/to/repository --format blueprint --emit-patch --lang en
