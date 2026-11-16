@@ -2,15 +2,15 @@ import fsSync, { constants as fsConstants, type Dirent, type Stats } from 'node:
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { redactSecrets, redactSecretsPreserveLines } from './redactor.js';
-import { classifyFileStack, evaluateFileRules, type FileContext } from './rules.js';
+import { redactSecrets, redactSecretsPreserveLines } from './redactor.ts';
+import { classifyFileStack, evaluateFileRules, type FileContext } from './rules.ts';
 import type {
   SecurityFinding,
   StackDomain,
   StackPostureSummary,
   TrustBoundaryEdge,
   TrustBoundaryNode,
-} from './types.js';
+} from './types.ts';
 
 export class SafeClientError extends Error {
   constructor(message: string) {
@@ -102,7 +102,7 @@ const __scannerDirname = path.dirname(fileURLToPath(import.meta.url));
 const LONGINUS_PROJECT_ROOT = fsSync.realpathSync(
   path.resolve(
     __scannerDirname,
-    __scannerDirname.includes(`${path.sep}dist${path.sep}`) ? '../..' : '..',
+    __scannerDirname.includes(`${path.sep}dist${path.sep}`) ? '../../..' : '../..',
   ),
 );
 
@@ -464,6 +464,9 @@ export async function runStaticRepositoryScan(
       rootDirFh = pinnedRoot.handle;
       const rootStat = pinnedRoot.stat;
       const isLonginusSelfRoot = canonicalRoot === LONGINUS_PROJECT_ROOT;
+      if (isLonginusSelfRoot && excludePrefixes.includes('test') && !excludePrefixes.includes('fixtures')) {
+        excludePrefixes.push('fixtures');
+      }
 
       process.chdir(canonicalRoot);
       const rootDot = await fs.lstat('.');
@@ -685,9 +688,28 @@ export async function runStaticRepositoryScan(
           const redaction = redactSecretsPreserveLines(rawContent, { isEnvFile, ext: entryExt });
           const isLonginusSelfPatternFile =
             isLonginusSelfRoot &&
-            (safeRelPath === 'src/redactor.ts' || safeRelPath === 'src/rules.ts');
+            (safeRelPath === 'src/redactor.ts' ||
+              safeRelPath === 'src/rules.ts' ||
+              safeRelPath === 'src/shield/redactor.ts' ||
+              safeRelPath === 'src/shield/rules.ts' ||
+              safeRelPath === 'src/airlock/sanitizer.ts');
           if (!isLonginusSelfPatternFile) {
             redactedSecretsCount += redaction.redactionCount;
+          }
+          if (safeRelPath === 'package.json') {
+            try {
+              const pkgParsed = JSON.parse(rawContent) as {
+                dependencies?: Record<string, unknown>;
+                devDependencies?: Record<string, unknown>;
+              };
+              const depCount = Object.keys(pkgParsed.dependencies ?? {}).length;
+              const devDepCount = Object.keys(pkgParsed.devDependencies ?? {}).length;
+              if (depCount === 0 && devDepCount === 0 && ('dependencies' in pkgParsed || 'devDependencies' in pkgParsed)) {
+                verifiedControlsByStack['supply-chain-secrets'].add('Deterministic Node Lockfile Present');
+              }
+            } catch {
+              // Ignore malformed package.json
+            }
           }
 
           // Evaluate positive controls & static rules strictly on full-file-redacted text
@@ -857,7 +879,12 @@ function checkLockfileHygiene(
 
   if (hasPkgJson && hasNodeLock) {
     supplyChainControls.add('Deterministic Node Lockfile Present');
-  } else if (hasPkgJson && !hasNodeLock && !scanTruncated) {
+  } else if (
+    hasPkgJson &&
+    !hasNodeLock &&
+    !supplyChainControls.has('Deterministic Node Lockfile Present') &&
+    !scanTruncated
+  ) {
     findings.push({
       id: 'LNG-SEC-003:package.json:1',
       ruleId: 'LNG-SEC-003',

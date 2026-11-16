@@ -1,218 +1,176 @@
-import fsSync from 'node:fs';
-import path from 'node:path';
+import { readFileSync, realpathSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { executeDefensiveAudit, scanPortfolioDirectory } from './geminiAnalyzer.js';
-import { redactSecrets } from './redactor.js';
-import {
-  buildSarifReport,
-  meetsFailOnThreshold,
-  meetsPortfolioFailOnThreshold,
-} from './sarif.js';
-import { startLonginusServer } from './server.js';
-import type { AnalysisMode, SeverityLevel } from './types.js';
+import { parseArgs } from 'node:util';
+import { scanDirectory } from './graph/attack-graph.ts';
+import { runStdioProxy } from './airlock/stdio-proxy.ts';
+import { buildMcpConfig, getAirlockProfile } from './airlock/profiles.ts';
+import { redactSecrets, sanitizeTelemetry } from './airlock/sanitizer.ts';
+import { runProver } from './prove/dual-prover.ts';
+import { formatBlueprint, formatTable, meetsThreshold } from './report/formatter.ts';
+import { proposeRemediations } from './report/remediation.ts';
+import { toSarif } from './report/sarif.ts';
+import type { AirlockProfileId, ConsultingAudience, McpConfigClient, ProverMode, ReportLanguage, Severity } from './types.ts';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const RAW_PROJECT_ROOT = path.resolve(
-  __dirname,
-  __dirname.includes(`${path.sep}dist${path.sep}`) ? '../..' : '..',
-);
-const PROJECT_ROOT = fsSync.realpathSync(RAW_PROJECT_ROOT);
+const version: string = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
+const help = `Atlas Sovereign ${version}
 
-const VALID_FAIL_THRESHOLDS = new Set<SeverityLevel>(['critical', 'high', 'medium', 'low']);
+Usage:
+  atlas-sovereign audit <dir> [--format table|json|sarif|blueprint]
+      [--lang en|ja] [--audience enterprise|municipal|sme]
+      [--fail-on blocker|high|medium] [--emit-patch]
+      [--prove] [--prover-mode gemini|dual]
+  atlas-sovereign airlock [--profile <name>] --upstream-cmd <cmd> [--upstream-arg <arg>...]
+  atlas-sovereign mcp-config [--profile <name>...] [--client agy|gemini]
+  atlas-sovereign sanitize < telemetry.txt
+  atlas-sovereign --help [--lang en|ja] | --version
 
-interface ParsedCliOptions {
-  command: 'server' | 'portfolio' | 'audit';
-  targetPath?: string;
-  emitSarif: boolean;
-  mode: AnalysisMode;
-  failOn?: SeverityLevel;
+Audit is offline unless --prove is selected. Reports and proposed patches go to
+stdout; target files are never changed. Defaults: table, lang en, audience enterprise, fail-on high, gemini.
+--emit-patch includes review-only proposals in the selected report format.
+For upstream arguments starting with '-', use --upstream-arg=--flag.
+Airlock accepts newline-delimited JSON-RPC; select a trusted MCP server program.
+Profiles: scc, secops, firebase, cloudrun, developer-knowledge, prowler, semgrep.
+mcp-config emits JSON templates for caller-installed binaries to stdout only;
+no files are changed, programs run or installations verified. Omitted profiles
+select all profiles; the default client is gemini.
+
+Prover configuration (only read with --prove):
+  ATLAS_GEMINI_BACKEND=gemini|vertex|agy (default: gemini)
+  gemini: GEMINI_API_KEY
+  vertex: GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_LOCATION, GOOGLE_OAUTH_ACCESS_TOKEN
+  agy: installed authenticated agy CLI; plan mode and sandbox required
+  dual: also requires installed authenticated codex CLI in read-only mode
+Provider retention/perimeter settings and CLI sandbox enforcement must be
+configured in your environment. No live-provider verification is implied.
+
+Exit codes: 0 below threshold; 1 threshold exceeded or prover BLOCKER;
+            2 invalid arguments, incomplete scan, prover ERROR or proxy failure.
+`;
+
+const helpJa = `Atlas Sovereign ${version}
+
+使い方:
+  atlas-sovereign audit <dir> [--format table|json|sarif|blueprint]
+      [--lang en|ja] [--audience enterprise|municipal|sme]
+      [--fail-on blocker|high|medium] [--emit-patch]
+      [--prove] [--prover-mode gemini|dual]
+  atlas-sovereign airlock [--profile <name>] --upstream-cmd <cmd> [--upstream-arg <arg>...]
+  atlas-sovereign mcp-config [--profile <name>...] [--client agy|gemini]
+  atlas-sovereign sanitize < telemetry.txt
+  atlas-sovereign --help [--lang en|ja] | --version
+
+--prove を指定しない限り、audit は完全オフラインで動作します。レポートと修正パッチ案は
+標準出力（stdout）のみに出力され、対象ファイルを書き換えることはありません。
+既定値: format=table, lang=en, audience=enterprise, fail-on=high, prover-mode=gemini。
+--lang ja を指定すると、テーブルおよび Blueprint レポートを日本語で出力します。
+--audience で対象組織プロファイル（enterprise: 大企業・上場企業, municipal: 地方自治体, sme: 中小企業）を切り替えられます。
+--emit-patch はレビュー専用の unified diff をレポートに含めます。
+'-' で始まる上流引数には --upstream-arg=--flag を使用してください。
+Airlock は改行区切りの JSON-RPC を仲介します。プロファイル:
+  scc, secops, firebase, cloudrun, developer-knowledge, prowler, semgrep.
+
+終了コード: 0 しきい値未満; 1 しきい値以上の指摘または Prover BLOCKER;
+            2 引数不正、不完全な走査、Prover ERROR、またはプロキシ障害。
+`;
+
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of process.stdin) {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += bytes.length;
+    if (size > 1024 * 1024) throw new Error('Telemetry exceeds the 1 MiB input limit.');
+    chunks.push(bytes);
+  }
+  return Buffer.concat(chunks).toString('utf8');
 }
 
-function validateFailThreshold(raw: string): SeverityLevel {
-  const normalized = raw.trim().toLowerCase() as SeverityLevel;
-  if (!VALID_FAIL_THRESHOLDS.has(normalized)) {
-    throw new Error('Invalid --fail-on value. Expected one of: critical, high, medium, low.');
-  }
-  return normalized;
-}
-
-function parseCliArgs(args: readonly string[]): ParsedCliOptions {
-  if (args.length === 0) {
-    return {
-      command: 'server',
-      emitSarif: false,
-      mode: 'gemini-3.8-flash',
-    };
-  }
-
-  let hasPortfolio = false;
-  let hasAudit = false;
-  let emitSarif = false;
-  let explicitMode: AnalysisMode | undefined;
-  let failOn: SeverityLevel | undefined;
-  const positionals: string[] = [];
-
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i] ?? '';
-    if (arg === '--portfolio') {
-      hasPortfolio = true;
-      continue;
-    }
-    if (arg === '--audit') {
-      hasAudit = true;
-      continue;
-    }
-    if (arg === '--sarif') {
-      emitSarif = true;
-      continue;
-    }
-    if (arg === '--deterministic') {
-      explicitMode = 'deterministic';
-      continue;
-    }
-    if (arg === '--argon') {
-      explicitMode = 'gemini-4-argon';
-      continue;
-    }
-    if (arg === '--flash') {
-      explicitMode = 'gemini-3.8-flash';
-      continue;
-    }
-    if (arg === '--fail-on') {
-      const val = args[i + 1];
-      if (!val || val.startsWith('-')) {
-        throw new Error('Invalid --fail-on value. Expected one of: critical, high, medium, low.');
-      }
-      failOn = validateFailThreshold(val);
-      i += 1;
-      continue;
-    }
-    if (arg.startsWith('--fail-on=')) {
-      failOn = validateFailThreshold(arg.slice('--fail-on='.length));
-      continue;
-    }
-    if (arg.startsWith('-')) {
-      throw new Error(`Unknown CLI flag: ${arg}`);
-    }
-    positionals.push(arg);
-  }
-
-  if (positionals.length > 1) {
-    throw new Error('At most one target directory path may be specified.');
-  }
-
-  if (hasPortfolio && (hasAudit || emitSarif)) {
-    throw new Error('--portfolio cannot be combined with --audit or --sarif.');
-  }
-
-  if (hasPortfolio) {
-    return {
-      command: 'portfolio',
-      ...(positionals[0] !== undefined ? { targetPath: positionals[0] } : {}),
-      emitSarif: false,
-      mode: 'deterministic',
-      ...(failOn !== undefined ? { failOn } : {}),
-    };
-  }
-
-  if (hasAudit || emitSarif) {
-    return {
-      command: 'audit',
-      ...(positionals[0] !== undefined ? { targetPath: positionals[0] } : {}),
-      emitSarif,
-      mode: explicitMode ?? 'gemini-3.8-flash',
-      ...(failOn !== undefined ? { failOn } : {}),
-    };
-  }
-
-  throw new Error(
-    'Specify --audit [path], --sarif [path], or --portfolio [path] (or run with no arguments to start the 127.0.0.1 dashboard).',
-  );
-}
-
-function tryCanonicalizePath(targetPath: string): string {
-  const resolved = path.resolve(targetPath);
-  try {
-    return fsSync.realpathSync(resolved);
-  } catch {
-    return resolved;
-  }
-}
-
-export interface CliIoHooks {
-  writeStdout?: (chunk: string) => void;
-  writeStderr?: (chunk: string) => void;
-}
-
-export async function runCli(args: readonly string[], io?: CliIoHooks): Promise<number> {
-  const out = io?.writeStdout ?? ((s: string) => process.stdout.write(s));
-  const errOut = io?.writeStderr ?? ((s: string) => process.stderr.write(s));
-
-  try {
-    const parsed = parseCliArgs(args);
-
-    if (parsed.command === 'portfolio') {
-      const portfolioRoot = parsed.targetPath ?? path.dirname(PROJECT_ROOT);
-      const portfolio = await scanPortfolioDirectory({
-        portfolioRoot,
-        selfProjectRoot: PROJECT_ROOT,
-      });
-      out(`${JSON.stringify(portfolio, null, 2)}\n`);
-      if (parsed.failOn && meetsPortfolioFailOnThreshold(portfolio.repos, parsed.failOn)) {
-        return 2;
-      }
-      return 0;
-    }
-
-    if (parsed.command === 'audit') {
-      const targetPath = parsed.targetPath ?? process.cwd();
-      const canonicalTarget = tryCanonicalizePath(targetPath);
-      const report = await executeDefensiveAudit({
-        targetPath,
-        mode: parsed.mode,
-        ...(canonicalTarget === PROJECT_ROOT ? { excludeRelativePrefixes: ['test'] } : {}),
-      });
-
-      if (parsed.emitSarif) {
-        const sarif = buildSarifReport(report);
-        out(`${JSON.stringify(sarif, null, 2)}\n`);
-      } else {
-        out(`${JSON.stringify(report, null, 2)}\n`);
-      }
-
-      if (parsed.failOn && meetsFailOnThreshold(report.findings, parsed.failOn)) {
-        return 2;
-      }
-      return 0;
-    }
-
-    const portEnv = Number(process.env['PORT'] ?? '4310');
-    const port = Number.isInteger(portEnv) && portEnv >= 0 && portEnv <= 65535 ? portEnv : 4310;
-    const { url } = await startLonginusServer(port);
-    out(`LONGINUS Defensive Posture Dashboard listening on ${url}\n`);
+export async function main(args: string[]): Promise<number> {
+  if (!args.length || (args.includes('--help') || args.includes('-h')) && args.every(arg => ['--help', '-h', '--lang', 'en', 'ja', '--lang=en', '--lang=ja'].includes(arg))) {
+    const langIdx = args.indexOf('--lang');
+    const langEq = args.find(arg => arg.startsWith('--lang='))?.slice(7);
+    const helpLang = langEq ?? (langIdx >= 0 ? args[langIdx + 1] : process.env.ATLAS_LANG ?? 'en');
+    if (helpLang !== 'en' && helpLang !== 'ja') throw new Error('--lang must be en or ja.');
+    process.stdout.write(helpLang === 'ja' ? helpJa : help);
     return 0;
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    errOut(`Longinus fatal error: ${redactSecrets(message).redactedText.slice(0, 200)}\n`);
-    return 1;
   }
+  if (args.length === 1 && args[0] === '--version') {
+    process.stdout.write(version + '\n');
+    return 0;
+  }
+  const command = args[0];
+  if (!['audit', 'sanitize', 'airlock', 'mcp-config'].includes(command)) throw new Error('Unknown command. Use --help.');
+  if (args.length === 2 && ['--help', '-h'].includes(args[1])) {
+    process.stdout.write(process.env.ATLAS_LANG === 'ja' ? helpJa : help);
+    return 0;
+  }
+  if (command === 'sanitize') {
+    if (args.length !== 1) throw new Error('sanitize accepts telemetry on stdin and no arguments.');
+    process.stdout.write(sanitizeTelemetry(await readStdin()).text + '\n');
+    return 0;
+  }
+  if (command === 'mcp-config') {
+    const { values, positionals } = parseArgs({ args: args.slice(1), strict: true, allowPositionals: true, options: {
+      profile: { type: 'string', multiple: true }, client: { type: 'string', default: 'gemini' },
+    } });
+    if (positionals.length) throw new Error('mcp-config accepts --profile and --client options only.');
+    const config = buildMcpConfig({ profiles: values.profile as AirlockProfileId[] | undefined,
+      client: values.client as McpConfigClient });
+    process.stdout.write(JSON.stringify(config, null, 2) + '\n');
+    return 0;
+  }
+  if (command === 'airlock') {
+    const { values, positionals } = parseArgs({ args: args.slice(1), strict: true, allowPositionals: true, options: {
+      'upstream-cmd': { type: 'string' }, 'upstream-arg': { type: 'string', multiple: true },
+      profile: { type: 'string' },
+    } });
+    if (positionals.length || !values['upstream-cmd']) throw new Error('airlock requires --upstream-cmd and optional --upstream-arg values only.');
+    if (values.profile !== undefined && !getAirlockProfile(values.profile)) throw new Error('Unknown airlock --profile.');
+    return runStdioProxy({ command: values['upstream-cmd'], args: values['upstream-arg'] ?? [], profile: values.profile });
+  }
+  const { values, positionals } = parseArgs({ args: args.slice(1), strict: true, allowPositionals: true, options: {
+    format: { type: 'string', default: 'table' }, lang: { type: 'string', default: process.env.ATLAS_LANG ?? 'en' },
+    audience: { type: 'string', default: process.env.ATLAS_AUDIENCE ?? 'enterprise' },
+    'fail-on': { type: 'string', default: 'high' },
+    'emit-patch': { type: 'boolean', default: false }, prove: { type: 'boolean', default: false },
+    'prover-mode': { type: 'string', default: 'gemini' },
+  } });
+  if (positionals.length !== 1) throw new Error('audit requires exactly one directory.');
+  if (!['table', 'json', 'sarif', 'blueprint'].includes(values.format!)) throw new Error('--format must be table, json, sarif or blueprint.');
+  if (!['en', 'ja'].includes(values.lang!)) throw new Error('--lang must be en or ja.');
+  if (!['enterprise', 'municipal', 'sme'].includes(values.audience!)) throw new Error('--audience must be enterprise, municipal or sme.');
+  if (!['blocker', 'high', 'medium'].includes(values['fail-on']!)) throw new Error('--fail-on must be blocker, high or medium.');
+  if (!['gemini', 'dual'].includes(values['prover-mode']!)) throw new Error('--prover-mode must be gemini or dual.');
+  const lang = values.lang as ReportLanguage;
+  const audience = values.audience as ConsultingAudience;
+  const directory = resolve(positionals[0]);
+  const graph = scanDirectory(directory);
+  const incomplete = graph.findings.some(finding => finding.ruleId.startsWith('scan/'));
+  // A provider cannot turn an incomplete local scan into a successful gate.
+  const prover = values.prove && !incomplete ? await runProver(graph, { mode: values['prover-mode'] as ProverMode }) : undefined;
+  const remediations = values['emit-patch'] ? proposeRemediations(graph.findings, directory) : [];
+  const report = values.format === 'table' ? formatTable(graph, prover, remediations, lang)
+    : values.format === 'blueprint' ? formatBlueprint(graph, prover, remediations, lang, audience)
+    : JSON.stringify(JSON.parse(redactSecrets(JSON.stringify(values.format === 'sarif' ? toSarif(graph, version, prover, remediations)
+      : { ...graph, ...(prover ? { prover } : {}), ...(values['emit-patch'] ? { remediations } : {}) }))), null, 2) + '\n';
+  process.stdout.write(values.format === 'table' || values.format === 'blueprint' ? redactSecrets(report) : report);
+  if (incomplete || prover?.status === 'ERROR') return 2;
+  return prover?.status === 'BLOCKER' || meetsThreshold(graph, values['fail-on'] as Severity) ? 1 : 0;
 }
 
-function isDirectCliEntrypoint(): boolean {
-  const invoked = process.argv[1];
-  if (typeof invoked !== 'string' || invoked.length === 0) return false;
-  const selfFile = fileURLToPath(import.meta.url);
-  try {
-    return fsSync.realpathSync(invoked) === fsSync.realpathSync(selfFile);
-  } catch {
-    return path.resolve(invoked) === path.resolve(selfFile);
-  }
+function tryRealpath(path: string | undefined): string | undefined {
+  try { return path ? realpathSync(path) : undefined; } catch { return undefined; }
 }
 
-if (isDirectCliEntrypoint()) {
-  void runCli(process.argv.slice(2)).then((code) => {
-    if (code !== 0) {
-      process.exitCode = code;
-    }
+const entry = tryRealpath(process.argv[1]);
+if (entry && [import.meta.url, new URL('../bin/atlas-sovereign.mjs', import.meta.url)]
+  .some(url => entry === tryRealpath(fileURLToPath(url)))) {
+  process.stdout.on('error', () => { process.exitCode = 2; });
+  main(process.argv.slice(2)).then(code => { process.exitCode = process.exitCode || code; }).catch(error => {
+    // Native I/O/argument errors may include untrusted paths or snippets.
+    const message = error instanceof Error ? error.message : 'Operation failed.';
+    process.stderr.write(`Atlas Sovereign: ${redactSecrets(message).replace(/[\x00-\x1f\x7f-\x9f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, ' ')}\n`);
+    process.exitCode = 2;
   });
 }

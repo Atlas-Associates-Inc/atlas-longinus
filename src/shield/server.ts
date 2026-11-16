@@ -4,16 +4,15 @@ import fs from 'node:fs/promises';
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { z } from 'zod';
-import { executeDefensiveAudit, scanPortfolioDirectory } from './geminiAnalyzer.js';
-import { buildSarifReport } from './sarif.js';
-import { SafeClientError } from './scanner.js';
-import type { AnalysisMode } from './types.js';
+import { executeDefensiveAudit, scanPortfolioDirectory } from './geminiAnalyzer.ts';
+import { buildSarifReport } from './sarif.ts';
+import { SafeClientError } from './scanner.ts';
+import type { AnalysisMode } from './types.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RAW_PROJECT_ROOT = path.resolve(
   __dirname,
-  __dirname.includes(`${path.sep}dist${path.sep}`) ? '../..' : '..',
+  __dirname.includes(`${path.sep}dist${path.sep}`) ? '../../..' : '../..',
 );
 const PROJECT_ROOT = fsSync.realpathSync(RAW_PROJECT_ROOT);
 const DEFAULT_PORTFOLIO_ROOT = path.dirname(PROJECT_ROOT);
@@ -30,18 +29,68 @@ export class PayloadTooLargeError extends SafeClientError {
   }
 }
 
-const AuditRequestSchema = z
-  .object({
-    targetPath: z.string().min(1).max(1024),
-    mode: z
-      .enum(['gemini-3.8-flash', 'gemini-4-argon', 'deterministic'])
-      .default('gemini-3.8-flash'),
-    apiKey: z.string().max(256).optional(),
-    excludeFixtures: z.boolean().optional(),
-  })
-  .strict();
+interface ParsedAuditRequest {
+  targetPath: string;
+  mode: AnalysisMode;
+  apiKey?: string;
+  excludeFixtures?: boolean;
+}
 
-const EmptyObjectSchema = z.object({}).strict();
+const VALID_AUDIT_MODES = new Set<AnalysisMode>([
+  'gemini-3.8-flash',
+  'gemini-4-argon',
+  'deterministic',
+]);
+const ALLOWED_AUDIT_KEYS = new Set(['targetPath', 'mode', 'apiKey', 'excludeFixtures']);
+
+const AuditRequestSchema = {
+  safeParse(
+    raw: unknown,
+  ): { success: true; data: ParsedAuditRequest } | { success: false } {
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+      return { success: false };
+    }
+    const obj = raw as Record<string, unknown>;
+    for (const k of Object.keys(obj)) {
+      if (!ALLOWED_AUDIT_KEYS.has(k)) return { success: false };
+    }
+    const targetPath = obj['targetPath'];
+    if (typeof targetPath !== 'string' || targetPath.length < 1 || targetPath.length > 1024) {
+      return { success: false };
+    }
+    const rawMode = obj['mode'] ?? 'gemini-3.8-flash';
+    if (typeof rawMode !== 'string' || !VALID_AUDIT_MODES.has(rawMode as AnalysisMode)) {
+      return { success: false };
+    }
+    const rawApiKey = obj['apiKey'];
+    if (rawApiKey !== undefined && (typeof rawApiKey !== 'string' || rawApiKey.length > 256)) {
+      return { success: false };
+    }
+    const rawExclude = obj['excludeFixtures'];
+    if (rawExclude !== undefined && typeof rawExclude !== 'boolean') {
+      return { success: false };
+    }
+    const data: ParsedAuditRequest = {
+      targetPath,
+      mode: rawMode as AnalysisMode,
+    };
+    if (rawApiKey !== undefined) data.apiKey = rawApiKey;
+    if (rawExclude !== undefined) data.excludeFixtures = rawExclude;
+    return { success: true, data };
+  },
+};
+
+const EmptyObjectSchema = {
+  safeParse(raw: unknown): { success: true } | { success: false } {
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+      return { success: false };
+    }
+    if (Object.keys(raw as Record<string, unknown>).length !== 0) {
+      return { success: false };
+    }
+    return { success: true };
+  },
+};
 
 function applyHardenedHeaders(res: ServerResponse, nonce?: string): void {
   res.setHeader('Cache-Control', 'no-store');
@@ -221,7 +270,7 @@ function renderIndexHtml(nonce: string, csrfToken: string): string {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="longinus-csrf" content="${csrfToken}" />
-  <title>LONGINUS — Defensive Posture &amp; Threat Surface Shield</title>
+  <title>ATLAS AEGIS — Defensive Posture &amp; Threat Surface Shield</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
@@ -229,7 +278,7 @@ function renderIndexHtml(nonce: string, csrfToken: string): string {
     <div class="topbar-inner">
       <div class="brand-block">
         <span class="brand-kicker">SOVEREIGN DEFENSIVE SHIELD</span>
-        <h1 class="brand-title">LONGINUS</h1>
+        <h1 class="brand-title">ATLAS AEGIS</h1>
       </div>
       <div class="header-badges" id="header-badges" aria-live="polite">
         <span class="pill pill-blue" id="engine-badge">Gemini Structured Threat Modeler</span>
@@ -248,7 +297,7 @@ function renderIndexHtml(nonce: string, csrfToken: string): string {
         <div class="preset-group" role="group" aria-label="クイック監査プリセット">
           <button type="button" class="btn btn-outline" id="preset-portfolio-btn">全プロダクト一括監査</button>
           <button type="button" class="btn btn-ghost" id="preset-fixture-btn">4スタック脆弱サンプル検証</button>
-          <button type="button" class="btn btn-ghost" id="preset-self-btn">Longinus 自己防御監査</button>
+          <button type="button" class="btn btn-ghost" id="preset-self-btn">Atlas AEGIS 自己防御監査</button>
           <button type="button" class="btn btn-outline" id="export-md-btn">レポート出力 (.md)</button>
           <button type="button" class="btn btn-outline" id="export-sarif-btn">SARIF出力 (.sarif)</button>
         </div>

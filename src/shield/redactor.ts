@@ -159,6 +159,7 @@ const LEADING_PURE_DYNAMIC_REF_RE =
 function isDynamicOrAlreadyRedacted(val: string): boolean {
   const trimmed = val.trim();
   if (!trimmed) return true;
+  if (/^\.{2,}$/.test(trimmed)) return true;
   if (/^(?:\\[nrt0])+$/.test(trimmed)) return true;
   if (trimmed.includes('[REDACTED')) return true;
   return PURE_DYNAMIC_REF_RE.test(trimmed);
@@ -377,7 +378,7 @@ function redactQuotedOrContinuationAt(
 function isLookupKeyContext(prefixBeforeQuote: string): boolean {
   return (
     /[A-Za-z0-9_$)\]]\s*\[\s*$/.test(prefixBeforeQuote) ||
-    /\b(?:getElementById|querySelector|querySelectorAll|getAttribute|Getenv|getenv|hasOwnProperty|GetString|environ\.(?:get|setdefault)|(?:headers|cookies|params|searchParams|config|viper|settings|storage|Map)\.get)\s*\(\s*$/i.test(
+    /\b(?:getElementById|querySelector|querySelectorAll|getAttribute|Getenv|getenv|requiredEnvironment|hasOwnProperty|GetString|environ\.(?:get|setdefault)|(?:headers|cookies|params|searchParams|config|viper|settings|storage|Map)\.get)\s*\(\s*$/i.test(
       prefixBeforeQuote,
     ) ||
     /\.\s*(?:split|join)\s*\(\s*$/.test(prefixBeforeQuote) ||

@@ -2,13 +2,11 @@ import crypto from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { GoogleGenAI } from '@google/genai';
-import { z } from 'zod';
 import {
   DEFENSIVE_PATCH_TEMPLATES,
   type DefensivePatchTemplateId,
   redactSecrets,
-} from './redactor.js';
+} from './redactor.ts';
 import {
   buildStackSummaries,
   openPinnedSafeTargetDirectory,
@@ -17,7 +15,7 @@ import {
   SafeClientError,
   type ScanOptions,
   type StaticScanResult,
-} from './scanner.js';
+} from './scanner.ts';
 import type {
   AnalysisMode,
   AuditReport,
@@ -26,10 +24,18 @@ import type {
   ReasoningLevel,
   RoadmapStep,
   SecurityFinding,
+  SeverityLevel,
   StackDomain,
   StrideCategory,
   StrideScoreItem,
-} from './types.js';
+} from './types.ts';
+
+export class ClosedSchemaValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ClosedSchemaValidationError';
+  }
+}
 
 const ALLOWED_GEMINI_MODELS = new Set(['gemini-3.8-flash', 'gemini-4-argon']);
 
@@ -359,73 +365,210 @@ const THREAT_MODEL_JSON_SCHEMA = {
 
 const SAFE_REL_PATH_RE = /^(?!.*\.\.)(?!\/)[A-Za-z0-9._/-]{1,140}$/;
 
-const GeminiThreatResponseZod = z
-  .object({
-    executivePostureId: z.enum(EXECUTIVE_POSTURE_IDS),
-    strideMatrix: z
-      .array(
-        z
-          .object({
-            category: z.enum([
-              'Spoofing',
-              'Tampering',
-              'Repudiation',
-              'Information Disclosure',
-              'Denial of Service',
-              'Elevation of Privilege',
-            ]),
-            exposureScore: z.number().min(0).max(100),
-            readinessScore: z.number().min(0).max(100),
-            riskCatalogId: z.enum(STRIDE_RISK_IDS),
-            defenseCatalogId: z.enum(STRIDE_DEFENSE_IDS),
-          })
-          .strict(),
-      )
-      .max(6),
-    priorityRoadmap: z
-      .array(
-        z
-          .object({
-            phaseId: z.enum(ROADMAP_PHASE_IDS),
-            targetStack: z.enum([
-              'ts-web-api',
-              'flutter-firebase',
-              'python-go-cloud',
-              'supply-chain-secrets',
-            ]),
-            playbookId: z.enum(ROADMAP_PLAYBOOK_IDS),
-          })
-          .strict(),
-      )
-      .max(6),
-    architecturalFindings: z
-      .array(
-        z
-          .object({
-            findingCatalogId: z.enum(ARCHITECTURAL_FINDING_IDS),
-            stack: z.enum([
-              'ts-web-api',
-              'flutter-firebase',
-              'python-go-cloud',
-              'supply-chain-secrets',
-            ]),
-            severity: z.enum(['critical', 'high', 'medium', 'low']),
-            stride: z.enum([
-              'Spoofing',
-              'Tampering',
-              'Repudiation',
-              'Information Disclosure',
-              'Denial of Service',
-              'Elevation of Privilege',
-            ]),
-            filePath: z.string().regex(SAFE_REL_PATH_RE),
-            patchTemplateId: z.enum(PATCH_TEMPLATE_IDS),
-          })
-          .strict(),
-      )
-      .max(6),
-  })
-  .strict();
+const VALID_STRIDE_CATEGORIES = new Set<StrideCategory>([
+  'Spoofing',
+  'Tampering',
+  'Repudiation',
+  'Information Disclosure',
+  'Denial of Service',
+  'Elevation of Privilege',
+]);
+const VALID_STACK_DOMAINS = new Set<StackDomain>([
+  'ts-web-api',
+  'flutter-firebase',
+  'python-go-cloud',
+  'supply-chain-secrets',
+]);
+const VALID_SEVERITIES = new Set<SeverityLevel>(['critical', 'high', 'medium', 'low']);
+const EXEC_POSTURE_SET = new Set<string>(EXECUTIVE_POSTURE_IDS);
+const STRIDE_RISK_SET = new Set<string>(STRIDE_RISK_IDS);
+const STRIDE_DEFENSE_SET = new Set<string>(STRIDE_DEFENSE_IDS);
+const ROADMAP_PHASE_SET = new Set<string>(ROADMAP_PHASE_IDS);
+const ROADMAP_PLAYBOOK_SET = new Set<string>(ROADMAP_PLAYBOOK_IDS);
+const ARCH_FINDING_SET = new Set<string>(ARCHITECTURAL_FINDING_IDS);
+const PATCH_TEMPLATE_SET = new Set<string>(PATCH_TEMPLATE_IDS);
+
+interface ValidatedGeminiThreatPayload {
+  executivePostureId: ExecutivePostureId;
+  strideMatrix: Array<{
+    category: StrideCategory;
+    exposureScore: number;
+    readinessScore: number;
+    riskCatalogId: StrideRiskId;
+    defenseCatalogId: StrideDefenseId;
+  }>;
+  priorityRoadmap: Array<{
+    phaseId: RoadmapPhaseId;
+    targetStack: StackDomain;
+    playbookId: RoadmapPlaybookId;
+  }>;
+  architecturalFindings: Array<{
+    findingCatalogId: ArchitecturalFindingId;
+    stack: StackDomain;
+    severity: SeverityLevel;
+    stride: StrideCategory;
+    filePath: string;
+    patchTemplateId: DefensivePatchTemplateId;
+  }>;
+}
+
+function assertStrictKeys(
+  obj: unknown,
+  allowedKeys: readonly string[],
+): Record<string, unknown> {
+  if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) {
+    throw new ClosedSchemaValidationError('Expected plain object.');
+  }
+  const rec = obj as Record<string, unknown>;
+  const allowed = new Set(allowedKeys);
+  for (const k of Object.keys(rec)) {
+    if (!allowed.has(k)) {
+      throw new ClosedSchemaValidationError(`Unexpected key: ${k}`);
+    }
+  }
+  for (const req of allowedKeys) {
+    if (!(req in rec)) {
+      throw new ClosedSchemaValidationError(`Missing required key: ${req}`);
+    }
+  }
+  return rec;
+}
+
+function parseGeminiThreatResponse(raw: unknown): ValidatedGeminiThreatPayload {
+  const root = assertStrictKeys(raw, [
+    'executivePostureId',
+    'strideMatrix',
+    'priorityRoadmap',
+    'architecturalFindings',
+  ]);
+
+  const executivePostureId = root['executivePostureId'];
+  if (typeof executivePostureId !== 'string' || !EXEC_POSTURE_SET.has(executivePostureId)) {
+    throw new ClosedSchemaValidationError('Invalid executivePostureId.');
+  }
+
+  const rawStride = root['strideMatrix'];
+  if (!Array.isArray(rawStride) || rawStride.length > 6) {
+    throw new ClosedSchemaValidationError('Invalid strideMatrix array.');
+  }
+  const strideMatrix = rawStride.map((entry) => {
+    const item = assertStrictKeys(entry, [
+      'category',
+      'exposureScore',
+      'readinessScore',
+      'riskCatalogId',
+      'defenseCatalogId',
+    ]);
+    const category = item['category'];
+    const exposureScore = item['exposureScore'];
+    const readinessScore = item['readinessScore'];
+    const riskCatalogId = item['riskCatalogId'];
+    const defenseCatalogId = item['defenseCatalogId'];
+    if (
+      typeof category !== 'string' ||
+      !VALID_STRIDE_CATEGORIES.has(category as StrideCategory) ||
+      typeof exposureScore !== 'number' ||
+      !Number.isFinite(exposureScore) ||
+      exposureScore < 0 ||
+      exposureScore > 100 ||
+      typeof readinessScore !== 'number' ||
+      !Number.isFinite(readinessScore) ||
+      readinessScore < 0 ||
+      readinessScore > 100 ||
+      typeof riskCatalogId !== 'string' ||
+      !STRIDE_RISK_SET.has(riskCatalogId) ||
+      typeof defenseCatalogId !== 'string' ||
+      !STRIDE_DEFENSE_SET.has(defenseCatalogId)
+    ) {
+      throw new ClosedSchemaValidationError('Invalid strideMatrix item.');
+    }
+    return {
+      category: category as StrideCategory,
+      exposureScore,
+      readinessScore,
+      riskCatalogId: riskCatalogId as StrideRiskId,
+      defenseCatalogId: defenseCatalogId as StrideDefenseId,
+    };
+  });
+
+  const rawRoadmap = root['priorityRoadmap'];
+  if (!Array.isArray(rawRoadmap) || rawRoadmap.length > 6) {
+    throw new ClosedSchemaValidationError('Invalid priorityRoadmap array.');
+  }
+  const priorityRoadmap = rawRoadmap.map((entry) => {
+    const item = assertStrictKeys(entry, ['phaseId', 'targetStack', 'playbookId']);
+    const phaseId = item['phaseId'];
+    const targetStack = item['targetStack'];
+    const playbookId = item['playbookId'];
+    if (
+      typeof phaseId !== 'string' ||
+      !ROADMAP_PHASE_SET.has(phaseId) ||
+      typeof targetStack !== 'string' ||
+      !VALID_STACK_DOMAINS.has(targetStack as StackDomain) ||
+      typeof playbookId !== 'string' ||
+      !ROADMAP_PLAYBOOK_SET.has(playbookId)
+    ) {
+      throw new ClosedSchemaValidationError('Invalid priorityRoadmap item.');
+    }
+    return {
+      phaseId: phaseId as RoadmapPhaseId,
+      targetStack: targetStack as StackDomain,
+      playbookId: playbookId as RoadmapPlaybookId,
+    };
+  });
+
+  const rawFindings = root['architecturalFindings'];
+  if (!Array.isArray(rawFindings) || rawFindings.length > 6) {
+    throw new ClosedSchemaValidationError('Invalid architecturalFindings array.');
+  }
+  const architecturalFindings = rawFindings.map((entry) => {
+    const item = assertStrictKeys(entry, [
+      'findingCatalogId',
+      'stack',
+      'severity',
+      'stride',
+      'filePath',
+      'patchTemplateId',
+    ]);
+    const findingCatalogId = item['findingCatalogId'];
+    const stack = item['stack'];
+    const severity = item['severity'];
+    const stride = item['stride'];
+    const filePath = item['filePath'];
+    const patchTemplateId = item['patchTemplateId'];
+    if (
+      typeof findingCatalogId !== 'string' ||
+      !ARCH_FINDING_SET.has(findingCatalogId) ||
+      typeof stack !== 'string' ||
+      !VALID_STACK_DOMAINS.has(stack as StackDomain) ||
+      typeof severity !== 'string' ||
+      !VALID_SEVERITIES.has(severity as SeverityLevel) ||
+      typeof stride !== 'string' ||
+      !VALID_STRIDE_CATEGORIES.has(stride as StrideCategory) ||
+      typeof filePath !== 'string' ||
+      !SAFE_REL_PATH_RE.test(filePath) ||
+      typeof patchTemplateId !== 'string' ||
+      !PATCH_TEMPLATE_SET.has(patchTemplateId)
+    ) {
+      throw new ClosedSchemaValidationError('Invalid architecturalFindings item.');
+    }
+    return {
+      findingCatalogId: findingCatalogId as ArchitecturalFindingId,
+      stack: stack as StackDomain,
+      severity: severity as SeverityLevel,
+      stride: stride as StrideCategory,
+      filePath,
+      patchTemplateId: patchTemplateId as DefensivePatchTemplateId,
+    };
+  });
+
+  return {
+    executivePostureId: executivePostureId as ExecutivePostureId,
+    strideMatrix,
+    priorityRoadmap,
+    architecturalFindings,
+  };
+}
 
 export interface GeminiValidationContext {
   allowedFilePaths?: ReadonlySet<string>;
@@ -481,7 +624,7 @@ export function classifySafeGeminiFallbackReason(err: unknown): string {
   if (err instanceof SyntaxError) {
     return 'Gemini 応答が有効な JSON 形式ではなかったため、決定論的 STRIDE エンジンへ安全フォールバックしました。';
   }
-  if (err instanceof z.ZodError) {
+  if (err instanceof ClosedSchemaValidationError) {
     return 'Gemini 応答が閉世界防御スキーマ契約に適合しなかったため、決定論的 STRIDE エンジンへ安全フォールバックしました。';
   }
   if (typeof err === 'object' && err !== null && 'status' in err) {
@@ -506,31 +649,21 @@ export function validateAndTransformGeminiOutput(
   priorityRoadmap: RoadmapStep[];
   architecturalFindings: SecurityFinding[];
 } {
-  const parsed = GeminiThreatResponseZod.parse(JSON.parse(rawJson));
+  const parsed = parseGeminiThreatResponse(JSON.parse(rawJson));
   const allowedPaths = context?.allowedFilePaths;
 
   for (const arch of parsed.architecturalFindings) {
     if (redactSecrets(arch.filePath).redactedText.includes('[REDACTED')) {
-      throw new z.ZodError([
-        {
-          code: z.ZodIssueCode.custom,
-          path: ['architecturalFindings', 'filePath'],
-          message: 'Secret-like token rejected in filePath.',
-        },
-      ]);
+      throw new ClosedSchemaValidationError('Secret-like token rejected in filePath.');
     }
     if (
       allowedPaths &&
       !CANONICAL_BOUNDARY_PATHS.has(arch.filePath) &&
       !allowedPaths.has(arch.filePath)
     ) {
-      throw new z.ZodError([
-        {
-          code: z.ZodIssueCode.custom,
-          path: ['architecturalFindings', 'filePath'],
-          message: 'filePath must match a scanned repository file or canonical boundary.',
-        },
-      ]);
+      throw new ClosedSchemaValidationError(
+        'filePath must match a scanned repository file or canonical boundary.',
+      );
     }
   }
 
@@ -744,22 +877,31 @@ export async function executeDefensiveAudit(params: {
         tokenEstimate = Math.ceil(safeDigest.length / 4) + 320;
         const activeThinkingLevel = plannedReasoning === 'none' ? 'low' : plannedReasoning;
 
-        const ai = new GoogleGenAI({ apiKey: resolvedApiKey });
-        const interaction = await ai.interactions.create({
-          model: requestedModel,
-          store: false,
-          system_instruction: DEFENSIVE_SYSTEM_INSTRUCTION,
-          input: `以下のゼロ抜粋・構造境界テレメトリから防御カタログ列挙値を選択して JSON で出力してください:\n\n${safeDigest}`,
-          generation_config: {
-            thinking_level: activeThinkingLevel,
+        const apiRes = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': resolvedApiKey,
           },
-          response_format: {
-            type: 'text',
-            mime_type: 'application/json',
-            schema: THREAT_MODEL_JSON_SCHEMA,
-          },
+          body: JSON.stringify({
+            model: requestedModel,
+            store: false,
+            system_instruction: DEFENSIVE_SYSTEM_INSTRUCTION,
+            input: `以下のゼロ抜粋・構造境界テレメトリから防御カタログ列挙値を選択して JSON で出力してください:\n\n${safeDigest}`,
+            generation_config: {
+              thinking_level: activeThinkingLevel,
+            },
+            response_format: {
+              type: 'text',
+              mime_type: 'application/json',
+              schema: THREAT_MODEL_JSON_SCHEMA,
+            },
+          }),
         });
-
+        if (!apiRes.ok) {
+          throw Object.assign(new Error('Gemini HTTP status error'), { status: apiRes.status });
+        }
+        const interaction = (await apiRes.json()) as { output_text?: string };
         const rawJson = interaction.output_text;
         if (!rawJson) {
           throw new Error('Empty structured output');

@@ -1,10 +1,10 @@
-import { redactSecrets } from './redactor.js';
+import { redactSecrets } from './redactor.ts';
 import type {
   AuditReport,
   PortfolioRepoSummary,
   SecurityFinding,
   SeverityLevel,
-} from './types.js';
+} from './types.ts';
 
 export interface SarifLog {
   $schema: string;
@@ -194,7 +194,7 @@ export function buildSarifReport(report: AuditReport): SarifLog {
       {
         tool: {
           driver: {
-            name: 'Longinus Defensive Posture Shield',
+            name: 'Atlas AEGIS Defensive Posture Shield',
             version: '1.1.0',
             informationUri: 'http://127.0.0.1:4310',
             rules,

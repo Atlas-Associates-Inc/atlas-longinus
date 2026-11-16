@@ -1,6 +1,6 @@
 import path from 'node:path';
-import { PUBLIC_ENV_SECRET_RE, redactSecrets } from './redactor.js';
-import type { SecurityFinding, SeverityLevel, StackDomain, StrideCategory } from './types.js';
+import { PUBLIC_ENV_SECRET_RE, redactSecrets } from './redactor.ts';
+import type { SecurityFinding, SeverityLevel, StackDomain, StrideCategory } from './types.ts';
 
 export interface FileContext {
   relativePath: string;

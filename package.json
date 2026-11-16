@@ -1,24 +1,19 @@
 {
-  "name": "longinus",
-  "version": "1.0.0",
-  "private": true,
+  "name": "@atlas-sec/sovereign",
+  "version": "0.6.0",
+  "description": "Atlas Sovereign: Instant in-house Cloud, DX & AI Security Consulting AI for Enterprises, Local Governments & SMEs (offline GCP and Firebase attack-path analyzer, 5-pillar scorecard, compliance mapper, 30/60/90-day blueprints, and read-only MCP airlock)",
+  "license": "Apache-2.0",
   "type": "module",
-  "description": "Longinus — Defensive Security Posture & Architectural Threat Modeling Dashboard",
-  "engines": {
-    "node": ">=22.0.0"
-  },
+  "engines": { "node": ">=22.18.0" },
+  "bin": { "atlas-sovereign": "./bin/atlas-sovereign.mjs" },
+  "files": ["bin/", "src/", "LICENSE", "README.md", "action.yml"],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "start": "node dist/src/cli.js",
-    "audit": "node dist/src/cli.js --audit",
-    "test": "pnpm run build && node --test dist/test/scanner.test.js"
+    "start": "node src/shield/cli.ts",
+    "dashboard": "node src/shield/cli.ts",
+    "audit:portfolio": "node src/shield/cli.ts --portfolio",
+    "check": "node src/cli.ts --help",
+    "test": "node --test --test-concurrency=1 test/*.test.ts"
   },
-  "dependencies": {
-    "@google/genai": "^2.29.1",
-    "zod": "^3.24.2"
-  },
-  "devDependencies": {
-    "@types/node": "^22.13.0",
-    "typescript": "^5.8.2"
-  }
+  "dependencies": {},
+  "devDependencies": {}
 }

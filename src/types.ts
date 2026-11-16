@@ -1,138 +1,130 @@
-export type StackDomain =
-  | 'ts-web-api'
-  | 'flutter-firebase'
-  | 'python-go-cloud'
-  | 'supply-chain-secrets';
+export type Severity = 'blocker' | 'high' | 'medium' | 'low' | 'info';
+export type ReportLanguage = 'en' | 'ja';
+export type ConsultingAudience = 'enterprise' | 'municipal' | 'sme';
 
-export type SeverityLevel = 'critical' | 'high' | 'medium' | 'low';
+export interface SourceLocation {
+  file: string;
+  line: number;
+  column?: number;
+}
 
-export type StrideCategory =
-  | 'Spoofing'
-  | 'Tampering'
-  | 'Repudiation'
-  | 'Information Disclosure'
-  | 'Denial of Service'
-  | 'Elevation of Privilege';
-
-export type AnalysisMode = 'gemini-3.8-flash' | 'gemini-4-argon' | 'deterministic';
-
-export type ReasoningLevel = 'low' | 'medium' | 'high' | 'none';
-
-export interface SecurityFinding {
+export interface Finding {
   id: string;
   ruleId: string;
+  severity: Severity;
   title: string;
-  stack: StackDomain;
-  severity: SeverityLevel;
-  stride: StrideCategory;
-  cwe: string;
-  owaspAsvs: string;
-  filePath: string;
-  line: number;
-  snippetRedacted: string;
-  rootCause: string;
-  defensivePatch: string;
-  verificationHint: string;
-  source: 'static-rule' | 'gemini-architecture';
+  message: string;
+  location: SourceLocation;
+  evidence: string;
 }
 
-export interface TrustBoundaryNode {
+export interface GraphNode {
   id: string;
+  kind: 'entry' | 'resource' | 'identity' | 'data';
   label: string;
-  zone: 'edge' | 'auth' | 'application' | 'data' | 'infra';
-  stack: StackDomain;
-  status: 'hardened' | 'attention' | 'exposed';
-  findingCount: number;
-  summary: string;
+  location?: SourceLocation;
 }
 
-export interface TrustBoundaryEdge {
+export interface GraphEdge {
+  id: string;
   from: string;
   to: string;
-  protocol: string;
-  riskLevel: 'low' | 'medium' | 'high';
+  kind: string;
+  findingIds: string[];
+  evidence: string;
+  confidence: 'confirmed' | 'potential';
 }
 
-export interface StrideScoreItem {
-  category: StrideCategory;
-  exposureScore: number;
-  readinessScore: number;
-  topRiskSummary: string;
-  primaryDefense: string;
+export interface AttackPath {
+  id: string;
+  nodes: string[];
+  edges: string[];
+  findingIds: string[];
+  severity: Severity;
+  confidence: 'confirmed' | 'potential';
+  description: string;
 }
 
-export interface StackPostureSummary {
-  stack: StackDomain;
-  label: string;
-  detectedFiles: number;
-  defenseScore: number;
-  criticalCount: number;
-  highCount: number;
-  mediumCount: number;
-  lowCount: number;
-  verifiedControls: string[];
+export interface GraphResult {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  findings: Finding[];
+  paths: AttackPath[];
+  limitations: string[];
 }
 
-export interface RoadmapStep {
-  phase: string;
-  title: string;
-  impact: string;
-  targetStack: StackDomain;
-  action: string;
+export interface Remediation {
+  findingId: string;
+  file: string;
+  description: string;
+  diff: string;
+  automatic: false;
 }
 
-export interface AuditReport {
-  auditId: string;
-  targetPath: string;
-  repoName: string;
-  auditedAt: string;
-  durationMs: number;
-  scannedFiles: number;
-  inspectedEntries: number;
-  scanTruncated: boolean;
-  truncationReason?: string;
-  redactedSecretsCount: number;
-  analysisModeUsed: AnalysisMode;
-  reasoningLevelUsed: ReasoningLevel;
-  geminiLiveUsed: boolean;
-  geminiFallbackReason?: string;
-  tokenEstimate: number;
-  overallDefenseScore: number;
-  executiveSummary: string;
-  priorityRoadmap: RoadmapStep[];
-  strideMatrix: StrideScoreItem[];
-  stackSummaries: StackPostureSummary[];
-  trustGraph: {
-    nodes: TrustBoundaryNode[];
-    edges: TrustBoundaryEdge[];
-  };
-  findings: SecurityFinding[];
+export interface AirlockDecision {
+  allowed: boolean;
+  reason: string;
 }
 
-export interface PortfolioRepoSummary {
-  dirName: string;
-  repoName: string;
-  targetPath: string;
-  overallDefenseScore: number;
-  scannedFiles: number;
-  scanTruncated: boolean;
-  criticalCount: number;
-  highCount: number;
-  mediumCount: number;
-  lowCount: number;
-  redactedSecretsCount: number;
-  verifiedControlsCount: number;
-  primaryStack: StackDomain;
-  topAction: string;
+export type AirlockProfileId = 'scc' | 'secops' | 'firebase' | 'cloudrun' | 'developer-knowledge' | 'prowler' | 'semgrep';
+export type McpConfigClient = 'agy' | 'gemini';
+
+export interface AirlockProfile {
+  id: AirlockProfileId;
+  description: string;
+  upstreamCommand: string;
+  upstreamArgs: readonly string[];
+  allowedTokens: readonly string[];
 }
 
-export interface PortfolioReport {
-  portfolioRootLabel: string;
-  scannedAt: string;
-  durationMs: number;
-  totalRepos: number;
-  averageDefenseScore: number;
-  criticalReposCount: number;
-  totalRedactedSecrets: number;
-  repos: PortfolioRepoSummary[];
+export interface SanitizedTelemetry {
+  text: string;
+  redactions: number;
+  quarantined: boolean;
+}
+
+export type ProverStatus = 'PASS' | 'BLOCKER' | 'ERROR';
+export type ProverMode = 'gemini' | 'dual';
+export type ProverLane = 'argonArchitect' | 'geminiRedTeam' | 'argonHigh' | 'astraUltra';
+export interface ExploitProof {
+  steps: string[];
+  evidence: string[];
+}
+
+export interface LaneVerdict {
+  family: 'google' | 'openai';
+  model: string;
+  status: ProverStatus;
+  rationale: string;
+  proof?: ExploitProof;
+}
+
+export type DualProverVerdict =
+  | { mode: 'gemini'; status: ProverStatus; lanes: { argonArchitect: LaneVerdict; geminiRedTeam: LaneVerdict } }
+  | { mode: 'dual'; status: ProverStatus; lanes: { argonHigh: LaneVerdict; astraUltra: LaneVerdict } };
+
+export interface SarifLog {
+  $schema: string;
+  version: '2.1.0';
+  runs: Array<{
+    tool: { driver: { name: string; version: string; informationUri: string; rules: Array<{
+      id: string;
+      name: string;
+      shortDescription: { text: string };
+      defaultConfiguration: { level: 'error' | 'warning' | 'note' };
+    }> } };
+    results: Array<{
+      ruleId: string;
+      ruleIndex: number;
+      level: 'error' | 'warning' | 'note';
+      message: { text: string };
+      locations: Array<{ physicalLocation: {
+        artifactLocation: { uri: string; uriBaseId: string };
+        region: { startLine: number; startColumn: number };
+      } }>;
+      partialFingerprints: { primaryLocationLineHash: string };
+      properties: { severity: Severity; findingId: string };
+    }>;
+    properties?: Record<string, unknown>;
+  }>;
 }

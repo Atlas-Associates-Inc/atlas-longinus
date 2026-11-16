@@ -5,26 +5,26 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { runCli } from '../src/cli.js';
+import { runCli } from '../src/shield/cli.ts';
 import {
   classifySafeGeminiFallbackReason,
   executeDefensiveAudit,
   scanPortfolioDirectory,
   selectOptimalReasoningLevel,
   validateAndTransformGeminiOutput,
-} from '../src/geminiAnalyzer.js';
-import { redactSecrets, redactSecretsPreserveLines } from '../src/redactor.js';
+} from '../src/shield/geminiAnalyzer.ts';
+import { redactSecrets, redactSecretsPreserveLines } from '../src/shield/redactor.ts';
 import {
   buildSarifReport,
   meetsFailOnThreshold,
   meetsPortfolioFailOnThreshold,
-} from '../src/sarif.js';
+} from '../src/shield/sarif.ts';
 import {
   readBoundedFromHandle,
   resolveSafeTargetDirectory,
   runStaticRepositoryScan,
-} from '../src/scanner.js';
-import { startLonginusServer } from '../src/server.js';
+} from '../src/shield/scanner.ts';
+import { startLonginusServer } from '../src/shield/server.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(
