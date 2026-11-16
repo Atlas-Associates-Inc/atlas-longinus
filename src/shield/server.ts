@@ -270,7 +270,7 @@ function renderIndexHtml(nonce: string, csrfToken: string): string {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="longinus-csrf" content="${csrfToken}" />
-  <title>ATLAS AEGIS — Defensive Posture &amp; Threat Surface Shield</title>
+  <title>LONGINUS — Sovereign Consulting &amp; Cyber Defense Spear</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
@@ -278,7 +278,7 @@ function renderIndexHtml(nonce: string, csrfToken: string): string {
     <div class="topbar-inner">
       <div class="brand-block">
         <span class="brand-kicker">SOVEREIGN DEFENSIVE SHIELD</span>
-        <h1 class="brand-title">ATLAS AEGIS</h1>
+        <h1 class="brand-title">LONGINUS</h1>
       </div>
       <div class="header-badges" id="header-badges" aria-live="polite">
         <span class="pill pill-blue" id="engine-badge">Gemini Structured Threat Modeler</span>
@@ -297,7 +297,7 @@ function renderIndexHtml(nonce: string, csrfToken: string): string {
         <div class="preset-group" role="group" aria-label="クイック監査プリセット">
           <button type="button" class="btn btn-outline" id="preset-portfolio-btn">全プロダクト一括監査</button>
           <button type="button" class="btn btn-ghost" id="preset-fixture-btn">4スタック脆弱サンプル検証</button>
-          <button type="button" class="btn btn-ghost" id="preset-self-btn">Atlas AEGIS 自己防御監査</button>
+          <button type="button" class="btn btn-ghost" id="preset-self-btn">Longinus 自己防御監査</button>
           <button type="button" class="btn btn-outline" id="export-md-btn">レポート出力 (.md)</button>
           <button type="button" class="btn btn-outline" id="export-sarif-btn">SARIF出力 (.sarif)</button>
         </div>

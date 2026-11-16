@@ -189,7 +189,7 @@ export async function runCli(args: readonly string[], io?: CliIoHooks): Promise<
     const portEnv = Number(process.env['PORT'] ?? '4310');
     const port = Number.isInteger(portEnv) && portEnv >= 0 && portEnv <= 65535 ? portEnv : 4310;
     const { url } = await startLonginusServer(port);
-    out(`ATLAS AEGIS Defensive Posture Dashboard listening on ${url}\n`);
+    out(`LONGINUS Defensive Posture Dashboard listening on ${url}\n`);
     return 0;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

@@ -194,7 +194,7 @@ export function buildSarifReport(report: AuditReport): SarifLog {
       {
         tool: {
           driver: {
-            name: 'Atlas AEGIS Defensive Posture Shield',
+            name: 'Longinus Defensive Posture Shield',
             version: '1.1.0',
             informationUri: 'http://127.0.0.1:4310',
             rules,

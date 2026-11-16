@@ -694,7 +694,7 @@
     exportBtn.addEventListener('click', () => {
       if (!latestReport) return;
       const lines = [
-        `# ATLAS AEGIS Defensive Posture Report — ${latestReport.repoName}`,
+        `# LONGINUS Defensive Posture Report — ${latestReport.repoName}`,
         '',
         `- **Audited At**: ${latestReport.auditedAt}`,
         `- **Target Path**: \`${latestReport.targetPath}\``,
@@ -730,7 +730,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `atlas-aegis-defense-report-${latestReport.repoName}.md`;
+      a.download = `longinus-defense-report-${latestReport.repoName}.md`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -765,7 +765,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `atlas-aegis-defense-report-${latestReport.repoName}.sarif`;
+        a.download = `longinus-defense-report-${latestReport.repoName}.sarif`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
