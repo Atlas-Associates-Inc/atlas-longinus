@@ -271,14 +271,18 @@ function renderIndexHtml(nonce: string, csrfToken: string): string {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="longinus-csrf" content="${csrfToken}" />
   <title>LONGINUS — Sovereign Consulting &amp; Cyber Defense Spear</title>
+  <link rel="icon" type="image/svg+xml" href="/longinus-icon.svg" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <header class="topbar" role="banner">
     <div class="topbar-inner">
-      <div class="brand-block">
-        <span class="brand-kicker">SOVEREIGN DEFENSIVE SHIELD</span>
-        <h1 class="brand-title">LONGINUS</h1>
+      <div class="brand-row">
+        <img src="/longinus-icon.svg" alt="" width="34" height="34" class="brand-logo" />
+        <div class="brand-block">
+          <span class="brand-kicker">SOVEREIGN DEFENSIVE SHIELD</span>
+          <h1 class="brand-title">LONGINUS</h1>
+        </div>
       </div>
       <div class="header-badges" id="header-badges" aria-live="polite">
         <span class="pill pill-blue" id="engine-badge">Gemini Structured Threat Modeler</span>
@@ -566,14 +570,18 @@ export function createLonginusServer(options?: LonginusServerOptions): http.Serv
         return;
       }
 
-      if (req.method === 'GET' && (pathname === '/styles.css' || pathname === '/app.js')) {
+      if (
+        req.method === 'GET' &&
+        (pathname === '/styles.css' || pathname === '/app.js' || pathname === '/longinus-icon.svg')
+      ) {
         const fileName = pathname.slice(1);
         const filePath = path.join(PUBLIC_DIR, fileName);
         const content = await fs.readFile(filePath, 'utf8');
         applyHardenedHeaders(res);
-        const mime =
-          fileName.endsWith('.css')
-            ? 'text/css; charset=utf-8'
+        const mime = fileName.endsWith('.css')
+          ? 'text/css; charset=utf-8'
+          : fileName.endsWith('.svg')
+            ? 'image/svg+xml; charset=utf-8'
             : 'application/javascript; charset=utf-8';
         res.writeHead(200, { 'Content-Type': mime });
         res.end(content);

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Longinus mark</title>
+  <desc id="desc">Razor-sharp twin helical spear vectors piercing a cyberspace target ring.</desc>
+  <defs>
+    <linearGradient id="background" x1="48" y1="32" x2="464" y2="480" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#121522"/>
+      <stop offset="1" stop-color="#07080e"/>
+    </linearGradient>
+    <linearGradient id="cyber-ring" x1="128" y1="112" x2="396" y2="384" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4f7cff" stop-opacity="0.9"/>
+      <stop offset="0.6" stop-color="#0284c7" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#121522" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="cobalt-blade" x1="92" y1="420" x2="424" y2="88" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#f7f8fc"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="116" fill="url(#background)" stroke="#27304f" stroke-width="9"/>
+  <!-- Cyberspace HUD Target Ring (pierced at upper-right) -->
+  <path d="M372 214 A138 138 0 1 1 298 140" fill="none" stroke="url(#cyber-ring)" stroke-width="6" stroke-linecap="round"/>
+  <path d="M342 232 A104 104 0 1 1 280 170" fill="none" stroke="#27304f" stroke-width="3" stroke-dasharray="10 8"/>
+  <!-- Upper Helical Flight Vector Blade -->
+  <path d="M88 378 C148 274 236 186 428 84 L344 152 C232 214 156 288 88 378 Z" fill="#f7f8fc"/>
+  <!-- Lower Helical Counter-Twist Vector Blade -->
+  <path d="M134 424 C224 356 298 280 360 168 L428 84 C326 276 238 364 134 424 Z" fill="url(#cobalt-blade)"/>
+  <!-- Central Singularity Core Lance -->
+  <path d="M110 402 L386 126" stroke="#f7f8fc" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="344" cy="168" r="7" fill="#f7f8fc"/>
+</svg>

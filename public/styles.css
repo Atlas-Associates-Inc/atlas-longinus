@@ -88,6 +88,19 @@ body {
   gap: 0.75rem;
 }
 
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.brand-logo {
+  inline-size: 34px;
+  block-size: 34px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
 .brand-block {
   display: flex;
   flex-direction: column;
