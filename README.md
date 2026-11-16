@@ -1,6 +1,42 @@
-# LONGINUS v0.6.0
+# 🔱 LONGINUS
 
-> 🌐 **Language / 言語**: **[English](#english)** · **[日本語](#日本語)** — CLI: `--lang en` / `--lang ja` (`ATLAS_LANG=en|ja`) · `--audience enterprise|municipal|sme` · Web UI: `npm start` (`http://127.0.0.1:4310`)
+<p align="center">
+  <img src="public/longinus-icon.svg" alt="LONGINUS Icon" width="96" height="96" />
+</p>
+
+> 🌐 **Language / 言語**: **[日本語 (Japanese)](#日本語)** · **[English](#english)** — Apache-2.0 · Node.js `>=22.18.0` · **0 npm dependencies (`npm install` 不要)** · Loopback Web UI: `npm start` (`http://127.0.0.1:4310`)
+
+---
+
+## ⚡ 0秒スタート：あなたのAIに「URLを貼って実行して」と言うだけ
+
+コマンドを覚える必要すらありません。普段お使いの AI エージェント（**Antigravity / Gemini CLI / Vertex AI / Cursor / Windsurf** 等）に、**下の1行をそのままコピペして送信するだけ**で、AIが自律的に `LONGINUS` を取得し、あなたのプロジェクトを読み取り専用（ファイル変更ゼロ・外部送信ゼロ）で監査します。
+
+### 🇯🇵 日本語プロンプト（そのままAIチャットに貼るだけ）
+```text
+https://github.com/Atlas-Associates-Inc/longinus を使って、このプロジェクトを読み取り専用で監査（--format blueprint --emit-patch --lang ja）して、5領域スコアと改善パッチ案を教えて。
+```
+*(※ 地方自治体・ガバメントクラウド仕様なら `--audience municipal`、中小企業・取引先提出仕様なら `--audience sme` と付け加えるだけ)*
+
+### 🌍 English Prompt (Copy & Paste into Your AI Agent)
+```text
+Use https://github.com/Atlas-Associates-Inc/longinus to run a read-only architecture & security audit (--format blueprint --emit-patch --lang en) on this project and show me the 5-pillar scorecard and review-only patches.
+```
+
+### 💻 ターミナルから直接1行で動かす場合（`npm install` 不要）
+外部 npm パッケージ依存が **完全ゼロ (`0 dependencies`)** のため、クローンした瞬間にそのまま動きます。
+```sh
+git clone https://github.com/Atlas-Associates-Inc/longinus.git
+node longinus/bin/atlas-sovereign.mjs audit /path/to/your-repo --format blueprint --emit-patch --lang ja
+```
+ローカル Web ダッシュボード（`http://127.0.0.1:4310`）または 4-Stack Code Shield CLI を起動する場合：
+```sh
+cd longinus && npm start
+# または CLI で 4-Stack ソースコード＆秘密情報監査:
+node bin/longinus.mjs /path/to/your-repo --deterministic
+```
+
+---
 
 <details>
 <summary><strong>Global Overview (20 Languages) / 20言語クイック概要</strong></summary>
@@ -146,10 +182,10 @@ Supported inputs are Firebase `firestore.rules` / `storage.rules` and `*.firesto
 
 | Rule ID | Severity | Detection / interpretation |
 | --- | --- | --- |
-| `firebase/public-read` | `high` | Unconditional public Rules reads. |
+| `firebase/public-read` | `high` | Unconditional public Rules reads on user/private data or unprotected paths (admin-write-restricted public asset/catalog buckets and point-lookup tokens are contextually recognized with zero false positives). |
 | `firebase/public-write` | `high` | Unconditional public Rules writes. |
-| `firebase/recursive-wildcard` | `high` | Public reads through a recursive wildcard expose descendants. |
-| `firebase/privilege-fields` | `medium` | Authenticated user-document writes lack a recognized field allowlist; application trust and validation need review. |
+| `firebase/recursive-wildcard` | `high` | Unprotected public reads through a recursive wildcard expose descendants (deduplicated per scope so a single `match` block is never triple-penalized). |
+| `firebase/privilege-fields` | `medium` | Authenticated user-document writes (`/users/{uid}`, `/profiles/{uid}`, `/accounts/{uid}`, `/members/{uid}`) lack a recognized field allowlist (`.hasOnly(...)`, `!.hasAny(...)`, or explicit `role`/`isAdmin` guard) after CEL `function` AST & `let`-binding resolution. |
 | `gcp/public-service` | `high` | Public IAM grants to `allUsers` or `allAuthenticatedUsers`. |
 | `gcp/public-ingress` | `medium` | External service ingress is enabled; this alone does not prove unauthenticated access. |
 | `iam/default-service-account` | `high` | A default Compute Engine, App Engine, or Cloud Build service account holds a recognized powerful role. |
@@ -412,10 +448,10 @@ npx @atlas-sec/sovereign audit . --lang ja
 
 | ルール ID | 重大度 | 検出内容・解釈 |
 | --- | --- | --- |
-| `firebase/public-read` | `high` | Rules による無条件の公開読み取り。 |
+| `firebase/public-read` | `high` | ユーザーデータ・保護対象パスにおける無条件の公開読み取り（書き込みが管理者関数または `false` に厳格制限された公開アセット／カタログ配信パスや単一トークン `get` は文脈判定により誤検知ゼロ化）。 |
 | `firebase/public-write` | `high` | Rules による無条件の公開書き込み。 |
-| `firebase/recursive-wildcard` | `high` | 再帰ワイルドカードを通じた公開読み取りによる子孫データの露出。 |
-| `firebase/privilege-fields` | `medium` | 認証済みユーザーによるユーザードキュメントへの書き込みに、認識可能なフィールド許可リストがない。アプリケーションの信頼境界と検証処理の確認が必要。 |
+| `firebase/recursive-wildcard` | `high` | 保護されていない再帰ワイルドカードを通じた公開読み取りによる子孫データの露出（同一 `match` スコープ単位で減点をキャップし、3重減点を排除）。 |
+| `firebase/privilege-fields` | `medium` | CEL カスタム関数（`function` / `let` 束縛）の AST インライン展開後、ユーザードキュメント本体（`/users/{uid}` 等）への書き込みに `.hasOnly(...)`・`!.hasAny(...)`・明示的ロール保護がない。 |
 | `gcp/public-service` | `high` | `allUsers` または `allAuthenticatedUsers` への公開 IAM 権限付与。 |
 | `gcp/public-ingress` | `medium` | サービスの外部 ingress が有効。これだけでは未認証アクセスを証明しない。 |
 | `iam/default-service-account` | `high` | Compute Engine、App Engine、または Cloud Build の既定サービスアカウントが、検出対象の強力なロールを保有。 |
