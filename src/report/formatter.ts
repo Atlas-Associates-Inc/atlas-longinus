@@ -386,6 +386,7 @@ function scoreGrade(score: number, incomplete: boolean): string {
 export function formatBlueprint(graph: GraphResult, prover?: DualProverVerdict, remediations: Remediation[] = [], lang: ReportLanguage = 'en', audience: ConsultingAudience = 'enterprise'): string {
   const counts: Record<Severity, number> = { blocker: 0, high: 0, medium: 0, low: 0, info: 0 };
   const pillarPenalties = new Map<string, number>(PILLARS.map(pillar => [pillar, 0]));
+  const locusPenalties = new Map<string, { domain: string; penalty: number }>();
   const distinctRuleIds: string[] = [];
   for (const finding of graph.findings) {
     counts[finding.severity]++;
@@ -393,8 +394,15 @@ export function formatBlueprint(graph: GraphResult, prover?: DualProverVerdict, 
     const domain = controlDomain(finding.ruleId);
     if (pillarPenalties.has(domain)) {
       const penalty = finding.severity === 'blocker' ? 35 : finding.severity === 'high' ? 18 : finding.severity === 'medium' ? 8 : 3;
-      pillarPenalties.set(domain, (pillarPenalties.get(domain) ?? 0) + penalty);
+      const locusKey = `${domain}:${finding.location.file}:${finding.location.line}`;
+      const prev = locusPenalties.get(locusKey);
+      if (!prev || penalty > prev.penalty) {
+        locusPenalties.set(locusKey, { domain, penalty });
+      }
     }
+  }
+  for (const { domain, penalty } of locusPenalties.values()) {
+    pillarPenalties.set(domain, (pillarPenalties.get(domain) ?? 0) + penalty);
   }
   const incomplete = graph.findings.some(finding => finding.ruleId.startsWith('scan/'));
   const pillarScores = PILLARS.map(pillar => ({
@@ -402,8 +410,7 @@ export function formatBlueprint(graph: GraphResult, prover?: DualProverVerdict, 
     score: Math.max(0, 100 - (pillarPenalties.get(pillar) ?? 0)),
   }));
   const rawAverage = Math.round(pillarScores.reduce((sum, item) => sum + item.score, 0) / PILLARS.length);
-  const pathPenalty = Math.min(30, graph.paths.length * 8);
-  const overallScore = incomplete ? 0 : Math.max(0, rawAverage - pathPenalty);
+  const overallScore = incomplete ? 0 : rawAverage;
   const grade = scoreGrade(overallScore, incomplete);
   const estimatedHoursSaved = Math.max(40, graph.nodes.length * 4 + graph.findings.length * 6 + graph.paths.length * 8);
   const estimatedJpySaved = estimatedHoursSaved * 35_000;

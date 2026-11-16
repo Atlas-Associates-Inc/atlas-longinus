@@ -7,9 +7,11 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { findAttackPaths, mergeGraphs, scanDirectory } from '../src/graph/attack-graph.ts';
 import { parseIamPolicy, parseTerraform, parseWifWorkflow } from '../src/graph/gcp-iam-parser.ts';
-import { buildBraceMap, closingBrace, createLineIndex, parseFirebaseRules, scanAllowClauses,
+import { buildBraceMap, closingBrace, createLineIndex, expandCelConditionAst, parseFirebaseRules, scanAllowClauses,
   stripComments, stripHclCommentsAndHeredocs } from '../src/graph/firebase-rules-parser.ts';
+import { formatBlueprint } from '../src/report/formatter.ts';
 import { proposeRemediations } from '../src/report/remediation.ts';
+import { runStaticRepositoryScan } from '../src/shield/scanner.ts';
 
 const vulnerable = fileURLToPath(new URL('../fixtures/vulnerable-enterprise/', import.meta.url));
 const hardened = fileURLToPath(new URL('../fixtures/hardened-enterprise/', import.meta.url));
@@ -1132,6 +1134,114 @@ test('Municipal, SME and Enterprise consulting rules detect residency, ZONAL SPO
     }
     const proposals = proposeRemediations(graph.findings, directory);
     assert.ok(proposals.some(p => p.diff.includes('"REGIONAL"')));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('CEL function AST resolution suppresses write-restricted public asset buckets and eliminates triple penalty', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'atlas-longinus-cel-ast-'));
+  try {
+    const storageRules = [
+      "rules_version = '2';",
+      'service firebase.storage {',
+      '  match /b/{bucket}/o {',
+      '    function isAuthenticated() {',
+      '      return request.auth != null;',
+      '    }',
+      '    function isDashboardAdmin() {',
+      '      return isAuthenticated() && request.auth.token.admin == true;',
+      '    }',
+      '    match /public/{allPaths=**} {',
+      '      allow get: if true;',
+      '      allow list, create, update, delete: if isDashboardAdmin();',
+      '    }',
+      '    match /badges/{allPaths=**} {',
+      '      allow read: if true;',
+      '      allow write: if isDashboardAdmin();',
+      '    }',
+      '    match /{allPaths=**} {',
+      '      allow read, write: if false;',
+      '    }',
+      '  }',
+      '}',
+    ].join('\n');
+    const firestoreRules = [
+      "rules_version = '2';",
+      'service cloud.firestore {',
+      '  match /databases/{database}/documents {',
+      '    function isAuthenticated() {',
+      '      return request.auth != null;',
+      '    }',
+      '    function isOwner(userId) {',
+      '      return isAuthenticated() && request.auth.uid == userId;',
+      '    }',
+      '    function isDashboardAdmin() {',
+      '      return isAuthenticated() && request.auth.token.admin == true;',
+      '    }',
+      '    function hasAllowedUserFields() {',
+      "      return request.resource.data.keys().hasOnly(['displayName', 'updatedAt']);",
+      '    }',
+      '    match /architectureAccess/{tokenId} {',
+      '      allow get: if true;',
+      '      allow list, create, update, delete: if isDashboardAdmin();',
+      '    }',
+      '    match /users/{userId} {',
+      '      allow get: if isOwner(userId);',
+      '      allow create, update: if isOwner(userId) && hasAllowedUserFields();',
+      '      match /notes/{noteId} {',
+      '        allow read, write: if isOwner(userId);',
+      '      }',
+      '    }',
+      '    match /{document=**} {',
+      '      allow read, write: if false;',
+      '    }',
+      '  }',
+      '}',
+    ].join('\n');
+    writeFileSync(join(directory, 'storage.rules'), storageRules);
+    writeFileSync(join(directory, 'firestore.rules'), firestoreRules);
+
+    const hardenedGraph = scanDirectory(directory);
+    assert.deepEqual(
+      hardenedGraph.findings,
+      [],
+      'Write-restricted public assets, point-lookup tokens, and AST-validated user writes must emit 0 false positives',
+    );
+    assert.deepEqual(hardenedGraph.paths, []);
+
+    const shieldScan = await runStaticRepositoryScan(directory);
+    assert.equal(
+      shieldScan.findings.filter(f => f.ruleId === 'LNG-FB-001').length,
+      0,
+      'LNG-FB-001 must also suppress write-restricted public asset buckets and deny-by-default wildcards',
+    );
+
+    // True positive via CEL function returning unconditional true + Triple Penalty elimination check
+    const vulnerableCelRules = [
+      "rules_version = '2';",
+      'service firebase.storage {',
+      '  match /b/{bucket}/o {',
+      '    function alwaysOpen() {',
+      '      return true;',
+      '    }',
+      '    match /leaked/{allPaths=**} {',
+      '      allow read: if alwaysOpen();',
+      '    }',
+      '  }',
+      '}',
+    ].join('\n');
+    writeFileSync(join(directory, 'storage.rules'), vulnerableCelRules);
+    const vulnGraph = scanDirectory(directory);
+    const ruleIds = vulnGraph.findings.map(f => f.ruleId).sort();
+    assert.deepEqual(ruleIds, ['firebase/public-read', 'firebase/recursive-wildcard']);
+
+    // Verify Triple Penalty is eliminated:
+    // Same line (line 8) emits firebase/public-read + firebase/recursive-wildcard + 1 attack path,
+    // but pillar penalty is deduplicated per (domain, file, line) to -18 (82/100) and overallScore has no extra pathPenalty (96/100).
+    const blueprint = formatBlueprint(vulnGraph);
+    assert.match(blueprint, /Firebase & Data Perimeter \| 82\/100 \| B/);
+    assert.match(blueprint, /Architecture Maturity Score: 96\/100 \(Grade: A\)/);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { parseFirebaseRules } from '../graph/firebase-rules-parser.ts';
 import { PUBLIC_ENV_SECRET_RE, redactSecrets } from './redactor.ts';
 import type { SecurityFinding, SeverityLevel, StackDomain, StrideCategory } from './types.ts';
 
@@ -288,13 +289,27 @@ if (parsed.protocol !== 'https:' || !ALLOWED_HOSTS.has(parsed.hostname)) {
     cwe: 'CWE-284',
     owaspAsvs: 'V4.1.3 Principle of Least Privilege (Deny by Default)',
     appliesTo: (ctx) => ctx.ext === '.rules',
-    evaluate: (ctx) =>
-      findMatchingLines(
-        ctx,
-        (line) =>
-          /\ballow\s+[^:;]*:\s*if\s+true\s*;/.test(line) ||
-          /match\s+\/\{document=\*\*\}/.test(line),
-      ),
+    evaluate: (ctx) => {
+      if (/\bservice\s+(?:cloud\.firestore|firebase\.storage)\s*\{/.test(ctx.redactedContent)) {
+        const parsed = parseFirebaseRules(ctx.redactedContent, ctx.relativePath);
+        const seenLines = new Set<number>();
+        const hits: Array<{ line: number; snippet: string }> = [];
+        for (const f of parsed.findings) {
+          if (
+            (f.ruleId === 'firebase/public-read' ||
+              f.ruleId === 'firebase/public-write' ||
+              f.ruleId === 'firebase/recursive-wildcard') &&
+            !seenLines.has(f.location.line)
+          ) {
+            seenLines.add(f.location.line);
+            const rawLine = ctx.redactedLines[f.location.line - 1] ?? f.evidence;
+            hits.push({ line: f.location.line, snippet: rawLine.trim().slice(0, 180) });
+          }
+        }
+        return hits;
+      }
+      return findMatchingLines(ctx, (line) => /\ballow\s+[^:;]*:\s*if\s+true\s*;/.test(line));
+    },
     rootCause:
       '`if true` またはルート `{document=**}` 再帰ワイルドカードにより、未認証の外部クライアントから全コレクションの閲覧・改ざん・削除（課金枯渇攻撃を含む）が可能になっています。',
     defensivePatch: `rules_version = '2';

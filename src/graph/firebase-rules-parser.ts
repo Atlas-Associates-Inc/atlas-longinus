@@ -318,6 +318,14 @@ export function* scanAllowClauses(text: string): Generator<{
   }
 }
 
+interface CelFunctionAst {
+  name: string;
+  params: string[];
+  bodyExpr: string;
+  scopeStart: number;
+  scopeEnd: number;
+}
+
 interface FirebaseScope {
   path: string;
   start: number;
@@ -336,6 +344,273 @@ interface FirebaseScope {
   writeMessage?: string;
   wildcardMessage?: string;
   privFieldsLabel?: string;
+  clauseFlags?: number;
+}
+
+const FLAG_PUBLIC_WRITE = 1;
+const FLAG_RESTRICTED_WRITE = 2;
+const FLAG_PUBLIC_LIST = 4;
+const FLAG_RESTRICTED_LIST = 8;
+
+const PUBLIC_ASSET_PATH_RE =
+  /(?:^|\/)(?:public|assets|static|badges|avatars|icons|media|ai_image|notifications|catalog|announcements|releases)(?:\/|$)/i;
+
+function extractCelFunctions(
+  text: string,
+  bracePairs: ReadonlyMap<number, number>,
+): CelFunctionAst[] {
+  if (!text.includes('function')) return [];
+  const fns: CelFunctionAst[] = [];
+  const enclosingBraces: Array<{ open: number; close: number }> = [];
+  for (const [open, close] of bracePairs.entries()) {
+    enclosingBraces.push({ open, close });
+  }
+
+  for (const match of text.matchAll(
+    /\bfunction\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*\{/g,
+  )) {
+    const fnStart = match.index!;
+    const openBrace = fnStart + match[0].length - 1;
+    const closeBrace = bracePairs.get(openBrace) ?? -1;
+    if (closeBrace < 0) continue;
+    const rawBody = text.slice(openBrace + 1, closeBrace).trim();
+    const retMatch = rawBody.match(/^return\s+([\s\S]*?)\s*;?\s*$/);
+    if (!retMatch) continue;
+    const params = match[2]
+      .split(',')
+      .map((p) => p.trim())
+      .filter((p) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(p));
+
+    let scopeStart = 0;
+    let scopeEnd = text.length;
+    for (const b of enclosingBraces) {
+      if (b.open < fnStart && b.close > closeBrace && b.open >= scopeStart) {
+        scopeStart = b.open;
+        scopeEnd = b.close;
+      }
+    }
+    fns.push({
+      name: match[1],
+      params,
+      bodyExpr: retMatch[1].trim(),
+      scopeStart,
+      scopeEnd,
+    });
+  }
+  return fns;
+}
+
+function splitBalancedArgs(argListText: string): string[] {
+  const trimmed = argListText.trim();
+  if (!trimmed) return [];
+  const args: string[] = [];
+  let start = 0;
+  let depth = 0;
+  let quote = 0;
+  let escaped = false;
+  for (let i = 0; i < trimmed.length; i++) {
+    const code = trimmed.charCodeAt(i);
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (code === 92) escaped = true;
+      else if (code === quote) quote = 0;
+      continue;
+    }
+    if (code === 34 || code === 39) {
+      quote = code;
+      continue;
+    }
+    if (code === 40 || code === 91 || code === 123) depth++;
+    else if (code === 41 || code === 93 || code === 125) depth = Math.max(0, depth - 1);
+    else if (code === 44 && depth === 0) {
+      args.push(trimmed.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  args.push(trimmed.slice(start).trim());
+  return args;
+}
+
+function substituteCelParams(
+  bodyExpr: string,
+  params: readonly string[],
+  args: readonly string[],
+): string {
+  if (params.length === 0) return bodyExpr;
+  const paramMap = new Map<string, string>();
+  for (let i = 0; i < params.length; i++) {
+    paramMap.set(params[i], `(${args[i] ?? 'null'})`);
+  }
+  let out = '';
+  let i = 0;
+  let quote = 0;
+  let escaped = false;
+  while (i < bodyExpr.length) {
+    const code = bodyExpr.charCodeAt(i);
+    if (quote) {
+      out += bodyExpr[i];
+      if (escaped) escaped = false;
+      else if (code === 92) escaped = true;
+      else if (code === quote) quote = 0;
+      i++;
+      continue;
+    }
+    if (code === 34 || code === 39) {
+      quote = code;
+      out += bodyExpr[i];
+      i++;
+      continue;
+    }
+    if (isWordCode(code) && (i === 0 || !isWordOrDotCode(bodyExpr.charCodeAt(i - 1)))) {
+      let end = i + 1;
+      while (end < bodyExpr.length && isWordCode(bodyExpr.charCodeAt(end))) end++;
+      const ident = bodyExpr.slice(i, end);
+      const replacement = paramMap.get(ident);
+      if (replacement !== undefined && bodyExpr.charCodeAt(end) !== 40) {
+        out += replacement;
+        i = end;
+        continue;
+      }
+      out += ident;
+      i = end;
+      continue;
+    }
+    out += bodyExpr[i];
+    i++;
+  }
+  return out;
+}
+
+export function expandCelConditionAst(
+  condition: string,
+  clauseOffset: number,
+  functions: readonly CelFunctionAst[],
+): string {
+  if (functions.length === 0 || !condition.includes('(')) return condition;
+  let current = condition;
+  for (let pass = 0; pass < 6; pass++) {
+    let changed = false;
+    let next = '';
+    let i = 0;
+    let quote = 0;
+    let escaped = false;
+    while (i < current.length) {
+      const code = current.charCodeAt(i);
+      if (quote) {
+        next += current[i];
+        if (escaped) escaped = false;
+        else if (code === 92) escaped = true;
+        else if (code === quote) quote = 0;
+        i++;
+        continue;
+      }
+      if (code === 34 || code === 39) {
+        quote = code;
+        next += current[i];
+        i++;
+        continue;
+      }
+      if (isWordCode(code) && (i === 0 || !isWordOrDotCode(current.charCodeAt(i - 1)))) {
+        let nameEnd = i + 1;
+        while (nameEnd < current.length && isWordCode(current.charCodeAt(nameEnd))) nameEnd++;
+        const fnName = current.slice(i, nameEnd);
+        let wsEnd = nameEnd;
+        while (wsEnd < current.length && isSpaceCode(current.charCodeAt(wsEnd))) wsEnd++;
+        if (current.charCodeAt(wsEnd) === 40) {
+          let matchedFn: CelFunctionAst | undefined;
+          for (const fn of functions) {
+            if (
+              fn.name === fnName &&
+              fn.scopeStart <= clauseOffset &&
+              clauseOffset <= fn.scopeEnd &&
+              (!matchedFn || fn.scopeStart >= matchedFn.scopeStart)
+            ) {
+              matchedFn = fn;
+            }
+          }
+          if (matchedFn) {
+            let pDepth = 1;
+            let pQuote = 0;
+            let pEsc = false;
+            let pCursor = wsEnd + 1;
+            while (pCursor < current.length && pDepth > 0) {
+              const pc = current.charCodeAt(pCursor);
+              if (pQuote) {
+                if (pEsc) pEsc = false;
+                else if (pc === 92) pEsc = true;
+                else if (pc === pQuote) pQuote = 0;
+              } else if (pc === 34 || pc === 39) pQuote = pc;
+              else if (pc === 40) pDepth++;
+              else if (pc === 41) pDepth--;
+              pCursor++;
+            }
+            if (pDepth === 0) {
+              const args = splitBalancedArgs(current.slice(wsEnd + 1, pCursor - 1));
+              const inlined = substituteCelParams(matchedFn.bodyExpr, matchedFn.params, args);
+              next += `(${inlined})`;
+              i = pCursor;
+              changed = true;
+              continue;
+            }
+          }
+        }
+        next += current.slice(i, nameEnd);
+        i = nameEnd;
+        continue;
+      }
+      next += current[i];
+      i++;
+    }
+    current = next;
+    if (!changed || current.length > 16_384) break;
+  }
+  return current;
+}
+
+function isUnconditionalTrueCel(expr: string): boolean {
+  return expr === 'true' || /^[\s(]*true[\s)]*$/.test(expr);
+}
+
+function isExplicitlyRestrictedCel(expr: string): boolean {
+  if (/^[\s(]*false[\s)]*$/.test(expr)) return true;
+  if (isUnconditionalTrueCel(expr)) return false;
+  return /\brequest\.auth\b/.test(expr);
+}
+
+function recordScopeClauseFlags(
+  scope: FirebaseScope,
+  operations: readonly string[],
+  expandedCondition: string,
+): void {
+  const isPub = isUnconditionalTrueCel(expandedCondition);
+  const isRestricted = isExplicitlyRestrictedCel(expandedCondition);
+  let flags = scope.clauseFlags ?? 0;
+  for (const op of operations) {
+    if (op === 'write' || op === 'create' || op === 'update' || op === 'delete') {
+      if (isPub) flags |= FLAG_PUBLIC_WRITE;
+      if (isRestricted) flags |= FLAG_RESTRICTED_WRITE;
+    }
+    if (op === 'list' || op === 'read') {
+      if (isPub) flags |= FLAG_PUBLIC_LIST;
+      if (isRestricted && op === 'list') flags |= FLAG_RESTRICTED_LIST;
+    }
+  }
+  scope.clauseFlags = flags;
+}
+
+function isWriteProtectedPublicReadScope(
+  scope: FirebaseScope,
+  clauseOps: readonly string[],
+): boolean {
+  const flags = scope.clauseFlags ?? 0;
+  if ((flags & FLAG_PUBLIC_WRITE) !== 0 || (flags & FLAG_RESTRICTED_WRITE) === 0) return false;
+  const isGetOnlyClause =
+    clauseOps.length === 1 &&
+    clauseOps[0] === 'get' &&
+    (flags & FLAG_PUBLIC_LIST) === 0 &&
+    (flags & FLAG_RESTRICTED_LIST) !== 0;
+  if (isGetOnlyClause) return true;
+  return PUBLIC_ASSET_PATH_RE.test(scope.path);
 }
 
 export function parseFirebaseRules(source: string, file: string,
@@ -447,6 +722,25 @@ export function parseFirebaseRules(source: string, file: string,
       'Expected a service and match blocks; this file was not treated as a clean ruleset.', 'Missing supported rules structure');
   }
   const entry = 'entry:firebase:public';
+  const celFunctions = extractCelFunctions(text, bracePairs);
+  const canHaveProtectedPublicScope =
+    /\bif\b/.test(text) && /\b(?:write|create|update|delete|list)\b/.test(text);
+  if (canHaveProtectedPublicScope) {
+    active.length = 0;
+    let preScopeIdx = 0;
+    forEachAllowClause(text, (offset, operations, condition) => {
+      while (active.length && active[active.length - 1].end <= offset) active.pop();
+      while (preScopeIdx < scopes.length && scopes[preScopeIdx].start < offset) {
+        const scope = scopes[preScopeIdx++];
+        if (scope.end > offset) active.push(scope);
+      }
+      if (!active.length || active[active.length - 1].limited) return;
+      const scope = active[active.length - 1];
+      const expanded =
+        celFunctions.length > 0 ? expandCelConditionAst(condition, offset, celFunctions) : condition;
+      recordScopeClauseFlags(scope, operations, expanded);
+    });
+  }
   // matchAll already emits scopes in source order.
   active.length = 0;
   let nextScope = 0;
@@ -460,28 +754,38 @@ export function parseFirebaseRules(source: string, file: string,
     if (!active.length || active[active.length - 1].limited) return;
     const scope = active[active.length - 1];
     const { path, data, resource } = scope;
+    const expandedCondition =
+      celFunctions.length > 0 ? expandCelConditionAst(condition, offset, celFunctions) : condition;
     let read = false, write = false, writeCreateUpdate = false;
     for (const op of operations) {
       if (op === 'read' || op === 'get' || op === 'list') read = true;
       if (op === 'write' || op === 'create' || op === 'update' || op === 'delete') write = true;
       if (op === 'write' || op === 'create' || op === 'update') writeCreateUpdate = true;
     }
-    const publicAccess = condition === 'true' || /^\(*\s*true\s*\)*$/.test(condition);
-    if (publicAccess && (read || write)) {
+    const publicAccess = isUnconditionalTrueCel(expandedCondition);
+    const suppressedPublicRead =
+      publicAccess &&
+      read &&
+      !write &&
+      canHaveProtectedPublicScope &&
+      isWriteProtectedPublicReadScope(scope, operations);
+    const effectivePublicRead = publicAccess && read && !suppressedPublicRead;
+    const effectivePublicWrite = publicAccess && write;
+    if (effectivePublicRead || effectivePublicWrite) {
       let readFinding: Finding | undefined;
       let writeFinding: Finding | undefined;
       let wildcardFinding: Finding | undefined;
-      if (read) {
+      if (effectivePublicRead) {
         const title = scope.readTitle ??= `Public ${kind} read`;
         const message = scope.readMessage ??= `The unconditional grant permits unauthenticated read at ${path}.`;
         readFinding = addFinding(graph, file, line, 'firebase/public-read', 'high', title, message, evidence);
       }
-      if (write) {
+      if (effectivePublicWrite) {
         const title = scope.writeTitle ??= `Public ${kind} write`;
         const message = scope.writeMessage ??= `The unconditional grant permits unauthenticated write at ${path}.`;
         writeFinding = addFinding(graph, file, line, 'firebase/public-write', 'high', title, message, evidence);
       }
-      if (read && scope.recursive) {
+      if (effectivePublicRead && scope.recursive) {
         const message = scope.wildcardMessage ??= `The public read grant covers the recursive match ${path}.`;
         wildcardFinding = addFinding(graph, file, line, 'firebase/recursive-wildcard', 'high',
           'Recursive wildcard exposes descendants', message, evidence);
@@ -508,7 +812,7 @@ export function parseFirebaseRules(source: string, file: string,
       const dataLabel = scope.dataLabel ??= `${kind} data matching ${path}`;
       addNode(data, 'data', dataLabel, line);
       const firstFinding = (readFinding ?? writeFinding)!;
-      const dataKind: GraphEdge['kind'] = read ? 'read-data' : 'write-data';
+      const dataKind: GraphEdge['kind'] = effectivePublicRead ? 'read-data' : 'write-data';
       if (!collapseDuplicateEdges) {
         const findingIds: string[] = [];
         if (readFinding) findingIds.push(readFinding.id);
@@ -526,8 +830,9 @@ export function parseFirebaseRules(source: string, file: string,
       }
     }
     if (kind === 'firestore' && writeCreateUpdate &&
-      /request\.auth/.test(condition) && /\/(?:users|profiles|accounts|members)(?:\/|$)/i.test(path) &&
-      !/\.hasOnly\s*\(/.test(condition)) {
+      /request\.auth/.test(expandedCondition) &&
+      /\/(?:users|profiles|accounts|members)(?:\/\{[^/}]+\})?$/i.test(path) &&
+      !/\.hasOnly\s*\(|!\s*request\.resource\.data[\s\S]*?\.hasAny\s*\(|\b(?:role|isAdmin|adminStatus)\b/.test(expandedCondition)) {
       const finding = addFinding(graph, file, line, 'firebase/privilege-fields', 'medium',
         'User document writes lack an explicit field allowlist',
         'If this document stores trusted role or privilege fields, authenticated writers may be able to modify them. Function-based validation and application trust require review.', evidence);
