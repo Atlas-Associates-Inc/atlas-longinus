@@ -351,9 +351,34 @@ const FLAG_PUBLIC_WRITE = 1;
 const FLAG_RESTRICTED_WRITE = 2;
 const FLAG_PUBLIC_LIST = 4;
 const FLAG_RESTRICTED_LIST = 8;
+const FLAG_ADMIN_OR_FALSE_WRITE = 16;
 
 const PUBLIC_ASSET_PATH_RE =
-  /(?:^|\/)(?:public|assets|static|badges|avatars|icons|media|ai_image|notifications|catalog|announcements|releases)(?:\/|$)/i;
+  /(?:^|\/)(?:public|assets|static|badges|avatars|icons|media|ai_image|notifications|catalog|announcements|releases|banners|wines|articles)(?:\/|$)/i;
+
+const SENSITIVE_USER_OR_PRIVATE_PATH_RE =
+  /(?:^|\/)(?:users|users_v2|profiles|accounts|members|chats|chat_media|groups|private|encrypted|temp|review_inputs|orders|payments|secrets|tokens|keys|keybackups|passkeys|sessions|devicesessions|messages|dm|admin|adminpermissions|internal|audit|logs|backups|customers|wallets|invoices)(?:\/|$)/i;
+
+const ROOT_CATCHALL_PATH_RE =
+  /^(?:\/databases\/\{[^/}]+\}\/documents|\/b\/\{[^/}]+\}\/o)?\/\{[^/}]+\}$/i;
+
+function resolveCelBodyWithLetBindings(rawBody: string): string | undefined {
+  let rest = rawBody.trim();
+  const letNames: string[] = [];
+  const letValues: string[] = [];
+  for (let count = 0; count < 16; count++) {
+    const letMatch = rest.match(/^let\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([\s\S]*?);\s*([\s\S]*)$/);
+    if (!letMatch) break;
+    const varName = letMatch[1];
+    const resolvedVal = substituteCelParams(letMatch[2].trim(), letNames, letValues);
+    letNames.push(varName);
+    letValues.push(resolvedVal);
+    rest = letMatch[3].trim();
+  }
+  const retMatch = rest.match(/^return\s+([\s\S]*?)\s*;?\s*$/);
+  if (!retMatch) return undefined;
+  return substituteCelParams(retMatch[1].trim(), letNames, letValues);
+}
 
 function extractCelFunctions(
   text: string,
@@ -373,9 +398,9 @@ function extractCelFunctions(
     const openBrace = fnStart + match[0].length - 1;
     const closeBrace = bracePairs.get(openBrace) ?? -1;
     if (closeBrace < 0) continue;
-    const rawBody = text.slice(openBrace + 1, closeBrace).trim();
-    const retMatch = rawBody.match(/^return\s+([\s\S]*?)\s*;?\s*$/);
-    if (!retMatch) continue;
+    const rawBody = text.slice(openBrace + 1, closeBrace);
+    const bodyExpr = resolveCelBodyWithLetBindings(rawBody);
+    if (!bodyExpr) continue;
     const params = match[2]
       .split(',')
       .map((p) => p.trim())
@@ -392,7 +417,7 @@ function extractCelFunctions(
     fns.push({
       name: match[1],
       params,
-      bodyExpr: retMatch[1].trim(),
+      bodyExpr,
       scopeStart,
       scopeEnd,
     });
@@ -577,18 +602,34 @@ function isExplicitlyRestrictedCel(expr: string): boolean {
   return /\brequest\.auth\b/.test(expr);
 }
 
+function isAdminOrFalseRestrictedCel(rawCondition: string, expandedCondition: string): boolean {
+  if (/^[\s(]*false[\s)]*$/.test(expandedCondition)) return true;
+  if (!isExplicitlyRestrictedCel(expandedCondition)) return false;
+  return (
+    /\b(?:is[A-Za-z0-9_]*(?:Admin|Operator|Staff|Moderator)|admin_role|adminPermissions|superAdmin)\b/i.test(
+      rawCondition,
+    ) ||
+    /\b(?:admin_role|adminPermissions|superAdmin|token\.admin|token\.role)\b/i.test(
+      expandedCondition,
+    )
+  );
+}
+
 function recordScopeClauseFlags(
   scope: FirebaseScope,
   operations: readonly string[],
+  rawCondition: string,
   expandedCondition: string,
 ): void {
   const isPub = isUnconditionalTrueCel(expandedCondition);
   const isRestricted = isExplicitlyRestrictedCel(expandedCondition);
+  const isAdminOrFalse = isAdminOrFalseRestrictedCel(rawCondition, expandedCondition);
   let flags = scope.clauseFlags ?? 0;
   for (const op of operations) {
     if (op === 'write' || op === 'create' || op === 'update' || op === 'delete') {
       if (isPub) flags |= FLAG_PUBLIC_WRITE;
       if (isRestricted) flags |= FLAG_RESTRICTED_WRITE;
+      if (isAdminOrFalse) flags |= FLAG_ADMIN_OR_FALSE_WRITE;
     }
     if (op === 'list' || op === 'read') {
       if (isPub) flags |= FLAG_PUBLIC_LIST;
@@ -604,13 +645,20 @@ function isWriteProtectedPublicReadScope(
 ): boolean {
   const flags = scope.clauseFlags ?? 0;
   if ((flags & FLAG_PUBLIC_WRITE) !== 0 || (flags & FLAG_RESTRICTED_WRITE) === 0) return false;
+  if (
+    ROOT_CATCHALL_PATH_RE.test(scope.path) ||
+    SENSITIVE_USER_OR_PRIVATE_PATH_RE.test(scope.path)
+  ) {
+    return false;
+  }
   const isGetOnlyClause =
     clauseOps.length === 1 &&
     clauseOps[0] === 'get' &&
     (flags & FLAG_PUBLIC_LIST) === 0 &&
     (flags & FLAG_RESTRICTED_LIST) !== 0;
   if (isGetOnlyClause) return true;
-  return PUBLIC_ASSET_PATH_RE.test(scope.path);
+  if (PUBLIC_ASSET_PATH_RE.test(scope.path)) return true;
+  return (flags & FLAG_ADMIN_OR_FALSE_WRITE) !== 0;
 }
 
 export function parseFirebaseRules(source: string, file: string,
@@ -738,7 +786,7 @@ export function parseFirebaseRules(source: string, file: string,
       const scope = active[active.length - 1];
       const expanded =
         celFunctions.length > 0 ? expandCelConditionAst(condition, offset, celFunctions) : condition;
-      recordScopeClauseFlags(scope, operations, expanded);
+      recordScopeClauseFlags(scope, operations, condition, expanded);
     });
   }
   // matchAll already emits scopes in source order.

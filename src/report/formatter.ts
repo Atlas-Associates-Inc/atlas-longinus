@@ -394,7 +394,10 @@ export function formatBlueprint(graph: GraphResult, prover?: DualProverVerdict, 
     const domain = controlDomain(finding.ruleId);
     if (pillarPenalties.has(domain)) {
       const penalty = finding.severity === 'blocker' ? 35 : finding.severity === 'high' ? 18 : finding.severity === 'medium' ? 8 : 3;
-      const locusKey = `${domain}:${finding.location.file}:${finding.location.line}`;
+      const scopeMatch = finding.ruleId.startsWith('firebase/')
+        ? finding.message.match(/ (?:at|match) (\/[^\s.]*?)\.?$/)?.[1]
+        : undefined;
+      const locusKey = `${domain}:${finding.location.file}:${scopeMatch ?? finding.location.line}`;
       const prev = locusPenalties.get(locusKey);
       if (!prev || penalty > prev.penalty) {
         locusPenalties.set(locusKey, { domain, penalty });

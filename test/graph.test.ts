@@ -1180,11 +1180,16 @@ test('CEL function AST resolution suppresses write-restricted public asset bucke
       '      return isAuthenticated() && request.auth.token.admin == true;',
       '    }',
       '    function hasAllowedUserFields() {',
-      "      return request.resource.data.keys().hasOnly(['displayName', 'updatedAt']);",
+      "      let allowed = ['displayName', 'updatedAt'];",
+      '      return request.resource.data.keys().hasOnly(allowed);',
       '    }',
       '    match /architectureAccess/{tokenId} {',
       '      allow get: if true;',
       '      allow list, create, update, delete: if isDashboardAdmin();',
+      '    }',
+      '    match /wines/{wineId} {',
+      '      allow read: if true;',
+      '      allow write: if isDashboardAdmin();',
       '    }',
       '    match /users/{userId} {',
       '      allow get: if isOwner(userId);',
@@ -1237,11 +1242,30 @@ test('CEL function AST resolution suppresses write-restricted public asset bucke
     assert.deepEqual(ruleIds, ['firebase/public-read', 'firebase/recursive-wildcard']);
 
     // Verify Triple Penalty is eliminated:
-    // Same line (line 8) emits firebase/public-read + firebase/recursive-wildcard + 1 attack path,
-    // but pillar penalty is deduplicated per (domain, file, line) to -18 (82/100) and overallScore has no extra pathPenalty (96/100).
+    // Same match scope emits firebase/public-read + firebase/recursive-wildcard + 1 attack path,
+    // but pillar penalty is deduplicated per (domain, file, scope/line) to -18 (82/100) and overallScore has no extra pathPenalty (96/100).
     const blueprint = formatBlueprint(vulnGraph);
     assert.match(blueprint, /Firebase & Data Perimeter \| 82\/100 \| B/);
     assert.match(blueprint, /Architecture Maturity Score: 96\/100 \(Grade: A\)/);
+
+    // Sensitive user/chat/group/private paths with allow read: if true MUST STILL BE FLAGGED as HIGH even if write is restricted
+    const leakedUserRules = [
+      "rules_version = '2';",
+      'service cloud.firestore {',
+      '  match /databases/{database}/documents {',
+      '    match /users/{userId} {',
+      '      allow read: if true;',
+      '      allow write: if false;',
+      '    }',
+      '  }',
+      '}',
+    ].join('\n');
+    const leakedUserGraph = parseFirebaseRules(leakedUserRules, 'firestore.rules');
+    assert.equal(
+      leakedUserGraph.findings.some(f => f.ruleId === 'firebase/public-read' && f.severity === 'high'),
+      true,
+      'Public read on sensitive /users/** path must always be flagged as HIGH even when write is false',
+    );
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
