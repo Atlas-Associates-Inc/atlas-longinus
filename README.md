@@ -582,7 +582,7 @@ npm test
 运行 https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
-- **核心能力**: 离线 GCP × Firebase 跨边界攻击路径分析（支持 CEL 函数与 `let` 绑定 AST 解析、管理员受控公开资产零误报、作用域级扣分去重）、4-Stack 源码与密钥护盾（1,529 种密钥模式脱敏）、5 大领域架构成熟度评分卡（0–100 分）、30/60/90 天修复路线图、只读 MCP Airlock 及本地 Web 控制台（`http://127.0.0.1:4310`）。
+- **核心能力**: 离线/在线均 100% 只读（`O_RDONLY | O_NOFOLLOW`）、临时目录 `0o700 ACL` + `Fernet (AES-128-CBC + HMAC-SHA256)` 加密、美国国防部 `DoD 5220.22-M` 3 次覆写销毁与 `ECDSA P-256` 签名数据销毁证书自动签发；GCP × Firebase 跨边界攻击路径分析（支持 CEL 函数与 `let` 绑定 AST 解析、管理员受控公开资产零误报、作用域级扣分去重）、4-Stack 源码与密钥护盾（1,529 种密钥模式脱敏）、5 大领域架构成熟度评分卡（0–100 分）、30/60/90 天修复路线图、只读 MCP Airlock 及本地 Web 控制台（`http://127.0.0.1:4310`）。
 - **技术规格**: Apache-2.0 开源免费（0 外部 npm 依赖，Node.js `>=22.18.0`，支持 `--lang zh-Hans`）。
 
 ---
@@ -596,7 +596,7 @@ npm test
 執行 https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
-- **核心能力**: 離線 GCP × Firebase 跨邊界攻擊路徑分析（支援 CEL 函式與 `let` 綁定 AST 解析、管理員受控公開資產零誤報、消除三重扣分）、4-Stack 原始碼與金鑰護盾、5 大領域架構成熟度評分卡（0–100 分）、30/60/90 天修復藍圖、唯讀 MCP Airlock 及本機 Web 儀表板（`http://127.0.0.1:4310`）。
+- **核心能力**: 離線／線上皆 100% 唯讀（`O_RDONLY | O_NOFOLLOW`）、暫存區 `0o700 ACL` + `Fernet (AES-128-CBC + HMAC-SHA256)` 加密、美國國防部 `DoD 5220.22-M` 3 次覆寫抹除與 `ECDSA P-256` 數位簽章資料銷毀證明書自動簽發；GCP × Firebase 跨邊界攻擊路徑分析（支援 CEL 函式與 `let` 綁定 AST 解析、管理員受控公開資產零誤報、消除三重扣分）、4-Stack 原始碼與金鑰護盾、5 大領域架構成熟度評分卡（0–100 分）、30/60/90 天修復藍圖、唯讀 MCP Airlock 及本機 Web 儀表板（`http://127.0.0.1:4310`）。
 - **技術規範**: Apache-2.0 開源免費（0 外部 npm 相依性，Node.js `>=22.18.0`，支援 `--lang zh-Hant`）。
 
 ---
@@ -610,7 +610,7 @@ npm test
 https://github.com/Atlas-Associates-Inc/atlas-longinus 실행해줘
 ```
 
-- **핵심 기능**: 오프라인 GCP × Firebase 교차 경계 공격 경로 분석(CEL 함수 및 `let` 바인딩 AST 해석, 관리자 전용 공개 에셋 오탐 제로, 3중 감점 폐지), 4-Stack 코드 실드, 5대 영역 아키텍처 성숙도 스코어카드(0–100점), 30/60/90일 개선 로드맵, 읽기 전용 MCP Airlock 및 로컬 웹 UI(`http://127.0.0.1:4310`).
+- **핵심 기능**: 오프라인/온라인 모두 100% 읽기 전용(`O_RDONLY | O_NOFOLLOW`), 임시 영역 `0o700 ACL` + `Fernet` 암호화, 미 국방부 `DoD 5220.22-M` 3-패스 덮어쓰기 영구 삭제 및 `ECDSA P-256` 서명 데이터 파기 증명서 자동 발급, GCP × Firebase 교차 경계 공격 경로 분석(CEL 함수 및 `let` 바인딩 AST 해석, 관리자 전용 공개 에셋 오탐 제로, 3중 감점 폐지), 4-Stack 코드 실드, 5대 영역 아키텍처 성숙도 스코어카드(0–100점), 30/60/90일 개선 로드맵, 읽기 전용 MCP Airlock 및 로컬 웹 UI(`http://127.0.0.1:4310`).
 - **기술 사양**: Apache-2.0 오픈소스(npm 의존성 0개, Node.js `>=22.18.0`, `--lang ko` 지원).
 
 ---
@@ -624,7 +624,7 @@ No necesita memorizar ni escribir ningún comando ni opción; simplemente pegue 
 Ejecuta https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
-- **Capacidades clave**: Analizador offline de rutas de ataque GCP × Firebase (resolución AST de funciones CEL, cero falsos positivos en activos públicos restringidos a administradores y eliminación de penalización triple), 4-Stack Code Shield, tarjeta de puntuación de 5 pilares (0–100), hoja de ruta de 30/60/90 días, MCP Airlock de solo lectura y panel web local (`http://127.0.0.1:4310`).
+- **Capacidades clave**: 100% solo lectura tanto offline como online (`O_RDONLY | O_NOFOLLOW`), bóveda temporal `0o700 ACL` + cifrado `Fernet`, borrado `DoD 5220.22-M` de 3 pasadas y Certificado de Destrucción de Datos firmado con `ECDSA P-256`; analizador de rutas de ataque GCP × Firebase (resolución AST de funciones CEL, cero falsos positivos en activos públicos restringidos a administradores y eliminación de penalización triple), 4-Stack Code Shield, tarjeta de puntuación de 5 pilares (0–100), hoja de ruta de 30/60/90 días, MCP Airlock de solo lectura y panel web local (`http://127.0.0.1:4310`).
 - **Especificaciones**: Apache-2.0, Node.js `>=22.18.0`, 0 dependencias npm, soporte `--lang es`.
 
 ---
@@ -638,7 +638,7 @@ Você não precisa memorizar nenhum comando ou opção; basta colar esta **1 lin
 Execute https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
-- **Principais recursos**: Analisador offline de caminhos de ataque GCP × Firebase (resolução AST de funções CEL, zero falsos positivos em ativos públicos restritos a administradores e fim da penalidade tripla), 4-Stack Code Shield, scorecard de maturidade em 5 pilares (0–100), roteiro de 30/60/90 dias, MCP Airlock somente leitura e painel web local (`http://127.0.0.1:4310`).
+- **Principais recursos**: 100% somente leitura offline e online (`O_RDONLY | O_NOFOLLOW`), diretório temporário `0o700 ACL` + criptografia `Fernet`, sanitização `DoD 5220.22-M` de 3 passagens e Certificado de Destruição de Dados assinado via `ECDSA P-256`; analisador de caminhos de ataque GCP × Firebase (resolução AST de funções CEL, zero falsos positivos em ativos públicos restritos a administradores e fim da penalidade tripla), 4-Stack Code Shield, scorecard de maturidade em 5 pilares (0–100), roteiro de 30/60/90 dias, MCP Airlock somente leitura e painel web local (`http://127.0.0.1:4310`).
 - **Especificações**: Apache-2.0, Node.js `>=22.18.0`, 0 dependências npm, suporte `--lang pt`.
 
 ---
@@ -652,7 +652,7 @@ Aucune commande ni option à mémoriser : collez simplement cette **seule ligne*
 Exécute https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
-- **Fonctionnalités clés**: Analyseur hors ligne de chemins d'attaque GCP × Firebase (résolution AST des fonctions CEL, zéro faux positif sur les ressources publiques gérées par les administrateurs, suppression de la triple pénalité), 4-Stack Code Shield, tableau de bord à 5 piliers (0–100), feuille de route 30/60/90 jours, MCP Airlock en lecture seule et interface web locale (`http://127.0.0.1:4310`).
+- **Fonctionnalités clés**: 100 % lecture seule hors ligne et en ligne (`O_RDONLY | O_NOFOLLOW`), espace temporaire `0o700 ACL` + chiffrement `Fernet`, effacement `DoD 5220.22-M` en 3 passes et certificat de destruction de données signé `ECDSA P-256` ; analyseur de chemins d'attaque GCP × Firebase (résolution AST des fonctions CEL, zéro faux positif sur les ressources publiques gérées par les administrateurs, suppression de la triple pénalité), 4-Stack Code Shield, tableau de bord à 5 piliers (0–100), feuille de route 30/60/90 jours, MCP Airlock en lecture seule et interface web locale (`http://127.0.0.1:4310`).
 - **Spécifications**: Apache-2.0, Node.js `>=22.18.0`, 0 dépendance npm, support `--lang fr`.
 
 ---
@@ -666,7 +666,7 @@ Sie müssen sich kein einziges Kommando merken – fügen Sie einfach diese **ei
 Führe https://github.com/Atlas-Associates-Inc/atlas-longinus aus
 ```
 
-- **Kernfunktionen**: Offline-Angriffspfad-Analysator für GCP × Firebase (CEL-Funktions-AST-Auflösung, null Fehlalarme bei schreibgeschützten öffentlichen Assets, keine Dreifach-Abzüge), 4-Stack Code Shield, 5-Säulen-Scorecard (0–100), 30/60/90-Tage-Roadmap, schreibgeschützter MCP-Airlock und lokales Web-Dashboard (`http://127.0.0.1:4310`).
+- **Kernfunktionen**: Offline wie online 100 % schreibgeschützt (`O_RDONLY | O_NOFOLLOW`), temporärer Bereich mit `0o700 ACL` + `Fernet`-Verschlüsselung, 3-Pass-Löschung nach `DoD 5220.22-M` und `ECDSA P-256`-signiertes Datenvernichtungszertifikat; Angriffspfad-Analysator für GCP × Firebase (CEL-Funktions-AST-Auflösung, null Fehlalarme bei schreibgeschützten öffentlichen Assets, keine Dreifach-Abzüge), 4-Stack Code Shield, 5-Säulen-Scorecard (0–100), 30/60/90-Tage-Roadmap, schreibgeschützter MCP-Airlock und lokales Web-Dashboard (`http://127.0.0.1:4310`).
 - **Spezifikationen**: Apache-2.0, Node.js `>=22.18.0`, 0 npm-Abhängigkeiten, `--lang de`.
 
 ---
@@ -680,7 +680,7 @@ Non serve memorizzare alcun comando o opzione: incolla semplicemente questa **si
 Esegui https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
-- **Funzionalità principali**: Analizzatore offline dei percorsi di attacco GCP × Firebase (risoluzione AST delle funzioni CEL, zero falsi positivi sugli asset pubblici protetti in scrittura, eliminazione della tripla penalità), 4-Stack Code Shield, scorecard a 5 pilastri (0–100), roadmap a 30/60/90 giorni, MCP Airlock in sola lettura e interfaccia web locale (`http://127.0.0.1:4310`).
+- **Funzionalità principali**: 100% sola lettura sia offline che online (`O_RDONLY | O_NOFOLLOW`), area temporanea `0o700 ACL` + crittografia `Fernet`, cancellazione `DoD 5220.22-M` a 3 passaggi e certificato di distruzione dati firmato `ECDSA P-256`; analizzatore dei percorsi di attacco GCP × Firebase (risoluzione AST delle funzioni CEL, zero falsi positivi sugli asset pubblici protetti in scrittura, eliminazione della tripla penalità), 4-Stack Code Shield, scorecard a 5 pilastri (0–100), roadmap a 30/60/90 giorni, MCP Airlock in sola lettura e interfaccia web locale (`http://127.0.0.1:4310`).
 - **Specifiche**: Apache-2.0, Node.js `>=22.18.0`, 0 dipendenze npm, supporto `--lang it`.
 
 ---
@@ -694,7 +694,7 @@ Esegui https://github.com/Atlas-Associates-Inc/atlas-longinus
 Запусти https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
-- **Ключевые возможности**: Офлайн-анализатор путей атак GCP × Firebase (AST-анализ функций CEL, отсутствие ложных срабатываний на публичных ресурсах с защитой от записи, устранение тройного штрафа), 4-Stack Code Shield, оценка зрелости по 5 направлениям (0–100), план на 30/60/90 дней, MCP Airlock только для чтения и локальный веб-интерфейс (`http://127.0.0.1:4310`).
+- **Ключевые возможности**: 100% режим «только чтение» офлайн и онлайн (`O_RDONLY | O_NOFOLLOW`), временная область `0o700 ACL` + шифрование `Fernet`, 3-проходное уничтожение по стандарту `DoD 5220.22-M` и сертификат уничтожения данных с подписью `ECDSA P-256`; анализатор путей атак GCP × Firebase (AST-анализ функций CEL, отсутствие ложных срабатываний на публичных ресурсах с защитой от записи, устранение тройного штрафа), 4-Stack Code Shield, оценка зрелости по 5 направлениям (0–100), план на 30/60/90 дней, MCP Airlock только для чтения и локальный веб-интерфейс (`http://127.0.0.1:4310`).
 - **Спецификации**: Apache-2.0, Node.js `>=22.18.0`, 0 зависимостей npm, поддержка `--lang ru`.
 
 ---
@@ -708,7 +708,7 @@ Esegui https://github.com/Atlas-Associates-Inc/atlas-longinus
 Запусти https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
-- **Основні можливості**: Офлайн-аналізатор шляхів атак GCP × Firebase (AST-аналіз функцій CEL, нуль хибних спрацьовувань на публічних ресурсах із захистом запису, скасування потрійного штрафу), 4-Stack Code Shield, оцінка за 5 напрямами (0–100), план на 30/60/90 днів, MCP Airlock лише для читання та локальний вебінтерфейс (`http://127.0.0.1:4310`).
+- **Основні можливості**: 100% режим лише для читання офлайн та онлайн (`O_RDONLY | O_NOFOLLOW`), тимчасова область `0o700 ACL` + шифрування `Fernet`, 3-прохідне знищення `DoD 5220.22-M` і сертифікат знищення даних із підписом `ECDSA P-256`; аналізатор шляхів атак GCP × Firebase (AST-аналіз функцій CEL, нуль хибних спрацьовувань на публічних ресурсах із захистом запису, скасування потрійного штрафу), 4-Stack Code Shield, оцінка за 5 напрямами (0–100), план на 30/60/90 днів, MCP Airlock лише для читання та локальний вебінтерфейс (`http://127.0.0.1:4310`).
 - **Специфікації**: Apache-2.0, Node.js `>=22.18.0`, 0 залежностей npm, підтримка `--lang uk`.
 
 ---
@@ -722,7 +722,7 @@ Nie musisz pamiętać żadnych poleceń ani opcji — po prostu wklej tę **jedn
 Uruchom https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
-- **Główne funkcje**: Analizator ścieżek ataków offline GCP × Firebase (analiza AST funkcji CEL, zero fałszywych alarmów dla publicznych zasobów chronionych przed zapisem, brak potrójnej kary), 4-Stack Code Shield, karta wyników 5 filarów (0–100), plan 30/60/90 dni, MCP Airlock tylko do odczytu oraz lokalny panel WWW (`http://127.0.0.1:4310`).
+- **Główne funkcje**: 100% tylko do odczytu offline i online (`O_RDONLY | O_NOFOLLOW`), katalog tymczasowy `0o700 ACL` + szyfrowanie `Fernet`, 3-przebiegowe nadpisywanie `DoD 5220.22-M` oraz certyfikat zniszczenia danych podpisany `ECDSA P-256`; analizator ścieżek ataków GCP × Firebase (analiza AST funkcji CEL, zero fałszywych alarmów dla publicznych zasobów chronionych przed zapisem, brak potrójnej kary), 4-Stack Code Shield, karta wyników 5 filarów (0–100), plan 30/60/90 dni, MCP Airlock tylko do odczytu oraz lokalny panel WWW (`http://127.0.0.1:4310`).
 - **Specyfikacja**: Apache-2.0, Node.js `>=22.18.0`, 0 zależności npm, obsługa `--lang pl`.
 
 ---
@@ -736,7 +736,7 @@ U hoeft geen enkel commando te onthouden — plak gewoon deze **ene regel** in u
 Voer https://github.com/Atlas-Associates-Inc/atlas-longinus uit
 ```
 
-- **Belangrijkste functies**: Offline GCP × Firebase aanvalspad-analyser (CEL-functie AST-analyse, nul fout-positieven op schrijfbeveiligde publieke assets, geen drievoudige strafpunten), 4-Stack Code Shield, 5-pijlerscorecard (0–100), 30/60/90-dagen-routekaart, alleen-lezen MCP Airlock en lokaal webdashboard (`http://127.0.0.1:4310`).
+- **Belangrijkste functies**: Offline én online 100% alleen-lezen (`O_RDONLY | O_NOFOLLOW`), tijdelijke opslag met `0o700 ACL` + `Fernet`-versleuteling, `DoD 5220.22-M` 3-pass wissing en `ECDSA P-256`-ondertekend datavernietigingscertificaat; GCP × Firebase aanvalspad-analyser (CEL-functie AST-analyse, nul fout-positieven op schrijfbeveiligde publieke assets, geen drievoudige strafpunten), 4-Stack Code Shield, 5-pijlerscorecard (0–100), 30/60/90-dagen-routekaart, alleen-lezen MCP Airlock en lokaal webdashboard (`http://127.0.0.1:4310`).
 - **Specificaties**: Apache-2.0, Node.js `>=22.18.0`, 0 npm-afhankelijkheden, ondersteuning voor `--lang nl`.
 
 ---
@@ -750,7 +750,7 @@ Tek bir komut veya seçenek ezberlemenize gerek yok — AI ajanınıza (**Antigr
 https://github.com/Atlas-Associates-Inc/atlas-longinus çalıştır
 ```
 
-- **Temel Özellikler**: Çevrimdışı GCP × Firebase saldırı yolu analizcisi (CEL fonksiyonu AST çözümlemesi, yazma korumalı genel varlıklarda sıfır yanlış pozitif, üçlü ceza kaldırıldı), 4-Stack Code Shield, 5 sütunlu puan kartı (0–100), 30/60/90 günlük yol haritası, salt okunur MCP Airlock ve yerel web arayüzü (`http://127.0.0.1:4310`).
+- **Temel Özellikler**: Çevrimdışı ve çevrimiçi %100 salt okunur (`O_RDONLY | O_NOFOLLOW`), `0o700 ACL` + `Fernet` şifreli geçici alan, `DoD 5220.22-M` 3 geçişli silme ve `ECDSA P-256` imzalı Veri İmha Sertifikası; GCP × Firebase saldırı yolu analizcisi (CEL fonksiyonu AST çözümlemesi, yazma korumalı genel varlıklarda sıfır yanlış pozitif, üçlü ceza kaldırıldı), 4-Stack Code Shield, 5 sütunlu puan kartı (0–100), 30/60/90 günlük yol haritası, salt okunur MCP Airlock ve yerel web arayüzü (`http://127.0.0.1:4310`).
 - **Teknik Özellikler**: Apache-2.0, Node.js `>=22.18.0`, 0 npm bağımlılığı, `--lang tr` desteği.
 
 ---
@@ -764,7 +764,7 @@ https://github.com/Atlas-Associates-Inc/atlas-longinus çalıştır
 شغّل https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
-- **القدرات الأساسية**: محلل مسارات الهجوم عبر حدود GCP × Firebase دون اتصال (تحليل AST لدوال CEL، صفر إنذارات كاذبة للأصول العامة المحمية ضد الكتابة، وإلغاء العقوبة الثلاثية)، ودرع الكود رباعي الطبقات (4-Stack Code Shield)، وبطاقة الأداء الخماسية (0–100)، وخارطة طريق 30/60/90 يوماً، وحاجز MCP Airlock للقراءة فقط، ولوحة تحكم محلية (`http://127.0.0.1:4310`).
+- **القدرات الأساسية**: قراءة فقط بنسبة 100% دون اتصال وعبر الإنترنت (`O_RDONLY | O_NOFOLLOW`)، مساحة مؤقتة بمعيار `0o700 ACL` وتشفير `Fernet`، مسح ثلاثي المراحل وفق معيار وزارة الدفاع الأمريكية `DoD 5220.22-M`، وإصدار شهادة إتلاف بيانات موقعة رقمياً بـ `ECDSA P-256`؛ محلل مسارات الهجوم عبر حدود GCP × Firebase (تحليل AST لدوال CEL، صفر إنذارات كاذبة للأصول العامة المحمية ضد الكتابة، وإلغاء العقوبة الثلاثية)، ودرع الكود رباعي الطبقات (4-Stack Code Shield)، وبطاقة الأداء الخماسية (0–100)، وخارطة طريق 30/60/90 يوماً، وحاجز MCP Airlock للقراءة فقط، ولوحة تحكم محلية (`http://127.0.0.1:4310`).
 - **المواصفات**: ترخيص Apache-2.0، وNode.js `>=22.18.0`، و0 تبعيات npm، ودعم `--lang ar`.
 
 ---
@@ -778,7 +778,7 @@ https://github.com/Atlas-Associates-Inc/atlas-longinus çalıştır
 https://github.com/Atlas-Associates-Inc/atlas-longinus चलाएँ
 ```
 
-- **मुख्य विशेषताएँ**: ऑफ़लाइन GCP × Firebase अटैक-पाथ विश्लेषक (CEL फ़ंक्शन AST विश्लेषण, एडमिन-नियंत्रित पब्लिक एसेट्स पर शून्य फ़ॉल्स पॉज़िटिव, और तिहरे दंड की समाप्ति), 4-Stack Code Shield, 5-पिलर स्कोरकार्ड (0–100), 30/60/90-दिन का रोडमैप, रीड-ओनली MCP Airlock और लोकल वेब डैशबोर्ड (`http://127.0.0.1:4310`)।
+- **मुख्य विशेषताएँ**: ऑफ़लाइन और ऑनलाइन दोनों में 100% रीड-ओनली (`O_RDONLY | O_NOFOLLOW`), `0o700 ACL` + `Fernet` एन्क्रिप्टेड अस्थायी क्षेत्र, `DoD 5220.22-M` 3-पास ओवरराइट विलोपन और `ECDSA P-256` हस्ताक्षरित डेटा नष्ट प्रमाणपत्र; GCP × Firebase अटैक-पाथ विश्लेषक (CEL फ़ंक्शन AST विश्लेषण, एडमिन-नियंत्रित पब्लिक एसेट्स पर शून्य फ़ॉल्स पॉज़िटिव, और तिहरे दंड की समाप्ति), 4-Stack Code Shield, 5-पिलर स्कोरकार्ड (0–100), 30/60/90-दिन का रोडमैप, रीड-ओनली MCP Airlock और लोकल वेब डैशबोर्ड (`http://127.0.0.1:4310`)।
 - **विनिर्देश**: Apache-2.0, Node.js `>=22.18.0`, 0 npm निर्भरताएँ, `--lang hi` समर्थन।
 
 ---
@@ -792,7 +792,7 @@ Anda tidak perlu menghafal satu karakter perintah pun—cukup tempel **1 baris**
 Jalankan https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
-- **Fitur Utama**: Penganalisis jalur serangan GCP × Firebase offline (resolusi AST fungsi CEL, nol positif palsu pada aset publik yang dibatasi tulis, dan penghapusan penalti ganda tiga), 4-Stack Code Shield, kartu skor 5 pilar (0–100), peta jalan 30/60/90 hari, MCP Airlock khusus-baca, dan dasbor web lokal (`http://127.0.0.1:4310`).
+- **Fitur Utama**: 100% hanya-baca baik offline maupun online (`O_RDONLY | O_NOFOLLOW`), ruang sementara `0o700 ACL` + enkripsi `Fernet`, penghapusan 3-pass `DoD 5220.22-M`, dan Sertifikat Pemusnahan Data bertanda tangan `ECDSA P-256`; penganalisis jalur serangan GCP × Firebase (resolusi AST fungsi CEL, nol positif palsu pada aset publik yang dibatasi tulis, dan penghapusan penalti ganda tiga), 4-Stack Code Shield, kartu skor 5 pilar (0–100), peta jalan 30/60/90 hari, MCP Airlock khusus-baca, dan dasbor web lokal (`http://127.0.0.1:4310`).
 - **Spesifikasi**: Apache-2.0, Node.js `>=22.18.0`, 0 dependensi npm, dukungan `--lang id`.
 
 ---
@@ -806,7 +806,7 @@ Bạn không cần nhớ bất kỳ câu lệnh hay tùy chọn nào—chỉ c�
 Chạy https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
-- **Tính năng cốt lõi**: Bộ phân tích đường dẫn tấn công GCP × Firebase ngoại tuyến (phân tích AST hàm CEL, không báo động giả trên tài sản công khai chỉ-admin-ghi, loại bỏ phạt 3 lần), 4-Stack Code Shield, bảng điểm 5 trụ cột (0–100), lộ trình 30/60/90 ngày, MCP Airlock chỉ đọc và bảng điều khiển web cục bộ (`http://127.0.0.1:4310`).
+- **Tính năng cốt lõi**: 100% chỉ đọc cả ngoại tuyến lẫn trực tuyến (`O_RDONLY | O_NOFOLLOW`), vùng tạm `0o700 ACL` + mã hóa `Fernet`, xóa ghi đè 3 lượt chuẩn `DoD 5220.22-M` và Chứng chỉ Hủy Dữ liệu ký số `ECDSA P-256`; bộ phân tích đường dẫn tấn công GCP × Firebase (phân tích AST hàm CEL, không báo động giả trên tài sản công khai chỉ-admin-ghi, loại bỏ phạt 3 lần), 4-Stack Code Shield, bảng điểm 5 trụ cột (0–100), lộ trình 30/60/90 ngày, MCP Airlock chỉ đọc và bảng điều khiển web cục bộ (`http://127.0.0.1:4310`).
 - **Quy chuẩn**: Apache-2.0, Node.js `>=22.18.0`, 0 phụ thuộc npm, hỗ trợ `--lang vi`.
 
 ---
@@ -820,5 +820,5 @@ Chạy https://github.com/Atlas-Associates-Inc/atlas-longinus
 รัน https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
-- **ความสามารถหลัก**: ตัววิเคราะห์เส้นทางการโจมตี GCP × Firebase แบบออฟไลน์ (การวิเคราะห์ AST ของฟังก์ชัน CEL, ลดการแจ้งเตือนผิดพลาดเป็นศูนย์สำหรับไฟล์สาธารณะที่จำกัดสิทธิ์เขียนเฉพาะแอดมิน, ยกเลิกการหักคะแนนซ้ำ 3 ต่อ), 4-Stack Code Shield, คะแนนความพร้อม 5 เสาหลัก (0–100), แผนงาน 30/60/90 วัน, MCP Airlock แบบอ่านอย่างเดียว และเว็บแดชบอร์ดในเครื่อง (`http://127.0.0.1:4310`)
+- **ความสามารถหลัก**: อ่านอย่างเดียว 100% ทั้งออฟไลน์และออนไลน์ (`O_RDONLY | O_NOFOLLOW`), พื้นที่ชั่วคราว `0o700 ACL` + การเข้ารหัส `Fernet`, การเขียนทับ 3 รอบตามมาตรฐาน `DoD 5220.22-M` และใบรับรองการทำลายข้อมูลที่ลงนามด้วย `ECDSA P-256`; ตัววิเคราะห์เส้นทางการโจมตี GCP × Firebase (การวิเคราะห์ AST ของฟังก์ชัน CEL, ลดการแจ้งเตือนผิดพลาดเป็นศูนย์สำหรับไฟล์สาธารณะที่จำกัดสิทธิ์เขียนเฉพาะแอดมิน, ยกเลิกการหักคะแนนซ้ำ 3 ต่อ), 4-Stack Code Shield, คะแนนความพร้อม 5 เสาหลัก (0–100), แผนงาน 30/60/90 วัน, MCP Airlock แบบอ่านอย่างเดียว และเว็บแดชบอร์ดในเครื่อง (`http://127.0.0.1:4310`)
 - **ข้อกำหนด**: Apache-2.0, Node.js `>=22.18.0`, 0 การพึ่งพา npm, รองรับ `--lang th`
