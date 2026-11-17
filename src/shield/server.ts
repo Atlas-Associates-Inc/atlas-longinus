@@ -480,6 +480,28 @@ function renderIndexHtml(nonce: string, csrfToken: string): string {
         </table>
       </div>
     </section>
+
+    <section class="card isolated-region" aria-labelledby="destruction-cert-heading">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">DOD 5220.22-M SANITIZATION &amp; ECDSA P-256 ATTESTATION</p>
+          <h2 id="destruction-cert-heading" class="section-title">米国国防総省規格 DoD 5220.22-M 3パス消去 &amp; ECDSA P-256 暗号署名入りデータ破棄証明書</h2>
+        </div>
+        <span class="pill pill-emerald" id="destruction-cert-badge">VERIFIED &bull; 0o700 ACL + Fernet</span>
+      </div>
+      <div tabindex="0" role="region" aria-labelledby="destruction-cert-caption" class="table-wrapper">
+        <table class="luxury-table">
+          <caption id="destruction-cert-caption" class="sr-only">DoD 5220.22-M データ破棄証明書およびECDSA P-256暗号署名</caption>
+          <thead>
+            <tr>
+              <th scope="col">証明項目</th>
+              <th scope="col">暗号学的検証値・規格詳細</th>
+            </tr>
+          </thead>
+          <tbody id="destruction-cert-tbody"></tbody>
+        </table>
+      </div>
+    </section>
   </main>
 
   <dialog id="patch-dialog" closedby="any" aria-labelledby="patch-dialog-title">

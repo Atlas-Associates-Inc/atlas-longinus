@@ -7,6 +7,10 @@
 > 🌐 **20 Languages**: **[English](#english)** · **[日本語](#日本語)** · **[简体中文](#zh-hans)** · **[繁體中文](#zh-hant)** · **[한국어](#ko)** · **[Español](#es)** · **[Português](#pt)** · **[Français](#fr)** · **[Deutsch](#de)** · **[Italiano](#it)** · **[Русский](#ru)** · **[Українська](#uk)** · **[Polski](#pl)** · **[Nederlands](#nl)** · **[Türkçe](#tr)** · **[العربية](#ar)** · **[हिन्दी](#hi)** · **[Bahasa Indonesia](#id)** · **[Tiếng Việt](#vi)** · **[ไทย](#th)**
 >
 > Apache-2.0 · Node.js `>=22.18.0` · **0 npm dependencies (no `npm install` required)** · Loopback Web UI: `npm start` (`http://127.0.0.1:4310`)
+>
+> 🛡️ **Zero-Retention Military-Grade Security Guarantee (Offline & Online)**:
+> - **EN**: Whether running offline or online, target repositories are treated as **100% Read-Only (`O_RDONLY | O_DIRECTORY | O_NOFOLLOW`)**, ephemeral workspaces are isolated under **`0o700` ACL + Fernet (`AES-128-CBC + HMAC-SHA256`) encryption**, wiped upon audit completion via **US Department of Defense `DoD 5220.22-M` 3-pass overwrite (`0x00` → `0xFF` → `CSPRNG` + `fsync`)**, and an **`ECDSA P-256` cryptographically signed Certificate of Data Destruction** is automatically issued at the end of every Blueprint & PDF report.
+> - **JA**: **オフラインで実行できるだけでなく、オンライン実行時であっても対象リポジトリを 100% 読み取り専用（Read-Only: `O_RDONLY | O_DIRECTORY | O_NOFOLLOW`）で扱い、一時領域は `0o700 ACL`＋`Fernet (AES-128-CBC + HMAC-SHA256)` 暗号化、監査終了時には米国国防総省規格 `DoD 5220.22-M` 3パス上書き消去（`0x00` → `0xFF` → `CSPRNG` + `fsync`）を行い、`ECDSA P-256` 暗号署名入りのデータ破棄証明書を設計書・PDF 巻末に自動発行します。**
 
 ---
 
@@ -63,7 +67,7 @@ Load this OSS repository (**LONGINUS**) into your company's AI agent to **instan
 - **Apache-2.0** — open source, instant in-house consulting AI for free (`$0`)
 - **Node.js >=22.18.0** — native erasable TypeScript
 - **0 npm dependencies** — runtime and development
-- **Read-only & offline by default** — zero cloud credentials required for local audit
+- **100% Read-Only (Offline & Online) + `0o700` ACL + Fernet Encryption + DoD 5220.22-M 3-Pass Wipe + ECDSA P-256 Certificate of Data Destruction** — target repositories are strictly opened with `O_RDONLY | O_DIRECTORY | O_NOFOLLOW`; ephemeral workspaces are isolated under `0o700` ACL and Fernet (`AES-128-CBC + HMAC-SHA256`) encryption, overwritten upon completion via US Department of Defense `DoD 5220.22-M` 3-pass sanitization (`0x00` → `0xFF` → `CSPRNG` + `fsync`), and an **ECDSA P-256 cryptographically signed Certificate of Data Destruction** is automatically issued at the end of every Blueprint & PDF report
 - **20-Language Support (`--lang <tag>`)** — supports all 20 global languages (`en`, `ja`, `zh-Hans`, `zh-Hant`, `ko`, `es`, `pt`, `fr`, `de`, `it`, `ru`, `uk`, `pl`, `nl`, `tr`, `ar`, `hi`, `id`, `vi`, `th`)
 
 ```mermaid
@@ -320,7 +324,7 @@ Test files run sequentially so deterministic wall-clock parser budgets do not co
 - **Apache-2.0** — オープンソース・完全無料で自社専用コンサル AI を即時構築（`¥0`）
 - **Node.js >=22.18.0** — ネイティブ実行可能な erasable TypeScript
 - **npm 依存パッケージ 0** — 実行時・開発時ともに外部依存ゼロ（`npm install` 不要）
-- **既定で読み取り専用・オフライン** — ローカル監査にクラウド認証情報は一切不要
+- **オフライン／オンラインともに 100% 読み取り専用（Read-Only）＋ `0o700 ACL` ＋ `Fernet` 暗号化 ＋ `DoD 5220.22-M` 3パス消去 ＋ `ECDSA P-256` データ破棄証明書自動発行** — 対象リポジトリは `O_RDONLY | O_DIRECTORY | O_NOFOLLOW` で厳格保護。一時領域は `0o700 ACL`＋`Fernet (AES-128-CBC + HMAC-SHA256)` で暗号化し、監査終了時には米国国防総省規格 `DoD 5220.22-M` 3パス上書き消去（`0x00` → `0xFF` → `CSPRNG` + `fsync`）を実行のうえ、**`ECDSA P-256` 暗号署名入りのデータ破棄証明書** を設計書・PDF巻末に自動発行
 - **世界20言語完全対応（`--lang <tag>`）** — 日本語（`ja`）・英語（`en`）を含む世界20言語（`en|ja|zh-Hans|zh-Hant|ko|es|pt|fr|de|it|ru|uk|pl|nl|tr|ar|hi|id|vi|th`）に対応
 
 ```mermaid

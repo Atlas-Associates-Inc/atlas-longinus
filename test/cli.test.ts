@@ -6,6 +6,13 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { parseFirebaseRules } from '../src/graph/firebase-rules-parser.ts';
+import {
+  executeEphemeralFernetDoDCycle,
+  fernetDecrypt,
+  fernetEncrypt,
+  generateFernetKey,
+  verifyDestructionCertificate,
+} from '../src/airlock/destruction-certificate.ts';
 import { proposeRemediations } from '../src/report/remediation.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -363,6 +370,8 @@ test('--format blueprint emits executive roadmap, control domains, diffs and exe
   assert.match(unsafe.stdout, /```diff/);
   assert.match(unsafe.stdout, /Instant In-House Consulting AI/);
   assert.match(unsafe.stdout, /Redacted Sprint Intake Summary/);
+  assert.match(unsafe.stdout, /## 8\. DoD 5220\.22-M 3-Pass Sanitization & ECDSA P-256 Signed Certificate of Data Destruction/);
+  assert.match(unsafe.stdout, /Verification Status: `VERIFIED`/);
   assert.equal(unsafe.stdout.includes('¥'), false, 'English blueprint must use pure USD without mixed yen symbols');
 
   const jaBlueprint = cli(['audit', vulnerable, '--format', 'blueprint', '--emit-patch', '--lang', 'ja', '--audience', 'municipal']);
@@ -380,6 +389,8 @@ test('--format blueprint emits executive roadmap, control domains, diffs and exe
   assert.match(jaBlueprint.stdout, /## 5\. レビュー専用の自動修正パッチ案/);
   assert.match(jaBlueprint.stdout, /社内専属コンサルAI即時構築/);
   assert.match(jaBlueprint.stdout, /audience=municipal/);
+  assert.match(jaBlueprint.stdout, /## 8\. 米国国防総省規格 DoD 5220\.22-M 消去＆ECDSA P-256 暗号署名入りデータ破棄証明書/);
+  assert.match(jaBlueprint.stdout, /検証ステータス: `VERIFIED`/);
 
   const jaTable = cli(['audit', hardened, '--lang', 'ja']);
   assert.equal(jaTable.status, 0, jaTable.stderr);
@@ -388,4 +399,22 @@ test('--format blueprint emits executive roadmap, control domains, diffs and exe
   const jaHelp = cli(['--help', '--lang', 'ja']);
   assert.equal(jaHelp.status, 0, jaHelp.stderr);
   assert.match(jaHelp.stdout, /使い方:/);
+});
+
+test('0o700 ACL + Fernet encryption + DoD 5220.22-M 3-pass wipe issues a verifiable ECDSA P-256 certificate', () => {
+  const key = generateFernetKey();
+  const token = fernetEncrypt('longinus-ephemeral-audit-digest', key);
+  assert.equal(fernetDecrypt(token, key), 'longinus-ephemeral-audit-digest');
+  assert.throws(() => fernetDecrypt(token.slice(0, -4) + 'AAAA', key), /HMAC/);
+
+  const cert = executeEphemeralFernetDoDCycle('score=98/100 grade=A findings=0');
+  assert.equal(cert.ephemeralVaultAcl, '0o700');
+  assert.equal(cert.encryptionStandard, 'Fernet (AES-128-CBC + HMAC-SHA256)');
+  assert.equal(cert.sanitizationStandard, 'DoD 5220.22-M (3-Pass: 0x00 -> 0xFF -> CSPRNG + fsync)');
+  assert.equal(cert.passesCompleted, 3);
+  assert.equal(cert.filesSanitized, 1);
+  assert.ok(cert.totalBytesOverwritten >= 192);
+  assert.equal(cert.verified, true);
+  assert.equal(verifyDestructionCertificate(cert), true);
+  assert.equal(verifyDestructionCertificate({ ...cert, canonicalPayload: cert.canonicalPayload + ' ' }), false);
 });

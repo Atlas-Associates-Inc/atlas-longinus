@@ -1,7 +1,12 @@
 import { spawn } from 'node:child_process';
-import { chmodSync, lstatSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, lstatSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, parse } from 'node:path';
+import {
+  dod522022mSanitizeDirectory,
+  fernetEncrypt,
+  generateFernetKey,
+} from '../airlock/destruction-certificate.ts';
 import { redactSecrets, sanitizeTelemetry } from '../airlock/sanitizer.ts';
 import type { DualProverVerdict, GraphResult, LaneVerdict, ProverLane, ProverMode } from '../types.ts';
 
@@ -280,8 +285,10 @@ function subprocess(command: 'agy' | 'codex', args: string[], stdin: string, sig
 async function defaultRunner(prompt: string, context: ProverContext): Promise<unknown> {
   if (context.lane === 'astraUltra') {
     const directory = mkdtempSync(join(tmpdir(), 'atlas-sovereign-codex-'));
+    const fernetKey = generateFernetKey();
     try {
       chmodSync(directory, 0o700);
+      writeFileSync(join(directory, 'prompt.fernet'), fernetEncrypt(prompt, fernetKey), { mode: 0o600, flag: 'wx' });
       const output = join(directory, 'verdict.json');
       writeFileSync(output, '', { mode: 0o600, flag: 'wx' });
       await subprocess('codex', [
@@ -292,14 +299,17 @@ async function defaultRunner(prompt: string, context: ProverContext): Promise<un
       if (!stat.isFile() || stat.size > MAX_RESPONSE_BYTES) throw new Error('Invalid prover output file.');
       return readFileSync(output, 'utf8');
     } finally {
-      rmSync(directory, { recursive: true, force: true });
+      fernetKey.fill(0);
+      dod522022mSanitizeDirectory(directory);
     }
   }
   const backend = process.env.ATLAS_GEMINI_BACKEND ?? 'gemini';
   if (backend === 'agy') {
     const directory = mkdtempSync(join(tmpdir(), 'atlas-sovereign-agy-'));
+    const fernetKey = generateFernetKey();
     try {
       chmodSync(directory, 0o700);
+      writeFileSync(join(directory, 'prompt.fernet'), fernetEncrypt(prompt, fernetKey), { mode: 0o600, flag: 'wx' });
       const promptPath = join(directory, 'prompt.md'), schemaPath = join(directory, 'schema.json');
       writeFileSync(promptPath, prompt, { mode: 0o600, flag: 'wx' });
       writeFileSync(schemaPath, JSON.stringify(verdictSchema), { mode: 0o600, flag: 'wx' });
@@ -312,7 +322,8 @@ async function defaultRunner(prompt: string, context: ProverContext): Promise<un
       if (!record(envelope)) throw new Error('Malformed agy envelope.');
       return envelope.structured_output ?? envelope.response;
     } finally {
-      rmSync(directory, { recursive: true, force: true });
+      fernetKey.fill(0);
+      dod522022mSanitizeDirectory(directory);
     }
   }
   if (backend !== 'gemini' && backend !== 'vertex') throw new Error('Unsupported Gemini backend.');

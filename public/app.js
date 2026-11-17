@@ -27,6 +27,8 @@
   const roadmapList = /** @type {HTMLElement} */ (document.getElementById('roadmap-list'));
   const strideTbody = /** @type {HTMLElement} */ (document.getElementById('stride-tbody'));
   const findingsTbody = /** @type {HTMLElement} */ (document.getElementById('findings-tbody'));
+  const destructionCertTbody = /** @type {HTMLElement} */ (document.getElementById('destruction-cert-tbody'));
+  const destructionCertBadge = /** @type {HTMLElement} */ (document.getElementById('destruction-cert-badge'));
   const portfolioSection = /** @type {HTMLElement} */ (document.getElementById('portfolio-section'));
   const portfolioKpis = /** @type {HTMLElement} */ (document.getElementById('portfolio-kpis'));
   const portfolioTbody = /** @type {HTMLElement} */ (document.getElementById('portfolio-tbody'));
@@ -192,6 +194,47 @@
     renderRoadmap(report.priorityRoadmap);
     renderStrideTable(report.strideMatrix);
     renderFindingsTable(report.findings);
+    renderDestructionCertificate(report.destructionCertificate);
+  }
+
+  /**
+   * @param {any} cert
+   */
+  function renderDestructionCertificate(cert) {
+    if (!destructionCertTbody) return;
+    clearChildren(destructionCertTbody);
+    if (!cert) return;
+    if (destructionCertBadge) {
+      destructionCertBadge.textContent = cert.verified
+        ? '✓ ECDSA P-256 VERIFIED • DoD 5220.22-M (3-Pass)'
+        : '⚠️ UNVERIFIED';
+    }
+    const rows = [
+      ['証明書ID (Certificate ID)', `${cert.certificateId} (${cert.issuedAt})`],
+      ['対象リポジトリ保護モード', String(cert.targetReadOnlyMode)],
+      [
+        '一時領域隔離 & 暗号化規格',
+        `ACL ${cert.ephemeralVaultAcl} + ${cert.encryptionStandard} (SHA-256: ${cert.fernetCiphertextSha256})`,
+      ],
+      [
+        '完全消去規格 (Sanitization Standard)',
+        `${cert.sanitizationStandard} (${cert.passesCompleted} パス上書き完了 • 計 ${cert.totalBytesOverwritten} bytes 消去 • Pass-3 SHA-256: ${cert.pass3OverwriteSha256})`,
+      ],
+      [
+        '暗号署名アルゴリズム',
+        `${cert.signatureAlgorithm} (検証ステータス: ${cert.verified ? 'VERIFIED' : 'FAILED'})`,
+      ],
+      ['公開鍵フィンガープリント (SPKI SHA-256)', String(cert.publicKeyFingerprintSha256)],
+      ['ECDSA P-256 デジタル署名 (Base64URL)', String(cert.signatureBase64Url)],
+    ];
+    for (const [label, value] of rows) {
+      const tr = el('tr');
+      const th = el('th', '', label);
+      th.setAttribute('scope', 'row');
+      tr.appendChild(th);
+      tr.appendChild(el('td', 'mono-path', value));
+      destructionCertTbody.appendChild(tr);
+    }
   }
 
   /**
@@ -724,6 +767,19 @@
             '',
           ],
         ),
+        ...(latestReport.destructionCertificate
+          ? [
+              '## DoD 5220.22-M 3-Pass Sanitization & ECDSA P-256 Signed Certificate of Data Destruction',
+              `- **Certificate ID**: \`${latestReport.destructionCertificate.certificateId}\` (${latestReport.destructionCertificate.issuedAt})`,
+              `- **Target Repository Protection**: \`${latestReport.destructionCertificate.targetReadOnlyMode}\``,
+              `- **Ephemeral Vault & Encryption**: \`ACL ${latestReport.destructionCertificate.ephemeralVaultAcl}\` + \`${latestReport.destructionCertificate.encryptionStandard}\` (SHA-256: \`${latestReport.destructionCertificate.fernetCiphertextSha256}\`)`,
+              `- **Sanitization Standard**: \`${latestReport.destructionCertificate.sanitizationStandard}\` (${latestReport.destructionCertificate.passesCompleted} passes completed • ${latestReport.destructionCertificate.totalBytesOverwritten} total bytes overwritten • Pass-3 SHA-256: \`${latestReport.destructionCertificate.pass3OverwriteSha256}\`)`,
+              `- **Signature Algorithm**: \`${latestReport.destructionCertificate.signatureAlgorithm}\` (Verification Status: \`${latestReport.destructionCertificate.verified ? 'VERIFIED' : 'FAILED'}\`)`,
+              `- **Public Key Fingerprint (SPKI SHA-256)**: \`${latestReport.destructionCertificate.publicKeyFingerprintSha256}\``,
+              `- **ECDSA P-256 Digital Signature (Base64URL)**: \`${latestReport.destructionCertificate.signatureBase64Url}\``,
+              '',
+            ]
+          : []),
       ];
 
       const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });

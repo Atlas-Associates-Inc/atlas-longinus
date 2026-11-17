@@ -1,4 +1,5 @@
 import type { ConsultingAudience, DualProverVerdict, GraphResult, Remediation, ReportLanguage, Severity } from '../types.ts';
+import { executeEphemeralFernetDoDCycle } from '../airlock/destruction-certificate.ts';
 import { redactSecrets } from '../airlock/sanitizer.ts';
 
 export const severityRank: Record<Severity, number> = { blocker: 0, high: 1, medium: 2, low: 3, info: 4 };
@@ -476,6 +477,8 @@ export function formatBlueprint(graph: GraphResult, prover?: DualProverVerdict, 
   const estimatedHoursSaved = Math.max(40, graph.nodes.length * 4 + graph.findings.length * 6 + graph.paths.length * 8);
   const estimatedJpySaved = estimatedHoursSaved * 35_000;
   const estimatedUsdSaved = Math.round(estimatedJpySaved / 150);
+  const intakeSummary = `audience=${audience} grade=${grade} score=${overallScore}/100 blocker=${counts.blocker} high=${counts.high} medium=${counts.medium} low=${counts.low} paths=${graph.paths.length} patches=${remediations.filter(item => item.diff).length}`;
+  const destructionCert = executeEphemeralFernetDoDCycle(intakeSummary);
 
   if (lang === 'ja') {
     const audienceLabelJa = audience === 'municipal' ? '地方自治体・ガバメントクラウド向け（総務省三層の対策・デジタル庁基準・ISMAP対応）'
@@ -560,7 +563,16 @@ export function formatBlueprint(graph: GraphResult, prover?: DualProverVerdict, 
       '- **社内専属コンサルAI即時構築（Apache-2.0、¥0／完全無料）**: `Atlas Sovereign` を自社の AI エージェントに読み込ませるだけで、外部コンサルティングファームを一切不要にする社内専属コンサルAIを即座に構築できます。',
       '- **🏛️ 地方自治体・公共機関向け（財政課・議会予算要求＆委託先SIer指示用）**: 上記マッピング表を「総務省ガイドライン（三層の対策・β\'モデル）・デジタル庁ガバメントクラウド利用基準・ISMAP」適合根拠および庁内稟議・SIer是正指示書としてそのまま転記可能です。',
       '- **🏢 中小企業・ひとり情シス向け（大手取引先・金融機関・補助金提出用）**: 上記マッピング表を「経済産業省サプライチェーン対策評価制度・IPA情報セキュリティ5か条・個人情報保護法第23条（安全管理措置）」の取引先提出用回答シートとしてそのまま活用可能です。',
-      `- **Redacted Sprint Intake Summary**: \`audience=${audience} grade=${grade} score=${overallScore}/100 blocker=${counts.blocker} high=${counts.high} medium=${counts.medium} low=${counts.low} paths=${graph.paths.length} patches=${remediations.filter(item => item.diff).length}\``,
+      `- **Redacted Sprint Intake Summary**: \`${intakeSummary}\``,
+      '',
+      '## 8. 米国国防総省規格 DoD 5220.22-M 消去＆ECDSA P-256 暗号署名入りデータ破棄証明書',
+      `- **証明書ID (Certificate ID)**: \`${destructionCert.certificateId}\` (${destructionCert.issuedAt})`,
+      `- **対象リポジトリ保護モード**: \`${destructionCert.targetReadOnlyMode}\``,
+      `- **一時領域隔離＆暗号化規格**: \`ACL ${destructionCert.ephemeralVaultAcl}\` + \`${destructionCert.encryptionStandard}\` (SHA-256: \`${destructionCert.fernetCiphertextSha256}\`)`,
+      `- **完全消去規格 (Sanitization Standard)**: \`${destructionCert.sanitizationStandard}\` (${destructionCert.passesCompleted} パス上書き完了 · 計 ${destructionCert.totalBytesOverwritten} bytes 消去 · Pass-3 SHA-256: \`${destructionCert.pass3OverwriteSha256}\`)`,
+      `- **暗号署名アルゴリズム**: \`${destructionCert.signatureAlgorithm}\` (検証ステータス: \`${destructionCert.verified ? 'VERIFIED' : 'FAILED'}\`)`,
+      `- **公開鍵フィンガープリント (SPKI SHA-256)**: \`${destructionCert.publicKeyFingerprintSha256}\``,
+      `- **ECDSA P-256 デジタル署名 (Base64URL)**: \`${destructionCert.signatureBase64Url}\``,
     );
     return lines.join('\n') + '\n';
   }
@@ -644,7 +656,16 @@ export function formatBlueprint(graph: GraphResult, prover?: DualProverVerdict, 
     '- **Instant In-House Consulting AI (Apache-2.0, $0 / Free)**: Load `Atlas Sovereign` into your company\'s AI agent to instantly build an enterprise, municipal, or SME Cloud/DX/AI consulting AI in-house, making external consulting firms completely unnecessary.',
     '- **Municipal & Public Sector Deliverable (`--audience municipal`)**: Directly maps findings to Government Cloud data residency, disaster BCP multi-zone HA, and ISMAP controls for budget proposals and vendor RFP verification.',
     '- **SME & Supply-Chain Deliverable (`--audience sme`)**: Provides a plain-language 3-step remediation prescription, FinOps monthly cloud bill protection, and partner security assessment evidence.',
-    `- **Redacted Sprint Intake Summary**: \`audience=${audience} grade=${grade} score=${overallScore}/100 blocker=${counts.blocker} high=${counts.high} medium=${counts.medium} low=${counts.low} paths=${graph.paths.length} patches=${remediations.filter(item => item.diff).length}\``,
+    `- **Redacted Sprint Intake Summary**: \`${intakeSummary}\``,
+    '',
+    '## 8. DoD 5220.22-M 3-Pass Sanitization & ECDSA P-256 Signed Certificate of Data Destruction',
+    `- **Certificate ID**: \`${destructionCert.certificateId}\` (${destructionCert.issuedAt})`,
+    `- **Target Repository Protection**: \`${destructionCert.targetReadOnlyMode}\``,
+    `- **Ephemeral Vault & Encryption**: \`ACL ${destructionCert.ephemeralVaultAcl}\` + \`${destructionCert.encryptionStandard}\` (SHA-256: \`${destructionCert.fernetCiphertextSha256}\`)`,
+    `- **Sanitization Standard**: \`${destructionCert.sanitizationStandard}\` (${destructionCert.passesCompleted} passes completed · ${destructionCert.totalBytesOverwritten} total bytes overwritten · Pass-3 SHA-256: \`${destructionCert.pass3OverwriteSha256}\`)`,
+    `- **Signature Algorithm**: \`${destructionCert.signatureAlgorithm}\` (Verification Status: \`${destructionCert.verified ? 'VERIFIED' : 'FAILED'}\`)`,
+    `- **Public Key Fingerprint (SPKI SHA-256)**: \`${destructionCert.publicKeyFingerprintSha256}\``,
+    `- **ECDSA P-256 Digital Signature (Base64URL)**: \`${destructionCert.signatureBase64Url}\``,
   );
   return lines.join('\n') + '\n';
 }

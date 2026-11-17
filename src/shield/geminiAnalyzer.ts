@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { executeEphemeralFernetDoDCycle } from '../airlock/destruction-certificate.ts';
 import {
   DEFENSIVE_PATCH_TEMPLATES,
   type DefensivePatchTemplateId,
@@ -945,6 +946,7 @@ export async function executeDefensiveAudit(params: {
     strideMatrix.reduce((sum, item) => sum + item.readinessScore, 0) / strideMatrix.length;
   const overallDefenseScore = Math.round(stackAvg * 0.65 + strideAvg * 0.35);
 
+  const destructionCertificate = executeEphemeralFernetDoDCycle(scan.architectureDigest);
   const durationMs = Math.max(1, Math.round(performance.now() - startedAt));
 
   const report: AuditReport = {
@@ -968,6 +970,7 @@ export async function executeDefensiveAudit(params: {
     stackSummaries,
     trustGraph: scan.trustGraph,
     findings: mergedFindings,
+    destructionCertificate,
   };
 
   if (scan.truncationReason !== undefined) {

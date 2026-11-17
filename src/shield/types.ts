@@ -1,3 +1,5 @@
+import type { DestructionCertificate } from '../airlock/destruction-certificate.ts';
+
 export type StackDomain =
   | 'ts-web-api'
   | 'flutter-firebase'
@@ -107,6 +109,7 @@ export interface AuditReport {
     edges: TrustBoundaryEdge[];
   };
   findings: SecurityFinding[];
+  destructionCertificate: DestructionCertificate;
 }
 
 export interface PortfolioRepoSummary {
