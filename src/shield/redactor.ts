@@ -151,7 +151,7 @@ function endsWithUnescapedBackslash(text: string): boolean {
 }
 
 const PURE_DYNAMIC_REF_RE =
-  /^(?:\$\([A-Za-z0-9_.\s/=-]+\)|\$\{\s*[A-Za-z_][A-Za-z0-9_.\[\]'"]*(?::-(?:true|false|\d+)?)?\s*\}|\$\{\{\s*[A-Za-z_][A-Za-z0-9_.]*\s*\}\}|\$[A-Za-z_][A-Za-z0-9_]*|--dart-define=[A-Za-z0-9_]+=\$\{[A-Za-z0-9_]+(?::-(?:true|false))?\})$/;
+  /^(?:\$\([A-Za-z0-9_.\s/=-]+\)|\$\{\s*[A-Za-z_][A-Za-z0-9_.\[\]'"]*(?::-(?:true|false|\d+)?)?\s*\}|\$\{\{\s*[A-Za-z_][A-Za-z0-9_.]*\s*\}\}|\$[A-Za-z_][A-Za-z0-9_]*|--dart-define=[A-Za-z0-9_]+=\$\{[A-Za-z0-9_]+(?::-(?:true|false))?\}|[A-Za-z0-9_]+=[A-Za-z0-9_-]+:(?:latest|\d+)(?:,[A-Za-z0-9_]+=[A-Za-z0-9_-]+:(?:latest|\d+))*)$/;
 
 const LEADING_PURE_DYNAMIC_REF_RE =
   /^(?:\$\([A-Za-z0-9_.\s/=-]+\)|\$\{\s*[A-Za-z_][A-Za-z0-9_.\[\]'"]*\s*\})/;
@@ -162,18 +162,19 @@ function isDynamicOrAlreadyRedacted(val: string): boolean {
   if (/^\.{2,}$/.test(trimmed)) return true;
   if (/^(?:\\[nrt0])+$/.test(trimmed)) return true;
   if (trimmed.includes('[REDACTED')) return true;
+  if (/[\u3000-\u9fff\uff00-\uffef\uac00-\ud7af]/.test(trimmed)) return true;
   if (/^(?:\.{1,2}\/|\/)[A-Za-z0-9_./-]+(?:\.[A-Za-z0-9]+)?$/i.test(trimmed)) {
     return true;
   }
   if (
-    /^(?:utf-?8|ascii|hex|base64|base64url|latin1|binary|ucs-?2|utf16le|string|number|boolean|object|function|undefined|symbol|bigint|sha256|sha384|sha512|sha1|md5|hmac|ed25519|rsa|ecdsa|localhost|127\.0\.0\.1|ci-dummy)$/i.test(
+    /^(?:utf-?8|ascii|hex|base64|base64url|latin1|binary|ucs-?2|utf16le|string|number|boolean|object|function|undefined|symbol|bigint|sha256|sha384|sha512|sha1|md5|hmac|ed25519|rsa|ecdsa|localhost|127\.0\.0\.1|ci-dummy|isSecret|apiKey|apiKeyIos|apiKeyAndroid|secret_tutorial_seen_v1|arc_master_key)$/i.test(
       trimmed,
     )
   ) {
     return true;
   }
   if (
-    /^[a-z][a-z0-9_]*(?:_private_key|_public_key|_signing_key|_encryption_key|_master_key|_secret_key|_session_token|_refresh_token|_access_token|_id_token|_enabled|_disabled|Enabled|Disabled|KeyName|StorageKey|PrefKey|ApiKey|ApiKeyIos|ApiKeyAndroid|CredentialOnDevice)$/.test(
+    /^[a-z][a-z0-9_]*(?:_private_key|_public_key|_signing_key|_encryption_key|_master_key|_secret_key|_session_token|_refresh_token|_access_token|_id_token|_enabled|_disabled|_seen_v\d+|_alias|Enabled|Disabled|KeyName|StorageKey|PrefKey|ApiKey|ApiKeyIos|ApiKeyAndroid|CredentialOnDevice)$/.test(
       trimmed,
     ) ||
     trimmed === '[Secret]'
@@ -573,7 +574,7 @@ function redactGeneralCodeLine(
         : 'ENV'
       : (typedEq ?? goTypedEq ?? generalOp);
     const prefixBeforeMatch = current.slice(0, match.index);
-    if (/\bcase\s+$/i.test(prefixBeforeMatch)) {
+    if (/\bcase\s+(?:[A-Za-z0-9_$.]+\.)?$/i.test(prefixBeforeMatch)) {
       searchPos = match.index + match[0].length;
       continue;
     }
@@ -590,7 +591,12 @@ function redactGeneralCodeLine(
       /^(?:NEXT_PUBLIC|VITE|REACT_APP|EXPO_PUBLIC)_(?:FIREBASE|RECAPTCHA|APPCHECK|MAPBOX|GOOGLE_MAPS)_/i.test(
         matchedKeyName,
       ) ||
-      /_(?:DOC_ID|COLLECTION|FIELD|PATH|HEADER|NAME|TABLE|COLUMN|ERROR|CODE|MESSAGE|MSG|STATUS|EVENT|TYPE|MODE|BASIS|PREFIX|SUFFIX|LABEL|TITLE|REGEX|PATTERN|ID|LENGTH|SIZE|COUNT|LIMIT|TTL|MS|SEC|SECONDS|MINUTES|HOURS|DAYS|URL_PATH|ENDPOINT|PORT|HOST|ENABLED|DISABLED)$/i.test(
+      /^(?:secrets|card_|scenario_|choice_|label_|title_|desc_|btn_)/i.test(matchedKeyName) ||
+      /^(?:is|has|can|should|allow|was|replyToIs|preserve)[A-Z_]/i.test(matchedKeyName) ||
+      /(?:SeenKey|KeyAlias|PrefKey|StorageKey|CacheKey|HeaderName|FieldName|ColumnName|KeyName)$/i.test(
+        matchedKeyName,
+      ) ||
+      /_(?:DOC_ID|COLLECTION|FIELD|PATH|HEADER|NAME|TABLE|COLUMN|ERROR|CODE|MESSAGE|MSG|STATUS|EVENT|TYPE|MODE|BASIS|PREFIX|SUFFIX|LABEL|TITLE|REGEX|PATTERN|ID|LENGTH|SIZE|COUNT|LIMIT|TTL|MS|SEC|SECONDS|MINUTES|HOURS|DAYS|URL_PATH|ENDPOINT|PORT|HOST|ENABLED|DISABLED|MISMATCH|INVALID|ALIAS|SEEN_KEY)$/i.test(
         matchedKeyName,
       )
     ) {
@@ -1190,10 +1196,10 @@ export function redactSecretsPreserveLines(
             rhsState.operator === ':' &&
             !rhsState.inParens &&
             !rhsState.awaitLeadingOp &&
-            indentLen <= rhsState.baseIndent &&
-            /^[A-Za-z0-9_.'" -]+\s*:/.test(trimmedLine)
+            (/^[A-Za-z0-9_.'" -]+\s*:(?:\s|$)/.test(trimmedLine) ||
+              /^(?:return|break|continue|throw|case|default)\b/.test(trimmedLine))
           ) {
-            // Dedented back to a sibling YAML/object key — fall through to normal processing
+            // Child/sibling YAML/object key or case statement body — fall through to normal processing
             state = null;
           } else if (rhsState.inParens && /^\)\s*;?\s*(?:\/\/.*|#.*)?$/.test(trimmedLine)) {
             state = null;

@@ -747,7 +747,7 @@ steps:
 ];
 
 export function evaluateFileRules(ctx: FileContext): SecurityFinding[] {
-  if (ctx.skipSelfPatternDefinitions === true) {
+  if (ctx.skipSelfPatternDefinitions === true || isNonProductionOrTemplateFile(ctx)) {
     return [];
   }
   const safeFilePath = redactSecrets(ctx.relativePath).redactedText;
