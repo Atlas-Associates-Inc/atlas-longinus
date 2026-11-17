@@ -10,7 +10,16 @@ import { runProver } from './prove/dual-prover.ts';
 import { formatBlueprint, formatTable, meetsThreshold } from './report/formatter.ts';
 import { proposeRemediations } from './report/remediation.ts';
 import { toSarif } from './report/sarif.ts';
+import { SUPPORTED_LANGUAGES } from './types.ts';
 import type { AirlockProfileId, ConsultingAudience, McpConfigClient, ProverMode, ReportLanguage, Severity } from './types.ts';
+
+function normalizeLanguage(raw: string | undefined): ReportLanguage | undefined {
+  if (!raw) return 'en';
+  const lower = raw.toLowerCase();
+  if (lower === 'zh-hans' || lower === 'zh-cn') return 'zh-Hans';
+  if (lower === 'zh-hant' || lower === 'zh-tw' || lower === 'zh-hk') return 'zh-Hant';
+  return SUPPORTED_LANGUAGES.find(lang => lang.toLowerCase() === lower);
+}
 
 const version: string = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 const help = `Atlas Sovereign ${version}
@@ -87,11 +96,12 @@ async function readStdin(): Promise<string> {
 }
 
 export async function main(args: string[]): Promise<number> {
-  if (!args.length || (args.includes('--help') || args.includes('-h')) && args.every(arg => ['--help', '-h', '--lang', 'en', 'ja', '--lang=en', '--lang=ja'].includes(arg))) {
+  if (!args.length || (args.includes('--help') || args.includes('-h')) && args.every((arg, idx) => arg === '--help' || arg === '-h' || arg === '--lang' || arg.startsWith('--lang=') || (idx > 0 && args[idx - 1] === '--lang'))) {
     const langIdx = args.indexOf('--lang');
     const langEq = args.find(arg => arg.startsWith('--lang='))?.slice(7);
-    const helpLang = langEq ?? (langIdx >= 0 ? args[langIdx + 1] : process.env.ATLAS_LANG ?? 'en');
-    if (helpLang !== 'en' && helpLang !== 'ja') throw new Error('--lang must be en or ja.');
+    const rawHelpLang = langEq ?? (langIdx >= 0 ? args[langIdx + 1] : process.env.ATLAS_LANG ?? 'en');
+    const helpLang = normalizeLanguage(rawHelpLang);
+    if (!helpLang) throw new Error('--lang must be one of the 20 supported language tags.');
     process.stdout.write(helpLang === 'ja' ? helpJa : help);
     return 0;
   }
@@ -138,11 +148,11 @@ export async function main(args: string[]): Promise<number> {
   } });
   if (positionals.length !== 1) throw new Error('audit requires exactly one directory.');
   if (!['table', 'json', 'sarif', 'blueprint'].includes(values.format!)) throw new Error('--format must be table, json, sarif or blueprint.');
-  if (!['en', 'ja'].includes(values.lang!)) throw new Error('--lang must be en or ja.');
+  const lang = normalizeLanguage(values.lang);
+  if (!lang) throw new Error('--lang must be one of the 20 supported language tags.');
   if (!['enterprise', 'municipal', 'sme'].includes(values.audience!)) throw new Error('--audience must be enterprise, municipal or sme.');
   if (!['blocker', 'high', 'medium'].includes(values['fail-on']!)) throw new Error('--fail-on must be blocker, high or medium.');
   if (!['gemini', 'dual'].includes(values['prover-mode']!)) throw new Error('--prover-mode must be gemini or dual.');
-  const lang = values.lang as ReportLanguage;
   const audience = values.audience as ConsultingAudience;
   const directory = resolve(positionals[0]);
   const graph = scanDirectory(directory);

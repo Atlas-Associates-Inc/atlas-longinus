@@ -227,7 +227,7 @@ test('CLI rejects unsupported real Node versions before importing TypeScript wit
 test('invalid commands and options return 2 without a report', () => {
   for (const args of [['unknown'], ['audit'], ['audit', hardened, '--format', 'xml'],
     ['audit', hardened, '--fail-on', 'low'], ['audit', hardened, '--prover-mode', 'unknown'],
-    ['audit', hardened, '--lang', 'fr'], ['--help', '--lang', 'de'],
+    ['audit', hardened, '--lang', 'xx-invalid'], ['--help', '--lang', 'zz-invalid'],
     ['audit', hardened, '--audience', 'invalid']]) {
     const result = cli(args);
     assert.equal(result.status, 2, args.join(' '));

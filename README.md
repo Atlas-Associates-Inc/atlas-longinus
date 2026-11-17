@@ -4,79 +4,68 @@
   <img src="public/longinus-icon.svg" alt="LONGINUS Icon" width="96" height="96" />
 </p>
 
-> 🌐 **20 Languages / 20言語ナビゲーション**: **[日本語](#日本語)** · **[English](#english)** · **[简体中文](#zh-hans)** · **[繁體中文](#zh-hant)** · **[한국어](#ko)** · **[Español](#es)** · **[Português](#pt)** · **[Français](#fr)** · **[Deutsch](#de)** · **[Italiano](#it)** · **[Русский](#ru)** · **[Українська](#uk)** · **[Polski](#pl)** · **[Nederlands](#nl)** · **[Türkçe](#tr)** · **[العربية](#ar)** · **[हिन्दी](#hi)** · **[Bahasa Indonesia](#id)** · **[Tiếng Việt](#vi)** · **[ไทย](#th)**
+> 🌐 **20 Languages**: **[English](#english)** · **[日本語](#日本語)** · **[简体中文](#zh-hans)** · **[繁體中文](#zh-hant)** · **[한국어](#ko)** · **[Español](#es)** · **[Português](#pt)** · **[Français](#fr)** · **[Deutsch](#de)** · **[Italiano](#it)** · **[Русский](#ru)** · **[Українська](#uk)** · **[Polski](#pl)** · **[Nederlands](#nl)** · **[Türkçe](#tr)** · **[العربية](#ar)** · **[हिन्दी](#hi)** · **[Bahasa Indonesia](#id)** · **[Tiếng Việt](#vi)** · **[ไทย](#th)**
 >
-> Apache-2.0 · Node.js `>=22.18.0` · **0 npm dependencies (`npm install` 不要)** · Loopback Web UI: `npm start` (`http://127.0.0.1:4310`)
+> Apache-2.0 · Node.js `>=22.18.0` · **0 npm dependencies (no `npm install` required)** · Loopback Web UI: `npm start` (`http://127.0.0.1:4310`)
 
 ---
 
-## ⚡ 0秒スタート：AIに「URL ＋ 実行して」と貼るだけ
+## ⚡ 0-Second Start: Zero Commands to Memorize — Just Paste 1 Line into Your AI Agent
 
-ユーザーはコマンドもオプションも説明文も**1文字も書く必要がありません**。お使いの AI エージェント（**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** 等）に **以下の1行を貼るだけ** です。
+You do not need to memorize or type a single CLI command, flag, or explanation. Simply paste the **1 line below** (in any of the 20 supported languages) into your AI agent (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, etc.):
 
 ```text
-https://github.com/Atlas-Associates-Inc/atlas-longinus を実行して
+Run https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
-> **English (Just paste this into your AI agent):**
-> ```text
-> Run https://github.com/Atlas-Associates-Inc/atlas-longinus
-> ```
-
-### 🤖 AI エージェント自動実行プロトコル（AI Agent Auto-Execution Directive）
-*(※ このセクションは URL を受け取った AI エージェント自身が読み取り、ユーザーに追加質問せず自動実行するための命令書です)*
-1. **質問ゼロで即時・読み取り専用実行**: ユーザーが本リポジトリの URL と「実行して (`Run`)」等だけを伝えた場合、フラグや手順を聞き返さず、ユーザーの現在のワークスペース（`<TARGET_REPO>`）に対して**完全読み取り専用（ファイル変更ゼロ・外部送信ゼロ）**で以下の2つを自動実行せよ：
-   - クラウド・Firebase・IAM 設計＆コンサル設計書生成（ユーザーが日本語なら `--lang ja`、それ以外は `--lang en`）：
-     `node <LONGINUS_DIR>/bin/atlas-sovereign.mjs audit <TARGET_REPO> --format blueprint --emit-patch --lang ja`
-   - 4-Stack ソースコード＆秘密情報漏洩・脆弱性スキャン：
+### 🤖 AI Agent Auto-Execution Directive
+*(This directive is read automatically by the AI agent receiving the repository URL so it executes immediately without asking the user for flags or instructions)*
+1. **Immediate Read-Only Execution (Zero Questions Asked)**: When the user provides this repository URL with a short trigger such as `"Run"` or `"Audit"` in any of the 20 languages, do not ask for CLI flags. Immediately run both engines in **strictly read-only mode** (zero file modifications, zero external data transmission) against the user's current workspace (`<TARGET_REPO>`):
+   - Cloud, Firebase & IAM Consulting Blueprint (`--lang ja` if the user's conversation is in Japanese, or the matching tag among the 20 supported languages):
+     `node <LONGINUS_DIR>/bin/atlas-sovereign.mjs audit <TARGET_REPO> --format blueprint --emit-patch --lang <USER_LANG>`
+   - 4-Stack Source Code & Secret Shield (`--deterministic`):
      `node <LONGINUS_DIR>/bin/longinus.mjs <TARGET_REPO> --deterministic`
-2. **ユーザーの言語で一括レポート**: 出力された **① 5領域アーキテクチャ成熟度スコアカード（0〜100点・Grade A〜F）**、**② 4-Stack Code Shield 検出結果**、**③ 外部コンサル削減効果試算（ROI）**、**④ 30/60/90日改修ロードマップ**、**⑤ レビュー専用修正パッチ案（diff）** をユーザーの言語で分かりやすく提示し、人間の明示承認があるまで対象ファイルを一切書き換えないこと。
+2. **Present the Unified Report in the User's Language**: Present **(1) the 5-Pillar Architecture Maturity Scorecard (`0–100`, Grade `A–F`)**, **(2) 4-Stack Code Shield findings**, **(3) Estimated External Consulting Cost Saved (ROI)**, **(4) 30/60/90-Day Remediation Roadmap**, and **(5) Review-Only Unified Diffs** in the user's conversation language. Never modify any target files without explicit human approval.
 
 ---
 
 <details open>
-<summary><strong>🌐 20-Language 1-Line AI Prompts & Global Overview / 世界20言語・「貼るだけ」超短文プロンプト＆概要</strong></summary>
-
-> **Note:** The [English](#english) and [日本語](#日本語) sections below are the sole authoritative technical and security-boundary specifications for LONGINUS (`atlas-sovereign`), defining all CLI flags, input bounds, and operational guarantees. In particular: exit code `0` is not an absolute completeness or security guarantee, lexical MCP Airlock filtering does not mathematically prove semantic read-only execution, secret and prompt sanitization is not an exhaustive prompt-injection defense, and `--prove` transmits sanitized evidence under caller-configured provider settings and mode names do not guarantee a closed perimeter or zero retention.
->
-> **注記:** 以下の [English](#english) および [日本語](#日本語) セクションが、すべてのCLIフラグ、入力上限、および運用上の保証を規定する唯一の正式な技術・セキュリティ境界仕様です。特に、終了コード `0` は完全性や安全性の絶対的保証ではなく、Airlockの字句フィルタリングは意味論的な読み取り専用動作を完全に証明するものではなく、サニタイズは網羅的なプロンプト注入防御ではなく、`--prove` は呼び出し側が設定したプロバイダー設定の下でサニタイズ済み証拠を送信し、モード名は閉じた境界やゼロ保持を保証しません。
+<summary><strong>🌐 20-Language 1-Line AI Prompts & Global Overview</strong></summary>
 
 | Language | Tag | Just Paste into Your AI Agent (`Antigravity / Gemini CLI / Claude Code / Codex / Cursor`) | Summary |
 | --- | --- | --- | --- |
-| **日本語 (Japanese)** | `ja` | `https://github.com/Atlas-Associates-Inc/atlas-longinus を実行して` | コマンドや説明文を1文字も書く必要なく、AIに左記の1行を貼るだけで本READMEの自動実行プロトコルが発動し、5領域スコア・4-Stack監査・修正パッチ案を全自動出力します（Apache-2.0、Node.js >=22.18.0、npm依存0）。正式仕様は [English](#english) / [日本語](#日本語) が正本です。 |
-| **English** | `en` | `Run https://github.com/Atlas-Associates-Inc/atlas-longinus` | Zero commands or flags to type—paste the 1-line prompt into your AI agent and LONGINUS automatically runs a read-only GCP × Firebase & 4-Stack Code Shield audit, outputting the 5-pillar scorecard, 30/60/90-day Blueprint, and review-only patches (Apache-2.0, Node.js >=22.18.0, 0 npm dependencies). Governed by [English](#english) and [日本語](#日本語). |
-| **简体中文 (Simplified Chinese)** | `zh-Hans` | `运行 https://github.com/Atlas-Associates-Inc/atlas-longinus` | 无需输入任何命令、参数或说明，只需将左侧一行粘贴至 AI 代理，即可自动执行只读架构与代码安全审计并输出5大领域评分与修复补丁（Apache-2.0、Node.js >=22.18.0、0 npm 依赖）。权威规范由 [English](#english) 与 [日本語](#日本語) 规定。 |
-| **繁體中文 (Traditional Chinese)** | `zh-Hant` | `執行 https://github.com/Atlas-Associates-Inc/atlas-longinus` | 無需輸入任何指令、參數或說明，只需將左側一行貼上至 AI 代理，即可自動執行唯讀架構與程式碼安全審計並輸出5大領域評分與修補建議（Apache-2.0、Node.js >=22.18.0、0 npm 相依性）。正式規範由 [English](#english) 與 [日本語](#日本語) 規定。 |
-| **한국어 (Korean)** | `ko` | `https://github.com/Atlas-Associates-Inc/atlas-longinus 실행해줘` | 명령어나 옵션을 한 글자도 적을 필요 없이 AI 에이전트에 왼쪽 한 줄만 붙여넣으면 읽기 전용 아키텍처 및 코드 보안 감사가 자동 실행됩니다(Apache-2.0, Node.js >=22.18.0, npm 의존성 0개). 공식 사양은 [English](#english) 및 [日本語](#日本語) 섹션을 따릅니다. |
-| **Español (Spanish)** | `es` | `Ejecuta https://github.com/Atlas-Associates-Inc/atlas-longinus` | Sin escribir comandos ni opciones: pegue esta línea en su agente de IA para ejecutar automáticamente la auditoría de arquitectura y seguridad en modo de solo lectura (Apache-2.0, Node.js >=22.18.0, 0 dependencias npm). Regido por [English](#english) y [日本語](#日本語). |
-| **Português (Portuguese)** | `pt` | `Execute https://github.com/Atlas-Associates-Inc/atlas-longinus` | Sem digitar comandos ou opções: basta colar esta linha no seu agente de IA para executar automaticamente a auditoria somente leitura LONGINUS (Apache-2.0, Node.js >=22.18.0, 0 dependências npm). Regido por [English](#english) e [日本語](#日本語). |
-| **Français (French)** | `fr` | `Exécute https://github.com/Atlas-Associates-Inc/atlas-longinus` | Sans taper la moindre commande ni option : collez simplement cette ligne dans votre agent IA pour lancer automatiquement l'audit en lecture seule LONGINUS (Apache-2.0, Node.js >=22.18.0, 0 dépendance npm). Régi par [English](#english) et [日本語](#日本語). |
-| **Deutsch (German)** | `de` | `Führe https://github.com/Atlas-Associates-Inc/atlas-longinus aus` | Ohne Befehle oder Optionen einzutippen: Fügen Sie einfach diese Zeile in Ihren KI-Agenten ein, um das schreibgeschützte LONGINUS-Audit automatisch zu starten (Apache-2.0, Node.js >=22.18.0, 0 npm-Abhängigkeiten). Geregelt durch [English](#english) und [日本語](#日本語). |
-| **Italiano (Italian)** | `it` | `Esegui https://github.com/Atlas-Associates-Inc/atlas-longinus` | Senza digitare comandi o opzioni: incolla questa riga nel tuo agente IA per avviare automaticamente l'audit in sola lettura LONGINUS (Apache-2.0, Node.js >=22.18.0, 0 dipendenze npm). Regolato da [English](#english) e [日本語](#日本語). |
-| **Русский (Russian)** | `ru` | `Запусти https://github.com/Atlas-Associates-Inc/atlas-longinus` | Без ввода команд и параметров: просто вставьте эту строку в ваш ИИ-агент для автоматического запуска офлайн-аудита LONGINUS в режиме только для чтения (Apache-2.0, Node.js >=22.18.0, 0 зависимостей npm). Определяется разделами [English](#english) и [日本語](#日本語). |
-| **Українська (Ukrainian)** | `uk` | `Запусти https://github.com/Atlas-Associates-Inc/atlas-longinus` | Без введення команд чи параметрів: просто вставте цей рядок у ваш ШІ-агент для автоматичного запуску аудиту LONGINUS у режимі лише для читання (Apache-2.0, Node.js >=22.18.0, 0 залежностей npm). Регулюється розділами [English](#english) і [日本語](#日本語). |
-| **Polski (Polish)** | `pl` | `Uruchom https://github.com/Atlas-Associates-Inc/atlas-longinus` | Bez wpisywania poleceń ani opcji: wklej tę linię do swojego agenta AI, aby automatycznie uruchomić audyt LONGINUS w trybie tylko do odczytu (Apache-2.0, Node.js >=22.18.0, 0 zależności npm). Określone w sekcjach [English](#english) i [日本語](#日本語). |
-| **Nederlands (Dutch)** | `nl` | `Voer https://github.com/Atlas-Associates-Inc/atlas-longinus uit` | Zonder commando's of opties te typen: plak deze regel in uw AI-agent om automatisch de alleen-lezen LONGINUS-audit uit te voeren (Apache-2.0, Node.js >=22.18.0, 0 npm-afhankelijkheden). Bepaald door [English](#english) en [日本語](#日本語). |
-| **Türkçe (Turkish)** | `tr` | `https://github.com/Atlas-Associates-Inc/atlas-longinus çalıştır` | Hiçbir komut veya seçenek yazmadan: salt okunur LONGINUS denetimini otomatik başlatmak için bu satırı AI ajanınıza yapıştırın (Apache-2.0, Node.js >=22.18.0, 0 npm bağımlılığı). [English](#english) ve [日本語](#日本語) bölümleriyle belirlenir. |
-| **العربية (Arabic)** | `ar` | `شغّل https://github.com/Atlas-Associates-Inc/atlas-longinus` | دون كتابة أي أوامر أو خيارات: فقط الصق هذا السطر في وكيل الذكاء الاصطناعي الخاص بك لتشغيل تدقيق LONGINUS للقراءة فقط تلقائيا (Apache-2.0، وNode.js >=22.18.0، و0 تبعيات npm). محكوم بقسمي [English](#english) و[日本語](#日本語). |
-| **हिन्दी (Hindi)** | `hi` | `https://github.com/Atlas-Associates-Inc/atlas-longinus चलाएँ` | कोई कमांड या विकल्प टाइप किए बिना—बस अपने AI एजेंट में यह एक पंक्ति पेस्ट करें और LONGINUS रीड-ओनली ऑडिट स्वतः चलेगा (Apache-2.0, Node.js >=22.18.0, 0 npm निर्भरताएँ)। [English](#english) और [日本語](#日本語) द्वारा शासित। |
-| **Bahasa Indonesia (Indonesian)** | `id` | `Jalankan https://github.com/Atlas-Associates-Inc/atlas-longinus` | Tanpa mengetik perintah atau opsi apa pun—cukup tempel 1 baris ini ke agen AI Anda untuk menjalankan audit khusus-baca LONGINUS secara otomatis (Apache-2.0, Node.js >=22.18.0, 0 dependensi npm). Diatur oleh [English](#english) dan [日本語](#日本語). |
-| **Tiếng Việt (Vietnamese)** | `vi` | `Chạy https://github.com/Atlas-Associates-Inc/atlas-longinus` | Không cần gõ bất kỳ lệnh hay tùy chọn nào—chỉ cần dán 1 dòng này vào AI agent để tự động chạy kiểm toán chỉ đọc LONGINUS (Apache-2.0, Node.js >=22.18.0, 0 phụ thuộc npm). Quy định bởi [English](#english) và [日本語](#日本語). |
-| **ไทย (Thai)** | `th` | `รัน https://github.com/Atlas-Associates-Inc/atlas-longinus` | ไม่ต้องพิมพ์คำสั่งหรือออปชันใดๆ เพียงวาง 1 บรรทัดนี้ลงใน AI Agent ของคุณเพื่อรันการตรวจสอบแบบอ่านอย่างเดียวของ LONGINUS โดยอัตโนมัติ (Apache-2.0, Node.js >=22.18.0, 0 การพึ่งพา npm) กำหนดโดยส่วน [English](#english) และ [日本語](#日本語) |
+| **English** | `en` | `Run https://github.com/Atlas-Associates-Inc/atlas-longinus` | Zero commands or flags to type—paste the 1-line prompt into your AI agent and LONGINUS automatically runs a read-only GCP × Firebase & 4-Stack Code Shield audit, outputting the 5-pillar scorecard, 30/60/90-day Blueprint, and review-only patches (Apache-2.0, Node.js >=22.18.0, 0 npm dependencies). |
+| **日本語 (Japanese)** | `ja` | `https://github.com/Atlas-Associates-Inc/atlas-longinus を実行して` | コマンドや説明文を1文字も書く必要なく、AIに左記の1行を貼るだけで自動実行プロトコルが発動し、5領域スコア・4-Stack監査・修正パッチ案を全自動出力します（Apache-2.0、Node.js >=22.18.0、npm依存0）。 |
+| **简体中文 (Simplified Chinese)** | `zh-Hans` | `运行 https://github.com/Atlas-Associates-Inc/atlas-longinus` | 无需输入任何命令、参数或说明，只需将左侧一行粘贴至 AI 代理，即可自动执行只读架构与代码安全审计并输出5大领域评分与修复补丁（Apache-2.0、Node.js >=22.18.0、0 npm 依赖）。 |
+| **繁體中文 (Traditional Chinese)** | `zh-Hant` | `執行 https://github.com/Atlas-Associates-Inc/atlas-longinus` | 無需輸入任何指令、參數或說明，只需將左側一行貼上至 AI 代理，即可自動執行唯讀架構與程式碼安全審計並輸出5大領域評分與修補建議（Apache-2.0、Node.js >=22.18.0、0 npm 相依性）。 |
+| **한국어 (Korean)** | `ko` | `https://github.com/Atlas-Associates-Inc/atlas-longinus 실행해줘` | 명령어나 옵션을 한 글자도 적을 필요 없이 AI 에이전트에 왼쪽 한 줄만 붙여넣으면 읽기 전용 아키텍처 및 코드 보안 감사가 자동 실행됩니다(Apache-2.0, Node.js >=22.18.0, npm 의존성 0개). |
+| **Español (Spanish)** | `es` | `Ejecuta https://github.com/Atlas-Associates-Inc/atlas-longinus` | Sin escribir comandos ni opciones: pegue esta línea en su agente de IA para ejecutar automáticamente la auditoría de arquitectura y seguridad en modo de solo lectura (Apache-2.0, Node.js >=22.18.0, 0 dependencias npm). |
+| **Português (Portuguese)** | `pt` | `Execute https://github.com/Atlas-Associates-Inc/atlas-longinus` | Sem digitar comandos ou opções: basta colar esta linha no seu agente de IA para executar automaticamente a auditoria somente leitura LONGINUS (Apache-2.0, Node.js >=22.18.0, 0 dependências npm). |
+| **Français (French)** | `fr` | `Exécute https://github.com/Atlas-Associates-Inc/atlas-longinus` | Sans taper la moindre commande ni option : collez simplement cette ligne dans votre agent IA pour lancer automatiquement l'audit en lecture seule LONGINUS (Apache-2.0, Node.js >=22.18.0, 0 dépendance npm). |
+| **Deutsch (German)** | `de` | `Führe https://github.com/Atlas-Associates-Inc/atlas-longinus aus` | Ohne Befehle oder Optionen einzutippen: Fügen Sie einfach diese Zeile in Ihren KI-Agenten ein, um das schreibgeschützte LONGINUS-Audit automatisch zu starten (Apache-2.0, Node.js >=22.18.0, 0 npm-Abhängigkeiten). |
+| **Italiano (Italian)** | `it` | `Esegui https://github.com/Atlas-Associates-Inc/atlas-longinus` | Senza digitare comandi o opzioni: incolla questa riga nel tuo agente IA per avviare automaticamente l'audit in sola lettura LONGINUS (Apache-2.0, Node.js >=22.18.0, 0 dipendenze npm). |
+| **Русский (Russian)** | `ru` | `Запусти https://github.com/Atlas-Associates-Inc/atlas-longinus` | Без ввода команд и параметров: просто вставьте эту строку в ваш ИИ-агент для автоматического запуска офлайн-аудита LONGINUS в режиме только для чтения (Apache-2.0, Node.js >=22.18.0, 0 зависимостей npm). |
+| **Українська (Ukrainian)** | `uk` | `Запусти https://github.com/Atlas-Associates-Inc/atlas-longinus` | Без введення команд чи параметрів: просто вставте цей рядок у ваш ШІ-агент для автоматичного запуску аудиту LONGINUS у режимі лише для читання (Apache-2.0, Node.js >=22.18.0, 0 залежностей npm). |
+| **Polski (Polish)** | `pl` | `Uruchom https://github.com/Atlas-Associates-Inc/atlas-longinus` | Bez wpisywania poleceń ani opcji: wklej tę linię do swojego agenta AI, aby automatycznie uruchomić audyt LONGINUS w trybie tylko do odczytu (Apache-2.0, Node.js >=22.18.0, 0 zależności npm). |
+| **Nederlands (Dutch)** | `nl` | `Voer https://github.com/Atlas-Associates-Inc/atlas-longinus uit` | Zonder commando's of opties te typen: plak deze regel in uw AI-agent om automatisch de alleen-lezen LONGINUS-audit uit te voeren (Apache-2.0, Node.js >=22.18.0, 0 npm-afhankelijkheden). |
+| **Türkçe (Turkish)** | `tr` | `https://github.com/Atlas-Associates-Inc/atlas-longinus çalıştır` | Hiçbir komut veya seçenek yazmadan: salt okunur LONGINUS denetimini otomatik başlatmak için bu satırı AI ajanınıza yapıştırın (Apache-2.0, Node.js >=22.18.0, 0 npm bağımlılığı). |
+| **العربية (Arabic)** | `ar` | `شغّل https://github.com/Atlas-Associates-Inc/atlas-longinus` | دون كتابة أي أوامر أو خيارات: فقط الصق هذا السطر في وكيل الذكاء الاصطناعي الخاص بك لتشغيل تدقيق LONGINUS للقراءة فقط تلقائيا (Apache-2.0، وNode.js >=22.18.0، و0 تبعيات npm). |
+| **हिन्दी (Hindi)** | `hi` | `https://github.com/Atlas-Associates-Inc/atlas-longinus चलाएँ` | कोई कमांड या विकल्प टाइप किए बिना—बस अपने AI एजेंट में यह एक पंक्ति पेस्ट करें और LONGINUS रीड-ओनली ऑडिट स्वतः चलेगा (Apache-2.0, Node.js >=22.18.0, 0 npm निर्भरताएँ)। |
+| **Bahasa Indonesia (Indonesian)** | `id` | `Jalankan https://github.com/Atlas-Associates-Inc/atlas-longinus` | Tanpa mengetik perintah atau opsi apa pun—cukup tempel 1 baris ini ke agen AI Anda untuk menjalankan audit khusus-baca LONGINUS secara otomatis (Apache-2.0, Node.js >=22.18.0, 0 dependensi npm). |
+| **Tiếng Việt (Vietnamese)** | `vi` | `Chạy https://github.com/Atlas-Associates-Inc/atlas-longinus` | Không cần gõ bất kỳ lệnh hay tùy chọn nào—chỉ cần dán 1 dòng này vào AI agent để tự động chạy kiểm toán chỉ đọc LONGINUS (Apache-2.0, Node.js >=22.18.0, 0 phụ thuộc npm). |
+| **ไทย (Thai)** | `th` | `รัน https://github.com/Atlas-Associates-Inc/atlas-longinus` | ไม่ต้องพิมพ์คำสั่งหรือออปชันใดๆ เพียงวาง 1 บรรทัดนี้ลงใน AI Agent ของคุณเพื่อรันการตรวจสอบแบบอ่านอย่างเดียวของ LONGINUS โดยอัตโนมัติ (Apache-2.0, Node.js >=22.18.0, 0 การพึ่งพา npm) |
 
 </details>
 
 ## English
 
-> 🌐 **Language**: **English** | [日本語に切り替え](#日本語)
-
-Load this OSS repository into your company's AI agent to **instantly build an in-house Cloud, DX, and AI Security Consulting AI**—making external consulting firms completely unnecessary—powered by offline GCP × Firebase attack-path analysis, a 5-pillar architecture maturity scorecard & consulting ROI estimator, autonomous 30/60/90-day remediation blueprints (`--format blueprint`), a read-only MCP Airlock, and optional Sovereign AI evidence review.
+Load this OSS repository (**LONGINUS**) into your company's AI agent to **instantly build an in-house Cloud, DX, and AI Security Consulting AI**—making external consulting firms completely unnecessary—powered by offline GCP × Firebase attack-path analysis, a 4-Stack Code & Secret Shield, a 5-pillar architecture maturity scorecard & consulting ROI estimator, autonomous 30/60/90-day remediation blueprints (`--format blueprint`), a read-only MCP Airlock, and optional Sovereign AI evidence review.
 
 - **Apache-2.0** — open source, instant in-house consulting AI for free (`$0`)
 - **Node.js >=22.18.0** — native erasable TypeScript
 - **0 npm dependencies** — runtime and development
 - **Read-only & offline by default** — zero cloud credentials required for local audit
-- **Switchable CLI language (`--lang en|ja`)** — 100% English (`--lang en`, default) or 100% Japanese (`--lang ja` or `ATLAS_LANG=ja`) output
+- **20-Language Support (`--lang <tag>`)** — supports all 20 global languages (`en`, `ja`, `zh-Hans`, `zh-Hant`, `ko`, `es`, `pt`, `fr`, `de`, `it`, `ru`, `uk`, `pl`, `nl`, `tr`, `ar`, `hi`, `id`, `vi`, `th`)
 
 ```mermaid
 flowchart LR
@@ -88,17 +77,17 @@ flowchart LR
   passes --> gate["Non-Majority Fail-Closed Gate: BLOCKER / ERROR / PASS"]
 ```
 
-### Why Atlas Sovereign (Making External Consulting Firms Unnecessary)
+### Why LONGINUS (Making External Consulting Firms Unnecessary)
 
-Global technology and DX consulting firms typically charge tens or hundreds of thousands of dollars (`$75,000–$350,000+`) over 3 to 6 months to assess enterprise cloud architectures, audit IAM and CI/CD trust boundaries, design AI/data guardrails and FinOps cost controls, and produce a 30/60/90-day transformation roadmap. **By loading `Atlas Sovereign` into your company's existing AI agent, your internal staff can instantly build a dedicated in-house Cloud, DX, and AI Security Consulting AI in seconds for $0—making external consulting firms completely unnecessary.**
+Global technology and DX consulting firms typically charge tens or hundreds of thousands of dollars (`$75,000–$350,000+`) over 3 to 6 months to assess enterprise cloud architectures, audit IAM and CI/CD trust boundaries, design AI/data guardrails and FinOps cost controls, and produce a 30/60/90-day transformation roadmap. **By loading `LONGINUS` into your company's existing AI agent, your internal staff can instantly build a dedicated in-house Cloud, DX, and AI Security Consulting AI in seconds for $0—making external consulting firms completely unnecessary.**
 
-Isolated scanners can identify an exposed resource without connecting it to the identity and permissions that make the exposure consequential. `Atlas Sovereign` correlates supported evidence across GCP × Firebase boundaries: public Firebase Rules, Cloud Run exposure, GKE node identity exposure, Cloud SQL public networks (`0.0.0.0/0`, unencrypted public IPv4, or missing resilience guardrails), Vertex AI Workbench public IP exposure, BigQuery public dataset grants (`allUsers` / `allAuthenticatedUsers`), unbounded serverless scaling (`finops/unbounded-serverless-scaling`), or Workload Identity Federation (WIF) can form entry points into paths involving runtime or federated identities (including Compute Engine, App Engine, and Cloud Build default service accounts), IAM privilege escalation, and access to Secret Manager, BigQuery, Cloud SQL, or Cloud Storage. The graph distinguishes observed or statically established relationships from `potential` transitions that depend on application behavior or deployment context.
+Isolated scanners can identify an exposed resource without connecting it to the identity and permissions that make the exposure consequential. `LONGINUS` correlates supported evidence across GCP × Firebase boundaries: public Firebase Rules, Cloud Run exposure, GKE node identity exposure, Cloud SQL public networks (`0.0.0.0/0`, unencrypted public IPv4, or missing resilience guardrails), Vertex AI Workbench public IP exposure, BigQuery public dataset grants (`allUsers` / `allAuthenticatedUsers`), unbounded serverless scaling (`finops/unbounded-serverless-scaling`), or Workload Identity Federation (WIF) can form entry points into paths involving runtime or federated identities (including Compute Engine, App Engine, and Cloud Build default service accounts), IAM privilege escalation, and access to Secret Manager, BigQuery, Cloud SQL, or Cloud Storage. The graph distinguishes observed or statically established relationships from `potential` transitions that depend on application behavior or deployment context.
 
 With `--format blueprint --emit-patch`, your internal AI coding agent automatically generates an executive risk summary, a **5-Pillar Architecture Maturity Scorecard (`0–100`, Grade `A`–`F`)**, an **Estimated External Consulting Equivalent Saved (`$` ROI)**, a 30/60/90-day remediation roadmap, and review-only unified diffs offline in seconds—replacing multi-month external consulting engagements with deterministic code and self-driving CI gates.
 
 AI SecOps adds another boundary: an assistant may receive hostile cloud logs or invoke tools with excessive privileges. The MCP Airlock mechanically restricts forwarded requests through fail-closed tool-name policies, while secret redaction and injection sanitization prepare untrusted telemetry for review. These controls have explicit limits; they do not establish that an upstream program is trustworthy or that every model instruction attack is neutralized.
 
-### What Atlas Sovereign Can Do (6 Core Capabilities)
+### What LONGINUS Can Do (6 Core Capabilities)
 
 | Capability | What It Does | Output / Value |
 | --- | --- | --- |
@@ -141,7 +130,7 @@ npm package publication has **not been verified**. Once a trusted release is ava
 npx @atlas-sec/sovereign audit .
 ```
 
-Defaults are `--format table`, `--fail-on high`, `--lang en` (or `ATLAS_LANG=en|ja`), and `--prover-mode gemini`. Formats are `table|json|sarif|blueprint`; languages are `en|ja`; failure thresholds are `blocker|high|medium`. Reports and proposed changes go to `stdout` only. `--format blueprint` emits a structured Markdown executive risk summary, a 30/60/90-day autonomous remediation roadmap, prioritized findings mapped to control domains, reachable cross-boundary attack paths, and review-only diffs when combined with `--emit-patch`. `--emit-patch` includes review-only unified diffs in the selected report format; it never applies them or modifies target files or cloud resources.
+Defaults are `--format table`, `--fail-on high`, `--lang en` (or `ATLAS_LANG=<tag>` across all 20 supported languages: `en|ja|zh-Hans|zh-Hant|ko|es|pt|fr|de|it|ru|uk|pl|nl|tr|ar|hi|id|vi|th`), and `--prover-mode gemini`. Formats are `table|json|sarif|blueprint`; failure thresholds are `blocker|high|medium`. Reports and proposed changes go to `stdout` only. `--format blueprint` emits a structured Markdown executive risk summary, a 30/60/90-day autonomous remediation roadmap, prioritized findings mapped to control domains, reachable cross-boundary attack paths, and review-only diffs when combined with `--emit-patch`. `--emit-patch` includes review-only unified diffs in the selected report format; it never applies them or modifies target files or cloud resources.
 
 | Exit code | Meaning |
 | --- | --- |
@@ -151,7 +140,7 @@ Defaults are `--format table`, `--fail-on high`, `--lang en` (or `ATLAS_LANG=en|
 
 ### Instant In-House Consulting AI (Zero External Consultants Needed)
 
-When an enterprise representative loads **`Atlas Sovereign`** into their company's internal AI agent (such as Gemini CLI, Antigravity, or Vertex AI), that internal AI immediately acquires the methodology, cross-boundary graph engine, 5-pillar maturity scorecard, and remediation patterns of a top-tier cloud & AI consulting firm—**completely eliminating the need to hire external consultants (`$0` open-source self-service)**.
+When an enterprise representative loads **`LONGINUS`** into their company's internal AI agent (such as Gemini CLI, Antigravity, or Vertex AI), that internal AI immediately acquires the methodology, cross-boundary graph engine, 5-pillar maturity scorecard, and remediation patterns of a top-tier cloud & AI consulting firm—**completely eliminating the need to hire external consultants (`$0` open-source self-service)**.
 
 **1-Line Copy-Paste Prompt for Your AI Agent (`Apache-2.0 — $0`, Zero Commands or Options to Type)**
 
@@ -162,7 +151,7 @@ Run https://github.com/Atlas-Associates-Inc/atlas-longinus
 | Approach | Cost & Duration | How It Works | Cloud Credential Handover |
 | --- | --- | --- | --- |
 | **Traditional External Consulting Firms** | **$75,000–$350,000+**<br/>*(3–6 months)* | External consultants conduct manual interviews, review configs, and deliver static slide decks; know-how leaves when the contract ends. | Often requires IAM reader roles or NDA log exports |
-| **Atlas Sovereign: Instant In-House Consulting AI (Apache-2.0)** | **$0 / Free**<br/>*(Instant / Self-Service)* | Load `Atlas Sovereign` into your company's AI agent to run the 4-step consulting playbook, apply review-only patches, and enable the CI gate **with zero external consultants**. | **Zero** (100% offline local static & exported-telemetry analysis) |
+| **LONGINUS: Instant In-House Consulting AI (Apache-2.0)** | **$0 / Free**<br/>*(Instant / Self-Service)* | Paste the 1-line URL into your company's AI agent to run the full audit, apply review-only patches, and enable the CI gate **with zero external consultants**. | **Zero** (100% offline local static & exported-telemetry analysis) |
 
 ### L0: Deterministic Cross-Boundary Attack Graph
 
@@ -328,15 +317,18 @@ Test files run sequentially so deterministic wall-clock parser budgets do not co
 
 ## 日本語
 
-> 🌐 **言語**: [Switch to English](#english) | **日本語**
+> ⚡ **0秒スタート（コマンドや説明文は1文字も不要）**: お使いの AI エージェント（**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** 等）に **以下の1行を貼るだけ** です：
+> ```text
+> https://github.com/Atlas-Associates-Inc/atlas-longinus を実行して
+> ```
 
-各企業の担当者が本リポジトリ（**Atlas Sovereign**）を自社 AI エージェントに読み込ませるだけで、**高額な外部コンサルティングファームと同等以上の「自社専用 DX・クラウド・AI セキュリティコンサル AI」を一瞬で構築し、外部コンサルを一切不要にします**。オフラインの GCP × Firebase 攻撃経路解析、5領域アーキテクチャ成熟度スコアカード＆外部コンサル削減額試算、30/60/90日の自律改修設計書（`--format blueprint --lang ja`）、読み取り専用 MCP Airlock、および任意の Sovereign AI 証拠検証を備えています。
+各企業の担当者が本リポジトリ（**LONGINUS**）を自社 AI エージェントに読み込ませるだけで、**高額な外部コンサルティングファームと同等以上の「自社専用 DX・クラウド・AI セキュリティコンサル AI」を一瞬で構築し、外部コンサルを一切不要にします**。オフラインの GCP × Firebase 攻撃経路解析、4-Stack Code Shield、5領域アーキテクチャ成熟度スコアカード＆外部コンサル削減額試算、30/60/90日の自律改修設計書（`--format blueprint --lang ja`）、読み取り専用 MCP Airlock、および任意の Sovereign AI 証拠検証を備えています。
 
 - **Apache-2.0** — オープンソース・完全無料で自社専用コンサル AI を即時構築（`¥0`）
 - **Node.js >=22.18.0** — ネイティブ実行可能な erasable TypeScript
-- **npm 依存パッケージ 0** — 実行時・開発時ともに外部依存ゼロ
+- **npm 依存パッケージ 0** — 実行時・開発時ともに外部依存ゼロ（`npm install` 不要）
 - **既定で読み取り専用・オフライン** — ローカル監査にクラウド認証情報は一切不要
-- **日英出力の完全切り替え（`--lang ja|en`）** — `--lang ja`（または環境変数 `ATLAS_LANG=ja`）でレポート・設計書・ヘルプを100%日本語出力、`--lang en` で100%英語出力
+- **世界20言語完全対応（`--lang <tag>`）** — 日本語（`ja`）・英語（`en`）を含む世界20言語（`en|ja|zh-Hans|zh-Hant|ko|es|pt|fr|de|it|ru|uk|pl|nl|tr|ar|hi|id|vi|th`）に対応
 
 ```mermaid
 flowchart LR
@@ -348,17 +340,17 @@ flowchart LR
   passes --> gate["非多数決 Fail-Closed ゲート: BLOCKER / ERROR / PASS"]
 ```
 
-### なぜ Atlas Sovereign か（外部コンサルを一瞬で不要にする）
+### なぜ LONGINUS か（外部コンサルを一瞬で不要にする）
 
-グローバルな DX・テクノロジーコンサルティングファームにクラウド設計評価・IAM／WIF 統制・AI／データ基盤ガードレール設計・FinOps コスト統制・30/60/90日ロードマップ策定を依頼すると、通常 3〜6ヶ月で数千万円（¥1,000万〜¥5,000万円以上）の費用がかかります。**`Atlas Sovereign` を各企業の担当者が自社の AI エージェントに読み込ませるだけで、そうしたコンサル会社が提供する知見・横断検査・改修パッチ生成を備えた「自社専用の超一流 DX・クラウド・AI コンサル AI」を一瞬（数秒・¥0）で社内構築でき、外部コンサルティング会社を一切不要にします。**
+グローバルな DX・テクノロジーコンサルティングファームにクラウド設計評価・IAM／WIF 統制・AI／データ基盤ガードレール設計・FinOps コスト統制・30/60/90日ロードマップ策定を依頼すると、通常 3〜6ヶ月で数千万円（¥1,000万〜¥5,000万円以上）の費用がかかります。**`LONGINUS` を各企業の担当者が自社の AI エージェントに読み込ませるだけで、そうしたコンサル会社が提供する知見・横断検査・改修パッチ生成を備えた「自社専用の超一流 DX・クラウド・AI コンサル AI」を一瞬（数秒・¥0）で社内構築でき、外部コンサルティング会社を一切不要にします。**
 
-個別のスキャナーでは、公開されたリソースを検出できても、その影響を決める ID と権限のつながりを見落とす場合があります。`Atlas Sovereign` は、GCP × Firebase の境界をまたぐ対応済みの証拠を関連付けます。公開された Firebase Rules、Cloud Run、GKE ノード ID の露出、Cloud SQL の全公開ネットワーク（`0.0.0.0/0`、非暗号化公開 IPv4、または削除保護・自動バックアップ欠如）、Vertex AI Workbench の公開 IP 露出、BigQuery データセットの公開共有（`allUsers` / `allAuthenticatedUsers`）、サーバーレスの上限なしスケーリング（`finops/unbounded-serverless-scaling`）、Workload Identity Federation（WIF）を入口として、実行 ID またはフェデレーション ID（Compute Engine、App Engine、Cloud Build の既定サービスアカウントを含む）、IAM 権限昇格、Secret Manager・BigQuery・Cloud SQL・Cloud Storage へのアクセスに至る経路を扱います。グラフでは、観測済みまたは静的に確認できた関係と、アプリケーションの動作やデプロイ環境に依存する `potential` な遷移を区別します。
+個別のスキャナーでは、公開されたリソースを検出できても、その影響を決める ID と権限のつながりを見落とす場合があります。`LONGINUS` は、GCP × Firebase の境界をまたぐ対応済みの証拠を関連付けます。公開された Firebase Rules、Cloud Run、GKE ノード ID の露出、Cloud SQL の全公開ネットワーク（`0.0.0.0/0`、非暗号化公開 IPv4、または削除保護・自動バックアップ欠如）、Vertex AI Workbench の公開 IP 露出、BigQuery データセットの公開共有（`allUsers` / `allAuthenticatedUsers`）、サーバーレスの上限なしスケーリング（`finops/unbounded-serverless-scaling`）、Workload Identity Federation（WIF）を入口として、実行 ID またはフェデレーション ID（Compute Engine、App Engine、Cloud Build の既定サービスアカウントを含む）、IAM 権限昇格、Secret Manager・BigQuery・Cloud SQL・Cloud Storage へのアクセスに至る経路を扱います。グラフでは、観測済みまたは静的に確認できた関係と、アプリケーションの動作やデプロイ環境に依存する `potential` な遷移を区別します。
 
 さらに `--format blueprint --emit-patch --lang ja` を使うことで、自社の AI コーディングエージェントが経営・情シス向けのリスク要約、**5領域アーキテクチャ成熟度スコアカード（`0–100` 点・Grade `A`〜`F`）**、**外部コンサル削減効果の自動試算（`¥` ROI）**、30/60/90日の自律改修ロードマップ、およびレビュー専用の修正 diff を完全な日本語でオフラインかつ数秒で自動生成します。これにより、従来数ヶ月を要した高額な外部コンサルティング診断を、決定論的なコードと自走型 CI ゲートへ完全に置き換えます。
 
 AI SecOps には別の境界もあります。アシスタントは攻撃用の指示を含むクラウドログを受け取ったり、過剰な権限を持つツールを呼び出したりする可能性があります。MCP Airlock は、安全側に拒否するツール名ポリシーで転送要求を機械的に制限し、秘密情報の除去とインジェクションのサニタイズによって、信頼できないテレメトリーをレビュー可能な形にします。これらの制御には限界があり、上流プログラムの信頼性や、モデルへのあらゆる指示攻撃の無効化を証明するものではありません。
 
-### Atlas Sovereign で何ができるか（6大機能）
+### LONGINUS で何ができるか（6大機能）
 
 | 機能領域 | できること | 得られる成果・価値 |
 | --- | --- | --- |
@@ -403,7 +395,7 @@ npm パッケージの公開状況は**未確認**です。信頼できるリリ
 npx @atlas-sec/sovereign audit . --lang ja
 ```
 
-既定値は `--format table`、`--fail-on high`、`--lang en`（環境変数 `ATLAS_LANG=ja|en` でも指定可）、`--prover-mode gemini` です。出力形式は `table|json|sarif|blueprint`、出力言語は `en|ja`、失敗とする重大度のしきい値は `blocker|high|medium` から選択します。レポートと変更案は `stdout`（標準出力）のみに出力します。`--format blueprint` は、経営・情シス向けリスク要約、30/60/90日の自律改修ロードマップ、統制ドメイン別の優先指摘一覧、到達可能なクロス境界攻撃経路、および `--emit-patch` 併用時のレビュー専用 diff を構造化 Markdown として出力します。`--emit-patch` は選択した形式のレポートにレビュー専用の unified diff を含めますが、適用は行わず、対象ファイルやクラウドリソースを変更しません。
+既定値は `--format table`、`--fail-on high`、`--lang en`（環境変数 `ATLAS_LANG=<tag>` でも全20言語 `en|ja|zh-Hans|zh-Hant|ko|es|pt|fr|de|it|ru|uk|pl|nl|tr|ar|hi|id|vi|th` を指定可）、`--prover-mode gemini` です。出力形式は `table|json|sarif|blueprint`、失敗とする重大度のしきい値は `blocker|high|medium` から選択します。レポートと変更案は `stdout`（標準出力）のみに出力します。`--format blueprint` は、経営・情シス向けリスク要約、30/60/90日の自律改修ロードマップ、統制ドメイン別の優先指摘一覧、到達可能なクロス境界攻撃経路、および `--emit-patch` 併用時のレビュー専用 diff を構造化 Markdown として出力します。`--emit-patch` は選択した形式のレポートにレビュー専用の unified diff を含めますが、適用は行わず、対象ファイルやクラウドリソースを変更しません。
 
 | 終了コード | 意味 |
 | --- | --- |
@@ -413,7 +405,7 @@ npx @atlas-sec/sovereign audit . --lang ja
 
 ### コンサル不要：外部コンサルAIを自社AIで一瞬で構築する自律導入スキーム
 
-各企業の担当者は、この **`Atlas Sovereign`** リポジトリを自社の AI エージェント（Gemini CLI、Antigravity、Vertex AI 等）に読み込ませるだけで、**高額な外部の DX・クラウドコンサルティングファームを雇うことなく、自社専用の「超一流コンサル AI」を一瞬で構築し、完全無料（¥0）で内製強化を完結**できます。
+各企業の担当者は、この **`LONGINUS`** リポジトリを自社の AI エージェント（Gemini CLI、Antigravity、Vertex AI 等）に読み込ませるだけで、**高額な外部の DX・クラウドコンサルティングファームを雇うことなく、自社専用の「超一流コンサル AI」を一瞬で構築し、完全無料（¥0）で内製強化を完結**できます。
 
 **自社AIにそのまま貼るだけの1行プロンプト（`Apache-2.0 — ¥0 完全自走・コマンドも説明文も不要`）**
 
@@ -424,7 +416,7 @@ https://github.com/Atlas-Associates-Inc/atlas-longinus を実行して
 | 導入形態 | 費用・期間 | 仕組み・特徴 | クラウド認証情報の引き渡し |
 | --- | --- | --- | --- |
 | **従来の外部コンサルティングファーム** | **¥10,000,000〜¥50,000,000+**<br/>*（3〜6ヶ月）* | 外部コンサルタントがヒアリング・設定確認・スライド作成を手作業で実施。契約終了とともに知見が流出。 | IAM 閲覧権限の付与やログ提出が必要な場合あり |
-| **Atlas Sovereign: 自社コンサルAI即時構築（Apache-2.0）** | **¥0（完全無料）**<br/>*（即日・数秒で構築）* | `Atlas Sovereign` を自社 AI に読み込ませて「社内専属コンサル AI」を一瞬で構築。4ステップの診断・修正 diff 適用・CI ゲート化まで**外部コンサル不要で完全自走**。 | **一切不要**（100% オフラインのローカル静的・エクスポート済みテレメトリー解析） |
+| **LONGINUS: 自社コンサルAI即時構築（Apache-2.0）** | **¥0（完全無料）**<br/>*（即日・数秒で構築）* | 1行の URL を自社 AI に貼るだけで「社内専属コンサル AI」を一瞬で構築。診断・修正 diff 適用・CI ゲート化まで**外部コンサル不要で完全自走**。 | **一切不要**（100% オフラインのローカル静的・エクスポート済みテレメトリー解析） |
 
 ### L0: 決定論的クロス境界攻撃グラフ
 
@@ -593,8 +585,6 @@ npm test
 <a id="zh-hans"></a>
 ## 简体中文 (Simplified Chinese)
 
-> 🌐 **语言切换**: [日本語](#日本語) | [English](#english) | **简体中文**
-
 无需记忆或输入任何命令与参数，只需将以下 **1 行文本**粘贴到您的 AI 代理（**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** 等）中即可自动执行只读审计：
 
 ```text
@@ -602,14 +592,12 @@ npm test
 ```
 
 - **核心能力**: 离线 GCP × Firebase 跨边界攻击路径分析（支持 CEL 函数与 `let` 绑定 AST 解析、管理员受控公开资产零误报、作用域级扣分去重）、4-Stack 源码与密钥护盾（1,529 种密钥模式脱敏）、5 大领域架构成熟度评分卡（0–100 分）、30/60/90 天修复路线图、只读 MCP Airlock 及本地 Web 控制台（`http://127.0.0.1:4310`）。
-- **技术规格与安全边界**: Apache-2.0 开源免费（0 外部 npm 依赖，Node.js `>=22.18.0`）。权威技术规范与安全边界以 [English](#english) 与 [日本語](#日本語) 章节为准。
+- **技术规格**: Apache-2.0 开源免费（0 外部 npm 依赖，Node.js `>=22.18.0`，支持 `--lang zh-Hans`）。
 
 ---
 
 <a id="zh-hant"></a>
 ## 繁體中文 (Traditional Chinese)
-
-> 🌐 **語言切換**: [日本語](#日本語) | [English](#english) | **繁體中文**
 
 無需記憶或輸入任何指令與參數，只需將以下 **1 行文字**貼上到您的 AI 代理（**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** 等）即可自動執行唯讀審計：
 
@@ -618,14 +606,12 @@ npm test
 ```
 
 - **核心能力**: 離線 GCP × Firebase 跨邊界攻擊路徑分析（支援 CEL 函式與 `let` 綁定 AST 解析、管理員受控公開資產零誤報、消除三重扣分）、4-Stack 原始碼與金鑰護盾、5 大領域架構成熟度評分卡（0–100 分）、30/60/90 天修復藍圖、唯讀 MCP Airlock 及本機 Web 儀表板（`http://127.0.0.1:4310`）。
-- **技術規範與安全邊界**: Apache-2.0 開源免費（0 外部 npm 相依性，Node.js `>=22.18.0`）。正式技術規範與安全邊界以 [English](#english) 與 [日本語](#日本語) 章節為準。
+- **技術規範**: Apache-2.0 開源免費（0 外部 npm 相依性，Node.js `>=22.18.0`，支援 `--lang zh-Hant`）。
 
 ---
 
 <a id="ko"></a>
 ## 한국어 (Korean)
-
-> 🌐 **언어 전환**: [日本語](#日本語) | [English](#english) | **한국어**
 
 명령어나 옵션을 한 글자도 외울 필요 없이 AI 에이전트(**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** 등)에 아래 **한 줄만 붙여넣으면** 읽기 전용 감사가 자동 실행됩니다:
 
@@ -634,14 +620,12 @@ https://github.com/Atlas-Associates-Inc/atlas-longinus 실행해줘
 ```
 
 - **핵심 기능**: 오프라인 GCP × Firebase 교차 경계 공격 경로 분석(CEL 함수 및 `let` 바인딩 AST 해석, 관리자 전용 공개 에셋 오탐 제로, 3중 감점 폐지), 4-Stack 코드 실드, 5대 영역 아키텍처 성숙도 스코어카드(0–100점), 30/60/90일 개선 로드맵, 읽기 전용 MCP Airlock 및 로컬 웹 UI(`http://127.0.0.1:4310`).
-- **기술 사양 및 보안 경계**: Apache-2.0 오픈소스(npm 의존성 0개, Node.js `>=22.18.0`). 공식 기술 사양은 [English](#english) 및 [日本語](#日本語) 섹션을 따릅니다.
+- **기술 사양**: Apache-2.0 오픈소스(npm 의존성 0개, Node.js `>=22.18.0`, `--lang ko` 지원).
 
 ---
 
 <a id="es"></a>
 ## Español (Spanish)
-
-> 🌐 **Idioma**: [日本語](#日本語) | [English](#english) | **Español**
 
 No necesita memorizar ni escribir ningún comando ni opción; simplemente pegue esta **1 línea** en su agente de IA (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, etc.):
 
@@ -650,14 +634,12 @@ Ejecuta https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
 - **Capacidades clave**: Analizador offline de rutas de ataque GCP × Firebase (resolución AST de funciones CEL, cero falsos positivos en activos públicos restringidos a administradores y eliminación de penalización triple), 4-Stack Code Shield, tarjeta de puntuación de 5 pilares (0–100), hoja de ruta de 30/60/90 días, MCP Airlock de solo lectura y panel web local (`http://127.0.0.1:4310`).
-- **Límites y especificaciones**: Apache-2.0, Node.js `>=22.18.0`, 0 dependencias npm. Regido por las secciones [English](#english) y [日本語](#日本語).
+- **Especificaciones**: Apache-2.0, Node.js `>=22.18.0`, 0 dependencias npm, soporte `--lang es`.
 
 ---
 
 <a id="pt"></a>
 ## Português (Portuguese)
-
-> 🌐 **Idioma**: [日本語](#日本語) | [English](#english) | **Português**
 
 Você não precisa memorizar nenhum comando ou opção; basta colar esta **1 linha** no seu agente de IA (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, etc.):
 
@@ -666,14 +648,12 @@ Execute https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
 - **Principais recursos**: Analisador offline de caminhos de ataque GCP × Firebase (resolução AST de funções CEL, zero falsos positivos em ativos públicos restritos a administradores e fim da penalidade tripla), 4-Stack Code Shield, scorecard de maturidade em 5 pilares (0–100), roteiro de 30/60/90 dias, MCP Airlock somente leitura e painel web local (`http://127.0.0.1:4310`).
-- **Especificações oficiais**: Apache-2.0, Node.js `>=22.18.0`, 0 dependências npm. Regido pelas seções [English](#english) e [日本語](#日本語).
+- **Especificações**: Apache-2.0, Node.js `>=22.18.0`, 0 dependências npm, suporte `--lang pt`.
 
 ---
 
 <a id="fr"></a>
 ## Français (French)
-
-> 🌐 **Langue**: [日本語](#日本語) | [English](#english) | **Français**
 
 Aucune commande ni option à mémoriser : collez simplement cette **seule ligne** dans votre agent IA (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, etc.) :
 
@@ -682,14 +662,12 @@ Exécute https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
 - **Fonctionnalités clés**: Analyseur hors ligne de chemins d'attaque GCP × Firebase (résolution AST des fonctions CEL, zéro faux positif sur les ressources publiques gérées par les administrateurs, suppression de la triple pénalité), 4-Stack Code Shield, tableau de bord à 5 piliers (0–100), feuille de route 30/60/90 jours, MCP Airlock en lecture seule et interface web locale (`http://127.0.0.1:4310`).
-- **Spécifications officielles**: Apache-2.0, Node.js `>=22.18.0`, 0 dépendance npm. Régi par les sections [English](#english) et [日本語](#日本語).
+- **Spécifications**: Apache-2.0, Node.js `>=22.18.0`, 0 dépendance npm, support `--lang fr`.
 
 ---
 
 <a id="de"></a>
 ## Deutsch (German)
-
-> 🌐 **Sprache**: [日本語](#日本語) | [English](#english) | **Deutsch**
 
 Sie müssen sich kein einziges Kommando merken – fügen Sie einfach diese **eine Zeile** in Ihren KI-Agenten (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** usw.) ein:
 
@@ -698,14 +676,12 @@ Führe https://github.com/Atlas-Associates-Inc/atlas-longinus aus
 ```
 
 - **Kernfunktionen**: Offline-Angriffspfad-Analysator für GCP × Firebase (CEL-Funktions-AST-Auflösung, null Fehlalarme bei schreibgeschützten öffentlichen Assets, keine Dreifach-Abzüge), 4-Stack Code Shield, 5-Säulen-Scorecard (0–100), 30/60/90-Tage-Roadmap, schreibgeschützter MCP-Airlock und lokales Web-Dashboard (`http://127.0.0.1:4310`).
-- **Spezifikationen**: Apache-2.0, Node.js `>=22.18.0`, 0 npm-Abhängigkeiten. Maßgeblich sind die Abschnitte [English](#english) und [日本語](#日本語).
+- **Spezifikationen**: Apache-2.0, Node.js `>=22.18.0`, 0 npm-Abhängigkeiten, `--lang de`.
 
 ---
 
 <a id="it"></a>
 ## Italiano (Italian)
-
-> 🌐 **Lingua**: [日本語](#日本語) | [English](#english) | **Italiano**
 
 Non serve memorizzare alcun comando o opzione: incolla semplicemente questa **singola riga** nel tuo agente IA (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, ecc.):
 
@@ -714,14 +690,12 @@ Esegui https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
 - **Funzionalità principali**: Analizzatore offline dei percorsi di attacco GCP × Firebase (risoluzione AST delle funzioni CEL, zero falsi positivi sugli asset pubblici protetti in scrittura, eliminazione della tripla penalità), 4-Stack Code Shield, scorecard a 5 pilastri (0–100), roadmap a 30/60/90 giorni, MCP Airlock in sola lettura e interfaccia web locale (`http://127.0.0.1:4310`).
-- **Specifiche ufficiali**: Apache-2.0, Node.js `>=22.18.0`, 0 dipendenze npm. Regolato dalle sezioni [English](#english) e [日本語](#日本語).
+- **Specifiche**: Apache-2.0, Node.js `>=22.18.0`, 0 dipendenze npm, supporto `--lang it`.
 
 ---
 
 <a id="ru"></a>
 ## Русский (Russian)
-
-> 🌐 **Язык**: [日本語](#日本語) | [English](#english) | **Русский**
 
 Не нужно запоминать команды или флаги — просто вставьте эту **одну строку** в ваш ИИ-агент (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** и др.):
 
@@ -730,14 +704,12 @@ Esegui https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
 - **Ключевые возможности**: Офлайн-анализатор путей атак GCP × Firebase (AST-анализ функций CEL, отсутствие ложных срабатываний на публичных ресурсах с защитой от записи, устранение тройного штрафа), 4-Stack Code Shield, оценка зрелости по 5 направлениям (0–100), план на 30/60/90 дней, MCP Airlock только для чтения и локальный веб-интерфейс (`http://127.0.0.1:4310`).
-- **Спецификации**: Apache-2.0, Node.js `>=22.18.0`, 0 зависимостей npm. Определяется разделами [English](#english) и [日本語](#日本語).
+- **Спецификации**: Apache-2.0, Node.js `>=22.18.0`, 0 зависимостей npm, поддержка `--lang ru`.
 
 ---
 
 <a id="uk"></a>
 ## Українська (Ukrainian)
-
-> 🌐 **Мова**: [日本語](#日本語) | [English](#english) | **Українська**
 
 Не потрібно запам'ятовувати жодної команди — просто вставте цей **один рядок** у ваш ШІ-агент (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** тощо):
 
@@ -746,14 +718,12 @@ Esegui https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
 - **Основні можливості**: Офлайн-аналізатор шляхів атак GCP × Firebase (AST-аналіз функцій CEL, нуль хибних спрацьовувань на публічних ресурсах із захистом запису, скасування потрійного штрафу), 4-Stack Code Shield, оцінка за 5 напрямами (0–100), план на 30/60/90 днів, MCP Airlock лише для читання та локальний вебінтерфейс (`http://127.0.0.1:4310`).
-- **Специфікації**: Apache-2.0, Node.js `>=22.18.0`, 0 залежностей npm. Регулюється розділами [English](#english) і [日本語](#日本語).
+- **Специфікації**: Apache-2.0, Node.js `>=22.18.0`, 0 залежностей npm, підтримка `--lang uk`.
 
 ---
 
 <a id="pl"></a>
 ## Polski (Polish)
-
-> 🌐 **Język**: [日本語](#日本語) | [English](#english) | **Polski**
 
 Nie musisz pamiętać żadnych poleceń ani opcji — po prostu wklej tę **jedną linię** do swojego agenta AI (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** itp.):
 
@@ -762,14 +732,12 @@ Uruchom https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
 - **Główne funkcje**: Analizator ścieżek ataków offline GCP × Firebase (analiza AST funkcji CEL, zero fałszywych alarmów dla publicznych zasobów chronionych przed zapisem, brak potrójnej kary), 4-Stack Code Shield, karta wyników 5 filarów (0–100), plan 30/60/90 dni, MCP Airlock tylko do odczytu oraz lokalny panel WWW (`http://127.0.0.1:4310`).
-- **Specyfikacja**: Apache-2.0, Node.js `>=22.18.0`, 0 zależności npm. Określone w sekcjach [English](#english) i [日本語](#日本語).
+- **Specyfikacja**: Apache-2.0, Node.js `>=22.18.0`, 0 zależności npm, obsługa `--lang pl`.
 
 ---
 
 <a id="nl"></a>
 ## Nederlands (Dutch)
-
-> 🌐 **Taal**: [日本語](#日本語) | [English](#english) | **Nederlands**
 
 U hoeft geen enkel commando te onthouden — plak gewoon deze **ene regel** in uw AI-agent (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, enz.):
 
@@ -778,14 +746,12 @@ Voer https://github.com/Atlas-Associates-Inc/atlas-longinus uit
 ```
 
 - **Belangrijkste functies**: Offline GCP × Firebase aanvalspad-analyser (CEL-functie AST-analyse, nul fout-positieven op schrijfbeveiligde publieke assets, geen drievoudige strafpunten), 4-Stack Code Shield, 5-pijlerscorecard (0–100), 30/60/90-dagen-routekaart, alleen-lezen MCP Airlock en lokaal webdashboard (`http://127.0.0.1:4310`).
-- **Specificaties**: Apache-2.0, Node.js `>=22.18.0`, 0 npm-afhankelijkheden. Bepaald door de secties [English](#english) en [日本語](#日本語).
+- **Specificaties**: Apache-2.0, Node.js `>=22.18.0`, 0 npm-afhankelijkheden, ondersteuning voor `--lang nl`.
 
 ---
 
 <a id="tr"></a>
 ## Türkçe (Turkish)
-
-> 🌐 **Dil**: [日本語](#日本語) | [English](#english) | **Türkçe**
 
 Tek bir komut veya seçenek ezberlemenize gerek yok — AI ajanınıza (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** vb.) yalnızca şu **1 satırı** yapıştırın:
 
@@ -794,14 +760,12 @@ https://github.com/Atlas-Associates-Inc/atlas-longinus çalıştır
 ```
 
 - **Temel Özellikler**: Çevrimdışı GCP × Firebase saldırı yolu analizcisi (CEL fonksiyonu AST çözümlemesi, yazma korumalı genel varlıklarda sıfır yanlış pozitif, üçlü ceza kaldırıldı), 4-Stack Code Shield, 5 sütunlu puan kartı (0–100), 30/60/90 günlük yol haritası, salt okunur MCP Airlock ve yerel web arayüzü (`http://127.0.0.1:4310`).
-- **Resmi Teknik Özellikler**: Apache-2.0, Node.js `>=22.18.0`, 0 npm bağımlılığı. [English](#english) ve [日本語](#日本語) bölümleriyle belirlenir.
+- **Teknik Özellikler**: Apache-2.0, Node.js `>=22.18.0`, 0 npm bağımlılığı, `--lang tr` desteği.
 
 ---
 
 <a id="ar"></a>
 ## العربية (Arabic)
-
-> 🌐 **اللغة**: [日本語](#日本語) | [English](#english) | **العربية**
 
 لا حاجة لحفظ أي أمر أو خيار على الإطلاق — فقط الصق هذا **السطر الواحد** في وكيل الذكاء الاصطناعي الخاص بك (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** إلخ):
 
@@ -810,14 +774,12 @@ https://github.com/Atlas-Associates-Inc/atlas-longinus çalıştır
 ```
 
 - **القدرات الأساسية**: محلل مسارات الهجوم عبر حدود GCP × Firebase دون اتصال (تحليل AST لدوال CEL، صفر إنذارات كاذبة للأصول العامة المحمية ضد الكتابة، وإلغاء العقوبة الثلاثية)، ودرع الكود رباعي الطبقات (4-Stack Code Shield)، وبطاقة الأداء الخماسية (0–100)، وخارطة طريق 30/60/90 يوماً، وحاجز MCP Airlock للقراءة فقط، ولوحة تحكم محلية (`http://127.0.0.1:4310`).
-- **المواصفات المعتمدة**: ترخيص Apache-2.0، وNode.js `>=22.18.0`، و0 تبعيات npm. محكوم بقسمي [English](#english) و[日本語](#日本語).
+- **المواصفات**: ترخيص Apache-2.0، وNode.js `>=22.18.0`، و0 تبعيات npm، ودعم `--lang ar`.
 
 ---
 
 <a id="hi"></a>
 ## हिन्दी (Hindi)
-
-> 🌐 **भाषा**: [日本語](#日本語) | [English](#english) | **हिन्दी**
 
 आपको कोई भी कमांड या विकल्प याद रखने की आवश्यकता नहीं है—बस अपने AI एजेंट (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** आदि) में यह **1 पंक्ति** पेस्ट करें:
 
@@ -826,14 +788,12 @@ https://github.com/Atlas-Associates-Inc/atlas-longinus चलाएँ
 ```
 
 - **मुख्य विशेषताएँ**: ऑफ़लाइन GCP × Firebase अटैक-पाथ विश्लेषक (CEL फ़ंक्शन AST विश्लेषण, एडमिन-नियंत्रित पब्लिक एसेट्स पर शून्य फ़ॉल्स पॉज़िटिव, और तिहरे दंड की समाप्ति), 4-Stack Code Shield, 5-पिलर स्कोरकार्ड (0–100), 30/60/90-दिन का रोडमैप, रीड-ओनली MCP Airlock और लोकल वेब डैशबोर्ड (`http://127.0.0.1:4310`)।
-- **आधिकारिक विनिर्देश**: Apache-2.0, Node.js `>=22.18.0`, 0 npm निर्भरताएँ। [English](#english) और [日本語](#日本語) अनुभागों द्वारा शासित।
+- **विनिर्देश**: Apache-2.0, Node.js `>=22.18.0`, 0 npm निर्भरताएँ, `--lang hi` समर्थन।
 
 ---
 
 <a id="id"></a>
 ## Bahasa Indonesia (Indonesian)
-
-> 🌐 **Bahasa**: [日本語](#日本語) | [English](#english) | **Bahasa Indonesia**
 
 Anda tidak perlu menghafal satu karakter perintah pun—cukup tempel **1 baris** ini ke agen AI Anda (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, dll.):
 
@@ -842,14 +802,12 @@ Jalankan https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
 - **Fitur Utama**: Penganalisis jalur serangan GCP × Firebase offline (resolusi AST fungsi CEL, nol positif palsu pada aset publik yang dibatasi tulis, dan penghapusan penalti ganda tiga), 4-Stack Code Shield, kartu skor 5 pilar (0–100), peta jalan 30/60/90 hari, MCP Airlock khusus-baca, dan dasbor web lokal (`http://127.0.0.1:4310`).
-- **Spesifikasi Resmi**: Apache-2.0, Node.js `>=22.18.0`, 0 dependensi npm. Diatur oleh bagian [English](#english) dan [日本語](#日本語).
+- **Spesifikasi**: Apache-2.0, Node.js `>=22.18.0`, 0 dependensi npm, dukungan `--lang id`.
 
 ---
 
 <a id="vi"></a>
 ## Tiếng Việt (Vietnamese)
-
-> 🌐 **Ngôn ngữ**: [日本語](#日本語) | [English](#english) | **Tiếng Việt**
 
 Bạn không cần nhớ bất kỳ câu lệnh hay tùy chọn nào—chỉ cần dán **1 dòng** này vào AI agent (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, v.v.):
 
@@ -858,14 +816,12 @@ Chạy https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
 - **Tính năng cốt lõi**: Bộ phân tích đường dẫn tấn công GCP × Firebase ngoại tuyến (phân tích AST hàm CEL, không báo động giả trên tài sản công khai chỉ-admin-ghi, loại bỏ phạt 3 lần), 4-Stack Code Shield, bảng điểm 5 trụ cột (0–100), lộ trình 30/60/90 ngày, MCP Airlock chỉ đọc và bảng điều khiển web cục bộ (`http://127.0.0.1:4310`).
-- **Quy chuẩn chính thức**: Apache-2.0, Node.js `>=22.18.0`, 0 phụ thuộc npm. Quy định bởi phần [English](#english) và [日本語](#日本語).
+- **Quy chuẩn**: Apache-2.0, Node.js `>=22.18.0`, 0 phụ thuộc npm, hỗ trợ `--lang vi`.
 
 ---
 
 <a id="th"></a>
 ## ไทย (Thai)
-
-> 🌐 **ภาษา**: [日本語](#日本語) | [English](#english) | **ไทย**
 
 ไม่ต้องจำคำสั่งหรือออปชันแม้แต่ตัวเดียว เพียงวาง **1 บรรทัด** นี้ลงใน AI Agent ของคุณ (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** ฯลฯ):
 
@@ -874,4 +830,4 @@ Chạy https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
 - **ความสามารถหลัก**: ตัววิเคราะห์เส้นทางการโจมตี GCP × Firebase แบบออฟไลน์ (การวิเคราะห์ AST ของฟังก์ชัน CEL, ลดการแจ้งเตือนผิดพลาดเป็นศูนย์สำหรับไฟล์สาธารณะที่จำกัดสิทธิ์เขียนเฉพาะแอดมิน, ยกเลิกการหักคะแนนซ้ำ 3 ต่อ), 4-Stack Code Shield, คะแนนความพร้อม 5 เสาหลัก (0–100), แผนงาน 30/60/90 วัน, MCP Airlock แบบอ่านอย่างเดียว และเว็บแดชบอร์ดในเครื่อง (`http://127.0.0.1:4310`)
-- **ข้อกำหนดอย่างเป็นทางการ**: Apache-2.0, Node.js `>=22.18.0`, 0 การพึ่งพา npm กำหนดโดยส่วน [English](#english) และ [日本語](#日本語)
+- **ข้อกำหนด**: Apache-2.0, Node.js `>=22.18.0`, 0 การพึ่งพา npm, รองรับ `--lang th`

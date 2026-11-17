@@ -1,5 +1,9 @@
 export type Severity = 'blocker' | 'high' | 'medium' | 'low' | 'info';
-export type ReportLanguage = 'en' | 'ja';
+export const SUPPORTED_LANGUAGES = [
+  'en', 'ja', 'zh-Hans', 'zh-Hant', 'ko', 'es', 'pt', 'fr', 'de', 'it',
+  'ru', 'uk', 'pl', 'nl', 'tr', 'ar', 'hi', 'id', 'vi', 'th',
+] as const;
+export type ReportLanguage = (typeof SUPPORTED_LANGUAGES)[number];
 export type ConsultingAudience = 'enterprise' | 'municipal' | 'sme';
 
 export interface SourceLocation {
