@@ -417,4 +417,14 @@ test('0o700 ACL + Fernet encryption + DoD 5220.22-M 3-pass wipe issues a verifia
   assert.equal(cert.verified, true);
   assert.equal(verifyDestructionCertificate(cert), true);
   assert.equal(verifyDestructionCertificate({ ...cert, canonicalPayload: cert.canonicalPayload + ' ' }), false);
+
+  const unified = spawnSync(process.execPath, [join(root, 'bin/longinus.mjs'), hardened, '--blueprint', '--emit-patch', '--lang', 'ja'], {
+    cwd: root, encoding: 'utf8', timeout: 10_000, maxBuffer: 1024 * 1024,
+    env: { PATH: process.env.PATH, LANG: 'C' },
+  });
+  assert.ifError(unified.error);
+  assert.equal(unified.status, 0, unified.stderr);
+  assert.match(unified.stdout, /### 5領域アーキテクチャ成熟度スコアカード/);
+  assert.match(unified.stdout, /## 8\. 米国国防総省規格 DoD 5220\.22-M 消去＆ECDSA P-256 暗号署名入りデータ破棄証明書/);
+  assert.match(unified.stdout, /## 9\. 4-Stack ソースコード＆1,529種シークレット防衛シールド統合監査/);
 });

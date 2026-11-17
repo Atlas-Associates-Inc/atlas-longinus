@@ -1,6 +1,10 @@
 import fsSync from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { scanDirectory } from '../graph/attack-graph.ts';
+import { formatBlueprint } from '../report/formatter.ts';
+import { proposeRemediations } from '../report/remediation.ts';
+import { SUPPORTED_LANGUAGES, type ConsultingAudience, type ReportLanguage } from '../types.ts';
 import { executeDefensiveAudit, scanPortfolioDirectory } from './geminiAnalyzer.ts';
 import { redactSecrets } from './redactor.ts';
 import {
@@ -9,7 +13,7 @@ import {
   meetsPortfolioFailOnThreshold,
 } from './sarif.ts';
 import { startLonginusServer } from './server.ts';
-import type { AnalysisMode, SeverityLevel } from './types.ts';
+import type { AnalysisMode, AuditReport, SeverityLevel } from './types.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RAW_PROJECT_ROOT = path.resolve(
@@ -19,11 +23,17 @@ const RAW_PROJECT_ROOT = path.resolve(
 const PROJECT_ROOT = fsSync.realpathSync(RAW_PROJECT_ROOT);
 
 const VALID_FAIL_THRESHOLDS = new Set<SeverityLevel>(['critical', 'high', 'medium', 'low']);
+const VALID_AUDIENCES = new Set<ConsultingAudience>(['enterprise', 'municipal', 'sme']);
+const VALID_LANGUAGES = new Set<string>(SUPPORTED_LANGUAGES);
 
 interface ParsedCliOptions {
   command: 'server' | 'portfolio' | 'audit';
   targetPath?: string;
   emitSarif: boolean;
+  emitBlueprint: boolean;
+  emitPatch: boolean;
+  lang: ReportLanguage;
+  audience: ConsultingAudience;
   mode: AnalysisMode;
   failOn?: SeverityLevel;
 }
@@ -36,11 +46,86 @@ function validateFailThreshold(raw: string): SeverityLevel {
   return normalized;
 }
 
+function validateLanguage(raw: string): ReportLanguage {
+  const trimmed = raw.trim();
+  if (!VALID_LANGUAGES.has(trimmed)) {
+    throw new Error(`Invalid --lang value: ${trimmed}`);
+  }
+  return trimmed as ReportLanguage;
+}
+
+function validateAudience(raw: string): ConsultingAudience {
+  const normalized = raw.trim().toLowerCase() as ConsultingAudience;
+  if (!VALID_AUDIENCES.has(normalized)) {
+    throw new Error('Invalid --audience value. Expected one of: enterprise, municipal, sme.');
+  }
+  return normalized;
+}
+
+function formatUnifiedBlueprintAndShield(
+  blueprintMarkdown: string,
+  shieldReport: AuditReport,
+  lang: ReportLanguage,
+): string {
+  const isJa = lang === 'ja';
+  const sectionLines: string[] = [
+    blueprintMarkdown.trimEnd(),
+    '',
+    '---',
+    '',
+    isJa
+      ? `## 9. 4-Stack ソースコード＆1,529種シークレット防衛シールド統合監査 (${shieldReport.repoName})`
+      : `## 9. 4-Stack Source Code & 1,529-Pattern Secret Shield Unified Audit (${shieldReport.repoName})`,
+    isJa
+      ? `- **総合コード防御スコア**: **${shieldReport.overallDefenseScore}/100**`
+      : `- **Overall Code Defense Score**: **${shieldReport.overallDefenseScore}/100**`,
+    isJa
+      ? `- **走査ファイル数**: ${shieldReport.scannedFiles} files (切り詰め: \`${shieldReport.scanTruncated}\` · 自動マスク保護機密: ${shieldReport.redactedSecretsCount} 箇所 · 所要 ${shieldReport.durationMs}ms)`
+      : `- **Scanned Files**: ${shieldReport.scannedFiles} files (Truncated: \`${shieldReport.scanTruncated}\` · Redacted Secrets Protected: ${shieldReport.redactedSecretsCount} · Duration: ${shieldReport.durationMs}ms)`,
+    isJa
+      ? `- **エグゼクティブ予防要約**: ${shieldReport.executiveSummary}`
+      : `- **Executive Preventive Summary**: ${shieldReport.executiveSummary}`,
+    '',
+    isJa ? '### 4技術スタック別・防御姿勢スコア一覧' : '### 4-Stack Defense Posture Breakdown',
+    isJa
+      ? '| 技術スタック | 対象ファイル | 防御スコア | 指摘内訳 (Critical / High / Medium / Low) |'
+      : '| Stack | Detected Files | Defense Score | Findings (Critical / High / Medium / Low) |',
+    '| --- | ---: | ---: | --- |',
+    ...shieldReport.stackSummaries.map(
+      (s) =>
+        `| ${s.label} | ${s.detectedFiles} | **${s.defenseScore}/100** | C:${s.criticalCount} / H:${s.highCount} / M:${s.mediumCount} / L:${s.lowCount} |`,
+    ),
+    '',
+    isJa ? '### 4-Stack コードレベル優先指摘一覧' : '### 4-Stack Code-Level Prioritized Findings',
+  ];
+
+  if (shieldReport.findings.length === 0) {
+    sectionLines.push(
+      isJa
+        ? '4技術スタック全体で重大な静的コード露出は検出されませんでした。'
+        : 'No static code exposures were detected across the 4 technology stacks.',
+    );
+  } else {
+    for (const f of shieldReport.findings.slice(0, 25)) {
+      sectionLines.push(
+        `- **[${f.severity.toUpperCase()}]** \`${f.filePath}:${f.line}\` — **${f.title}** (\`${f.ruleId}\` · *${f.stride}* · *${f.cwe}* · *${f.owaspAsvs}*)`,
+        `  - ${f.rootCause}`,
+      );
+    }
+  }
+
+  return `${sectionLines.join('\n')}\n`;
+}
+
 function parseCliArgs(args: readonly string[]): ParsedCliOptions {
   if (args.length === 0) {
     return {
       command: 'server',
       emitSarif: false,
+      emitBlueprint: false,
+      emitPatch: false,
+      lang: 'en',
+      audience: 'enterprise',
       mode: 'gemini-3.8-flash',
     };
   }
@@ -48,12 +133,20 @@ function parseCliArgs(args: readonly string[]): ParsedCliOptions {
   let hasPortfolio = false;
   let hasAudit = false;
   let emitSarif = false;
+  let emitBlueprint = false;
+  let emitPatch = false;
+  let lang: ReportLanguage = 'en';
+  let audience: ConsultingAudience = 'enterprise';
   let explicitMode: AnalysisMode | undefined;
   let failOn: SeverityLevel | undefined;
   const positionals: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i] ?? '';
+    if (arg === 'audit' && positionals.length === 0 && !hasAudit) {
+      hasAudit = true;
+      continue;
+    }
     if (arg === '--portfolio') {
       hasPortfolio = true;
       continue;
@@ -62,8 +155,56 @@ function parseCliArgs(args: readonly string[]): ParsedCliOptions {
       hasAudit = true;
       continue;
     }
-    if (arg === '--sarif') {
+    if (arg === '--sarif' || arg === '--format=sarif') {
       emitSarif = true;
+      continue;
+    }
+    if (arg === '--blueprint' || arg === '--unified' || arg === '--format=blueprint') {
+      emitBlueprint = true;
+      continue;
+    }
+    if (arg === '--format') {
+      const val = args[i + 1];
+      if (val === 'blueprint') {
+        emitBlueprint = true;
+        i += 1;
+        continue;
+      }
+      if (val === 'sarif') {
+        emitSarif = true;
+        i += 1;
+        continue;
+      }
+      throw new Error('Invalid --format value. Expected blueprint or sarif.');
+    }
+    if (arg === '--emit-patch') {
+      emitPatch = true;
+      continue;
+    }
+    if (arg === '--lang') {
+      const val = args[i + 1];
+      if (!val || val.startsWith('-')) {
+        throw new Error('Invalid --lang value.');
+      }
+      lang = validateLanguage(val);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith('--lang=')) {
+      lang = validateLanguage(arg.slice('--lang='.length));
+      continue;
+    }
+    if (arg === '--audience') {
+      const val = args[i + 1];
+      if (!val || val.startsWith('-')) {
+        throw new Error('Invalid --audience value.');
+      }
+      audience = validateAudience(val);
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith('--audience=')) {
+      audience = validateAudience(arg.slice('--audience='.length));
       continue;
     }
     if (arg === '--deterministic') {
@@ -101,8 +242,8 @@ function parseCliArgs(args: readonly string[]): ParsedCliOptions {
     throw new Error('At most one target directory path may be specified.');
   }
 
-  if (hasPortfolio && (hasAudit || emitSarif)) {
-    throw new Error('--portfolio cannot be combined with --audit or --sarif.');
+  if (hasPortfolio && (hasAudit || emitSarif || emitBlueprint)) {
+    throw new Error('--portfolio cannot be combined with --audit, --sarif, or --blueprint.');
   }
 
   if (hasPortfolio) {
@@ -110,23 +251,31 @@ function parseCliArgs(args: readonly string[]): ParsedCliOptions {
       command: 'portfolio',
       ...(positionals[0] !== undefined ? { targetPath: positionals[0] } : {}),
       emitSarif: false,
+      emitBlueprint: false,
+      emitPatch: false,
+      lang,
+      audience,
       mode: 'deterministic',
       ...(failOn !== undefined ? { failOn } : {}),
     };
   }
 
-  if (hasAudit || emitSarif || positionals.length === 1 || explicitMode !== undefined) {
+  if (hasAudit || emitSarif || emitBlueprint || positionals.length === 1 || explicitMode !== undefined) {
     return {
       command: 'audit',
       ...(positionals[0] !== undefined ? { targetPath: positionals[0] } : {}),
       emitSarif,
-      mode: explicitMode ?? 'gemini-3.8-flash',
+      emitBlueprint,
+      emitPatch,
+      lang,
+      audience,
+      mode: explicitMode ?? (emitBlueprint ? 'deterministic' : 'gemini-3.8-flash'),
       ...(failOn !== undefined ? { failOn } : {}),
     };
   }
 
   throw new Error(
-    'Specify --audit [path], --sarif [path], or --portfolio [path] (or run with no arguments to start the 127.0.0.1 dashboard).',
+    'Specify --audit [path], --blueprint [path], --sarif [path], or --portfolio [path] (or run with no arguments to start the 127.0.0.1 dashboard).',
   );
 }
 
@@ -173,7 +322,12 @@ export async function runCli(args: readonly string[], io?: CliIoHooks): Promise<
         ...(canonicalTarget === PROJECT_ROOT ? { excludeRelativePrefixes: ['test'] } : {}),
       });
 
-      if (parsed.emitSarif) {
+      if (parsed.emitBlueprint) {
+        const graph = scanDirectory(canonicalTarget);
+        const remediations = parsed.emitPatch ? proposeRemediations(graph.findings, canonicalTarget) : [];
+        const blueprintMarkdown = formatBlueprint(graph, undefined, remediations, parsed.lang, parsed.audience);
+        out(formatUnifiedBlueprintAndShield(blueprintMarkdown, report, parsed.lang));
+      } else if (parsed.emitSarif) {
         const sarif = buildSarifReport(report);
         out(`${JSON.stringify(sarif, null, 2)}\n`);
       } else {
