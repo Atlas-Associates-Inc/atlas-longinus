@@ -356,6 +356,8 @@ test('--format blueprint emits executive roadmap, control domains, diffs and exe
   assert.match(unsafe.stdout, /### 5-Pillar Architecture Maturity Scorecard/);
   assert.match(unsafe.stdout, /## 2\. Autonomous 30 \/ 60 \/ 90-Day Remediation Roadmap/);
   assert.match(unsafe.stdout, /## 3\. Prioritized Findings & Control Domains/);
+  assert.match(unsafe.stdout, /\[Root-Cause & Attack Mechanics\]/);
+  assert.match(unsafe.stdout, /\[2026 Best-Practice Prescription\]/);
   assert.match(unsafe.stdout, /## 4\. Reachable Cross-Boundary Attack Paths/);
   assert.match(unsafe.stdout, /## 5\. Review-Only Remediation Proposals/);
   assert.match(unsafe.stdout, /```diff/);
@@ -372,6 +374,8 @@ test('--format blueprint emits executive roadmap, control domains, diffs and exe
   assert.match(jaBlueprint.stdout, /### 法規制・ガイドライン自動マッピング表/);
   assert.match(jaBlueprint.stdout, /## 2\. 30 \/ 60 \/ 90日 自律改修ロードマップ/);
   assert.match(jaBlueprint.stdout, /## 3\. 統制ドメイン別の優先指摘一覧/);
+  assert.match(jaBlueprint.stdout, /【背景・攻撃メカニズム】/);
+  assert.match(jaBlueprint.stdout, /【最新知見による根治策】/);
   assert.match(jaBlueprint.stdout, /## 4\. 到達可能なクロス境界攻撃経路/);
   assert.match(jaBlueprint.stdout, /## 5\. レビュー専用の自動修正パッチ案/);
   assert.match(jaBlueprint.stdout, /社内専属コンサルAI即時構築/);
