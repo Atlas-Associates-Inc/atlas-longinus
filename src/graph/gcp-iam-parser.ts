@@ -483,6 +483,101 @@ export function parseTerraform(source: string, file: string, moduleLocals?: Read
         }
       }
     }
+    if (type === 'aws_s3_bucket' || type === 'aws_s3_bucket_acl' || type === 'aws_s3_bucket_public_access_block') {
+      const bucketName = value(attributes, 'bucket', true, locals) ?? resource.name;
+      const dataId = `data:${id}:AWS S3 bucket ${bucketName}`;
+      graph.nodes.push({ id, kind: 'resource', label: `${type}.${resource.name}`, location: { file, line } },
+        { id: dataId, kind: 'data', label: `AWS S3 bucket ${bucketName} in ${type}.${resource.name}`, location: { file, line } });
+      const aclAttr = attr(attributes, 'acl', true);
+      const aclVal = aclAttr ? quoted(aclAttr.raw) ?? aclAttr.raw : undefined;
+      const blockAclsAttr = attr(attributes, 'block_public_acls', true);
+      const blockPolicyAttr = attr(attributes, 'block_public_policy', true);
+      if (aclVal === 'public-read' || aclVal === 'public-read-write' || blockAclsAttr?.raw === 'false' || blockPolicyAttr?.raw === 'false') {
+        const hitAttr = (aclVal === 'public-read' || aclVal === 'public-read-write') ? aclAttr! : (blockAclsAttr?.raw === 'false' ? blockAclsAttr! : blockPolicyAttr!);
+        const hitLine = lineIndex(resource.offset + hitAttr.offset);
+        const sev = aclVal === 'public-read-write' ? 'blocker' : 'high';
+        const finding = addFinding(graph, file, hitLine, 'aws/public-s3-bucket', sev,
+          'AWS S3 bucket permits public ACL or disables public access block',
+          `S3 resource ${resource.name} exposes bucket objects via public ACL or disabled public access block; enforce acl = "private" and block_public_acls = true / block_public_policy = true.`,
+          aclVal ? `acl = "${aclVal}"` : 'block_public_acls = false');
+        const entry = 'entry:aws:public-s3';
+        graph.nodes.push({ id: entry, kind: 'entry', label: 'Public internet (0.0.0.0/0)', location: { file, line: hitLine } });
+        graph.edges.push({ id: `${file}:${hitLine}:${entry}:${dataId}`, from: entry, to: dataId,
+          kind: 'public-s3-bucket', findingIds: [finding.id], evidence: finding.evidence, confidence: 'confirmed' });
+      }
+    }
+    if (type === 'aws_db_instance') {
+      const dataId = `data:${id}:AWS RDS database`;
+      graph.nodes.push({ id, kind: 'resource', label: `${type}.${resource.name}`, location: { file, line } },
+        { id: dataId, kind: 'data', label: `AWS RDS database in ${type}.${resource.name}`, location: { file, line } });
+      const pubAttr = attr(attributes, 'publicly_accessible', true);
+      if (pubAttr?.raw === 'true') {
+        const pubLine = lineIndex(resource.offset + pubAttr.offset);
+        const finding = addFinding(graph, file, pubLine, 'aws/public-rds-instance', 'high',
+          'AWS RDS database instance is publicly accessible from the internet',
+          'publicly_accessible = true exposes the RDS database endpoint outside the VPC; set publicly_accessible = false and place the instance in private subnets.',
+          'publicly_accessible = true');
+        const entry = 'entry:aws:0.0.0.0/0';
+        graph.nodes.push({ id: entry, kind: 'entry', label: 'Public internet (0.0.0.0/0)', location: { file, line: pubLine } });
+        graph.edges.push({ id: `${file}:${pubLine}:${entry}:${dataId}`, from: entry, to: dataId,
+          kind: 'public-rds-network', findingIds: [finding.id], evidence: finding.evidence, confidence: 'confirmed' });
+      }
+      const multiAzAttr = attr(attributes, 'multi_az', true);
+      if (multiAzAttr?.raw === 'false') {
+        addFinding(graph, file, lineIndex(resource.offset + multiAzAttr.offset), 'sre/single-zone-database', 'medium',
+          'AWS RDS instance uses single-AZ deployment without Multi-AZ failover',
+          'multi_az = false leaves the RDS instance vulnerable to Availability Zone outages; enable multi_az = true for production resilience.',
+          'multi_az = false');
+      }
+    }
+    if (type === 'aws_iam_role') {
+      const policyRaw = value(attributes, 'assume_role_policy', true, locals) ?? body;
+      if (/token\.actions\.githubusercontent\.com/.test(policyRaw) && !/token\.actions\.githubusercontent\.com:sub\s*["']?\s*[:=]\s*["']repo:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+/.test(policyRaw)) {
+        const finding = addFinding(graph, file, line, 'aws/unpinned-github-oidc', 'high',
+          'AWS IAM role trusts GitHub Actions OIDC without a repository sub restriction',
+          'assume_role_policy trusts token.actions.githubusercontent.com without pinning token.actions.githubusercontent.com:sub to a specific repo:owner/name claim.',
+          'Missing token.actions.githubusercontent.com:sub repo pin');
+        const entry = `entry:wif:${id}`;
+        graph.nodes.push({ id: entry, kind: 'entry', label: 'GitHub OIDC identities', location: { file, line } },
+          { id, kind: 'resource', label: `${type}.${resource.name}`, location: { file, line } });
+        graph.edges.push({ id: finding.id, from: entry, to: id, kind: 'unrestricted-provider-candidate', findingIds: [finding.id],
+          evidence: finding.evidence, confidence: 'potential' });
+      }
+    }
+    if (type === 'azurerm_storage_account') {
+      const dataId = `data:${id}:Azure Storage Account ${resource.name}`;
+      graph.nodes.push({ id, kind: 'resource', label: `${type}.${resource.name}`, location: { file, line } },
+        { id: dataId, kind: 'data', label: `Azure Storage Account in ${type}.${resource.name}`, location: { file, line } });
+      const pubBlobAttr = attr(attributes, 'allow_nested_items_to_be_public', true) ?? attr(attributes, 'allow_blob_public_access', true);
+      if (pubBlobAttr?.raw === 'true') {
+        const hitLine = lineIndex(resource.offset + pubBlobAttr.offset);
+        const finding = addFinding(graph, file, hitLine, 'azure/public-storage-blob', 'high',
+          'Azure Storage Account allows anonymous public blob access',
+          'Enabling allow_nested_items_to_be_public (or allow_blob_public_access) exposes blob containers to anonymous enumeration and read access; set it to false.',
+          'allow_nested_items_to_be_public = true');
+        const entry = 'entry:azure:public-blob';
+        graph.nodes.push({ id: entry, kind: 'entry', label: 'Public internet (0.0.0.0/0)', location: { file, line: hitLine } });
+        graph.edges.push({ id: `${file}:${hitLine}:${entry}:${dataId}`, from: entry, to: dataId,
+          kind: 'public-azure-blob', findingIds: [finding.id], evidence: finding.evidence, confidence: 'confirmed' });
+      }
+    }
+    if (type === 'azurerm_postgresql_flexible_server' || type === 'azurerm_mssql_server' || type === 'azurerm_mysql_flexible_server') {
+      const dataId = `data:${id}:Azure Database ${resource.name}`;
+      graph.nodes.push({ id, kind: 'resource', label: `${type}.${resource.name}`, location: { file, line } },
+        { id: dataId, kind: 'data', label: `Azure Database in ${type}.${resource.name}`, location: { file, line } });
+      const pubNetAttr = attr(attributes, 'public_network_access_enabled', true);
+      if (pubNetAttr?.raw === 'true') {
+        const hitLine = lineIndex(resource.offset + pubNetAttr.offset);
+        const finding = addFinding(graph, file, hitLine, 'azure/public-database-network', 'high',
+          'Azure Database server enables public network access',
+          'public_network_access_enabled = true exposes the managed database endpoint to public network reachability; disable public network access and use Azure Private Endpoint.',
+          'public_network_access_enabled = true');
+        const entry = 'entry:azure:0.0.0.0/0';
+        graph.nodes.push({ id: entry, kind: 'entry', label: 'Public internet (0.0.0.0/0)', location: { file, line: hitLine } });
+        graph.edges.push({ id: `${file}:${hitLine}:${entry}:${dataId}`, from: entry, to: dataId,
+          kind: 'public-azure-db', findingIds: [finding.id], evidence: finding.evidence, confidence: 'confirmed' });
+      }
+    }
     if (!/_iam_(?:member|binding|policy)$/.test(type)) continue;
     if (type.endsWith('_iam_policy')) {
       graph.limitations.push(`${file}:${line}: Embedded Terraform policy_data is not evaluated; provide the exported IAM JSON policy.`);

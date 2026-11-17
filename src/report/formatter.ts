@@ -40,6 +40,11 @@ const RULE_TITLE_JA: Record<string, string> = {
   'audit/impersonation-chain': 'Cloud Audit Logs: サービスアカウントなりすまし・トークン発行チェーン',
   'audit/sensitive-data-access': 'Cloud Audit Logs: 機密データ・シークレットへの不審アクセス',
   'scc/active-finding': 'Security Command Center (SCC) アクティブ検出事項',
+  'aws/public-s3-bucket': 'AWS S3バケットの公開ACL・パブリックアクセスブロック無効化',
+  'aws/public-rds-instance': 'AWS RDSデータベースのインターネット公開設定 (publicly_accessible = true)',
+  'aws/unpinned-github-oidc': 'AWS IAMロールのGitHub OIDCリポジトリ制約 (sub) 欠如',
+  'azure/public-storage-blob': 'Azure Storage Accountの匿名パブリックBlobアクセス許可',
+  'azure/public-database-network': 'Azure Databaseサーバーのパブリックネットワークアクセス有効化',
 };
 
 const RULE_MESSAGE_JA: Record<string, string> = {
@@ -60,10 +65,15 @@ const RULE_MESSAGE_JA: Record<string, string> = {
   'bigquery/public-dataset-exposure': 'BigQuery データセットが allUsers または allAuthenticatedUsers に公開されています。',
   'finops/unbounded-serverless-scaling': 'Cloud Run / Cloud Functions に正の max_instance_count 上限がなく、課金爆発 (Denial-of-Wallet) のリスクがあります。',
   'gov/data-residency-violation': 'データ基盤が日本国内リージョン（asia-northeast1 東京 / asia-northeast2 大阪）以外の国外またはマルチリージョンに配置されています。',
-  'sre/single-zone-database': 'Cloud SQL が単一ゾーン (ZONAL) 構成のため、ゾーン障害や広域災害時に自動フェイルオーバーできません。REGIONAL (高可用性) 構成を推奨します。',
+  'sre/single-zone-database': 'Cloud SQL / AWS RDS が単一ゾーン (ZONAL / multi_az = false) 構成のため、ゾーン障害や広域災害時に自動フェイルオーバーできません。マルチゾーン高可用性構成を推奨します。',
   'finops/storage-missing-lifecycle': 'バケットに lifecycle_rule が未設定のため、不要オブジェクトの蓄積による毎月のストレージ費用肥大化リスクがあります。',
   'data/missing-cmek-encryption': 'Cloud KMS の顧客管理暗号鍵 (default_kms_key_name) が未設定です。機密データ主権のためCMEK設定を推奨します。',
   'cicd/unpinned-workflow-action': 'GitHub Actions で可変ブランチ参照 (@main/@master) または permissions: write-all が使われており、CIサプライチェーン侵害リスクがあります。',
+  'aws/public-s3-bucket': 'AWS S3 バケットで公開ACL (public-read / public-read-write) または block_public_acls = false が設定されており、バケット内オブジェクトが外部露出しています。',
+  'aws/public-rds-instance': 'AWS RDS インスタンスで publicly_accessible = true が設定されており、VPC外部からデータベースエンドポイントへ到達可能です。',
+  'aws/unpinned-github-oidc': 'AWS IAM ロールの assume_role_policy で token.actions.githubusercontent.com:sub によるリポジトリ固定条件が欠如しています。',
+  'azure/public-storage-blob': 'Azure Storage Account で allow_nested_items_to_be_public = true が有効化されており、匿名アクセスによるBlob列挙・漏洩リスクがあります。',
+  'azure/public-database-network': 'Azure Database サーバーで public_network_access_enabled = true が有効化されており、パブリックネットワークから到達可能です。',
 };
 
 const RULE_DEEP_RATIONALE_JA: Record<string, string> = {
@@ -93,6 +103,11 @@ const RULE_DEEP_RATIONALE_JA: Record<string, string> = {
   'audit/impersonation-chain': '【背景・攻撃メカニズム】`GenerateAccessToken` / `SignBlob` / `SignJwt` の連鎖呼び出しは、低権限SAを踏み台にして高権限SAの短命トークンを動的生成する多段ラテラルムーブメントの決定的兆候です。【最新知見による根治策】委任チェーン上の不要な `serviceAccountTokenCreator` バインディングを剥奪し、IAM Conditions で呼び出し元IP・VPC・サービスを制限してください。',
   'audit/sensitive-data-access': '【背景・攻撃メカニズム】Secret Manager の `AccessSecretVersion` や BigQuery / Cloud Storage への異常なバルク読み取りは、奪取されたランタイムIDを用いた機密資産の外部流出（Exfiltration）フェーズを示します。【最新知見による根治策】VPC Service Controls で境界外へのデータ持ち出しを遮断し、シークレット参照権限を実際にそのシークレットを必要とする単一Cloud Runサービスのみに分離してください。',
   'scc/active-finding': '【背景・攻撃メカニズム】Security Command Center (SCC) の ACTIVE 指摘は、クラウド実環境上で現在進行形で露出・脆弱性・不審挙動が観測されていることを示します。【最新知見による根治策】IaC（Terraform）側の宣言コードと実環境ドリフトを突合し、本設計書の自動生成パッチで恒久修正を適用してください。',
+  'aws/public-s3-bucket': '【背景・攻撃メカニズム】S3 バケットで公開ACL（`public-read` / `public-read-write`）や `block_public_acls = false` が設定されていると、バケット名列挙ボットにより数分以内にバックアップ・顧客PII・静的資産の改ざんや全件抽出が成立します。【最新知見による根治策】`acl = "private"` とし、`aws_s3_bucket_public_access_block` の全4属性（`block_public_acls`, `block_public_policy`, `ignore_public_acls`, `restrict_public_buckets`）を `true` に固定したうえで、公開配信は CloudFront OAC (Origin Access Control) 経由のみに限定してください。',
+  'aws/public-rds-instance': '【背景・攻撃メカニズム】`publicly_accessible = true` の RDS インスタンスはパブリックDNSと公開IPを持ち、セキュリティグループの設定ミスや一時的な開放と重なった瞬間にインターネットから直接DBへの侵入を許します。【最新知見による根治策】`publicly_accessible = false` に設定してプライベートサブネット内に完全隔離し、踏み台が必要な場合も AWS Systems Manager Session Manager や RDS Proxy 経由で接続してください。',
+  'aws/unpinned-github-oidc': '【背景・攻撃メカニズム】AWS IAM ロールの信頼ポリシーで `token.actions.githubusercontent.com` を許可しつつ `sub` クレーム（`repo:owner/name:...`）をピン留めしない場合、GitHub上の任意の第三者リポジトリから `AssumeRoleWithWebIdentity` を呼び出して当該AWSロールを乗っ取ることが可能です。【最新知見による根治策】`Condition.StringEquals`（または特定ブランチ限定 `StringLike`）で `"token.actions.githubusercontent.com:sub": "repo:owner/repo:ref:refs/heads/main"` を厳格固定してください。',
+  'azure/public-storage-blob': '【背景・攻撃メカニズム】Azure Storage Account で `allow_nested_items_to_be_public = true` が有効な場合、配下のコンテナで匿名読み取りが誤設定された際にストレージアカウント全体の機密Blobが外部へ直接露出します。【最新知見による根治策】`allow_nested_items_to_be_public = false` でアカウントレベルの匿名アクセスを全面禁止し、Azure Private Endpoint または Microsoft Entra ID 認可を強制してください。',
+  'azure/public-database-network': '【背景・攻撃メカニズム】Azure PostgreSQL / MySQL / SQL Server で `public_network_access_enabled = true` が有効な場合、パブリックインターネットからマネージドDBエンドポイントへの接続試行が可能になります。【最新知見による根治策】`public_network_access_enabled = false` に設定し、Azure VNet 統合または Private Link (Private Endpoint) 経由の閉域通信のみに限定してください。',
 };
 
 const RULE_DEEP_RATIONALE_EN: Record<string, string> = {
@@ -122,6 +137,11 @@ const RULE_DEEP_RATIONALE_EN: Record<string, string> = {
   'audit/impersonation-chain': '[Root-Cause & Attack Mechanics] Chained `GenerateAccessToken`, `SignBlob`, or `SignJwt` audit events indicate active lateral movement where a low-privilege identity mints short-lived credentials for privileged service accounts. [2026 Best-Practice Prescription] Break unnecessary delegation chains and bind `roles/iam.serviceAccountTokenCreator` only with strict IAM Conditions.',
   'audit/sensitive-data-access': '[Root-Cause & Attack Mechanics] Anomalous `AccessSecretVersion` or bulk data read events indicate active credential harvesting and crown-jewel data exfiltration by a compromised workload identity. [2026 Best-Practice Prescription] Enforce VPC Service Controls egress boundaries and partition Secret Manager bindings per individual service account.',
   'scc/active-finding': '[Root-Cause & Attack Mechanics] An ACTIVE Security Command Center finding confirms a live runtime exposure or misconfiguration observed in the cloud environment. [2026 Best-Practice Prescription] Reconcile live cloud state with Terraform IaC and apply the review-only remediation patch to eliminate drift.',
+  'aws/public-s3-bucket': '[Root-Cause & Attack Mechanics] Configuring a public ACL (`public-read` / `public-read-write`) or setting `block_public_acls = false` on an S3 bucket exposes stored objects to automated bucket-enumeration bots, bulk data exfiltration, and bucket poisoning. [2026 Best-Practice Prescription] Enforce `acl = "private"`, set all four `aws_s3_bucket_public_access_block` attributes (`block_public_acls`, `block_public_policy`, `ignore_public_acls`, `restrict_public_buckets`) to `true`, and serve public assets exclusively through CloudFront Origin Access Control (OAC).',
+  'aws/public-rds-instance': '[Root-Cause & Attack Mechanics] Setting `publicly_accessible = true` assigns a public IP and DNS endpoint to the RDS database, exposing it to internet-wide brute-force and protocol exploitation if security groups are misconfigured. [2026 Best-Practice Prescription] Set `publicly_accessible = false`, isolate the RDS instance inside private VPC subnets, and connect via RDS Proxy or AWS Systems Manager Session Manager.',
+  'aws/unpinned-github-oidc': '[Root-Cause & Attack Mechanics] Trusting `token.actions.githubusercontent.com` in `assume_role_policy` without constraining `token.actions.githubusercontent.com:sub` allows any third-party GitHub repository to call `AssumeRoleWithWebIdentity` and hijack the AWS IAM role. [2026 Best-Practice Prescription] Pin `token.actions.githubusercontent.com:sub` to the exact repository and branch (`repo:owner/name:ref:refs/heads/main`).',
+  'azure/public-storage-blob': '[Root-Cause & Attack Mechanics] Enabling `allow_nested_items_to_be_public = true` on an Azure Storage Account permits anonymous public read access to blob containers, risking mass PII and backup leakage. [2026 Best-Practice Prescription] Set `allow_nested_items_to_be_public = false` at the storage account level and enforce Microsoft Entra ID authorization with Azure Private Endpoint.',
+  'azure/public-database-network': '[Root-Cause & Attack Mechanics] Enabling `public_network_access_enabled = true` on Azure PostgreSQL, MySQL, or SQL Server exposes the managed database endpoint to external network reachability. [2026 Best-Practice Prescription] Set `public_network_access_enabled = false` and route all database traffic through Azure VNet integration or Private Link.',
 };
 
 function localizeLimitationJa(text: string): string {
@@ -191,6 +211,11 @@ const REMEDIATION_JA: Record<string, string> = {
   'Add a lifecycle_rule block to transition or expire stale objects automatically and prevent unbounded monthly storage cost growth.': '不要データの自動アーカイブ・削除を行う `lifecycle_rule` ブロックを追加し、毎月のストレージ課金の肥大化を防止してください。',
   'Configure encryption { default_kms_key_name = ... } using a customer-managed Cloud KMS key (CMEK) to enforce cryptographic data sovereignty.': '顧客管理の Cloud KMS 暗号鍵（`encryption { default_kms_key_name = ... }`）を設定し、暗号鍵の主権・失効管理を自社統制下に置いてください。',
   'Pin GitHub Actions uses: steps to immutable commit SHAs (or verified release tags) and replace permissions: write-all with least-privilege read permissions.': 'GitHub Actions の `uses:` を不変のコミットSHA（または検証済みリリースタグ）に固定し、`permissions: write-all` を最小限の `contents: read` 等に縮小してください。',
+  'Set S3 bucket ACL to "private" and enforce block_public_acls = true and block_public_policy = true on aws_s3_bucket_public_access_block.': 'S3 バケットの ACL を `"private"` に設定し、`aws_s3_bucket_public_access_block` で `block_public_acls = true` および `block_public_policy = true` を強制してください。',
+  'Set publicly_accessible = false on aws_db_instance and place the database in isolated private VPC subnets.': '`aws_db_instance` の `publicly_accessible = false` を設定し、データベースをプライベートVPCサブネット内に隔離してください。',
+  'Constrain token.actions.githubusercontent.com:sub in assume_role_policy to a specific trusted repository (repo:owner/name:ref:refs/heads/main).': '`assume_role_policy` の条件句で `token.actions.githubusercontent.com:sub` を信頼する特定リポジトリ（`repo:owner/name:ref:refs/heads/main`）に固定してください。',
+  'Set allow_nested_items_to_be_public = false (and allow_blob_public_access = false) on azurerm_storage_account.': '`azurerm_storage_account` で `allow_nested_items_to_be_public = false` を設定し、匿名パブリックアクセスを遮断してください。',
+  'Set public_network_access_enabled = false on Azure Database servers and route traffic through Azure Private Endpoint.': 'Azure Database サーバーで `public_network_access_enabled = false` を設定し、Azure Private Endpoint 経由の閉域通信に限定してください。',
 };
 
 function localizeRemediationJa(text: string): string {
@@ -240,9 +265,9 @@ export function formatTable(graph: GraphResult, prover?: DualProverVerdict, reme
 }
 
 function controlDomain(ruleId: string): string {
-  if (ruleId.startsWith('firebase/') || ruleId.startsWith('bigquery/') || ruleId.startsWith('data/') || ruleId.startsWith('gov/')) return 'Firebase & Data Perimeter';
-  if (ruleId.startsWith('iam/') || ruleId.startsWith('wif/') || ruleId.startsWith('cicd/')) return 'Identity & Workload Federation';
-  if (ruleId.startsWith('gke/') || ruleId === 'sql/public-authorized-network' || ruleId === 'sql/unencrypted-public-ip' || ruleId.startsWith('gcp/')) return 'Cloud Workload & Database Hardening';
+  if (ruleId.startsWith('firebase/') || ruleId.startsWith('bigquery/') || ruleId.startsWith('data/') || ruleId.startsWith('gov/') || ruleId === 'aws/public-s3-bucket' || ruleId === 'azure/public-storage-blob') return 'Firebase & Data Perimeter';
+  if (ruleId.startsWith('iam/') || ruleId.startsWith('wif/') || ruleId.startsWith('cicd/') || ruleId === 'aws/unpinned-github-oidc') return 'Identity & Workload Federation';
+  if (ruleId.startsWith('gke/') || ruleId === 'sql/public-authorized-network' || ruleId === 'sql/unencrypted-public-ip' || ruleId.startsWith('gcp/') || ruleId === 'aws/public-rds-instance' || ruleId === 'azure/public-database-network') return 'Cloud Workload & Database Hardening';
   if (ruleId.startsWith('vertex/') || ruleId.startsWith('audit/') || ruleId.startsWith('scc/')) return 'AI / Vertex & Runtime Threat Governance';
   if (ruleId.startsWith('finops/') || ruleId === 'sql/missing-resilience-guardrails' || ruleId.startsWith('sre/')) return 'FinOps Cost Guardrails & Resilience';
   return 'Scan Completeness & Input Safety';
@@ -403,6 +428,41 @@ const COMPLIANCE_MAP: Record<string, ComplianceMapping> = {
     municipalEn: 'MIC Guideline Software Supply-Chain Integrity / ISMAP 14.2',
     smeJa: '経産省サプライチェーン評価(開発・更新プログラム経由の侵入防止)',
     smeEn: 'METI Supply-Chain Security (CI/CD Pipeline Integrity)',
+  },
+  'aws/public-s3-bucket': {
+    enterprise: 'SOC2 CC6.1 / ISO27001 A.8.3 / NIST PR.DS-01 (S3 Public Access Block)',
+    municipalJa: 'デジタル庁ガバメントクラウド(AWS) S3パブリックアクセス完全遮断 / ISMAP 9.4',
+    municipalEn: 'Digital Agency GovCloud (AWS) S3 Public Access Block / ISMAP 9.4',
+    smeJa: '個人情報保護法第23条 / IPA(クラウドストレージの公開設定遮断)',
+    smeEn: 'APPI Art.23 / IPA (S3 Bucket Public Exposure Prevention)',
+  },
+  'aws/public-rds-instance': {
+    enterprise: 'SOC2 CC6.6 / ISO27001 A.8.20 / NIST PR.IR-01 (RDS Private Subnet Isolation)',
+    municipalJa: '総務省 三層の対策・ガバメントクラウド(AWS) 基幹DBの閉域分離 / ISMAP 13.1',
+    municipalEn: 'MIC Three-Tier DB Isolation (AWS RDS Private Subnet) / ISMAP 13.1',
+    smeJa: '個人情報保護法第23条 / IPA(顧客DBの外部公開遮断)',
+    smeEn: 'APPI Art.23 / IPA (RDS Public Endpoint Prohibition)',
+  },
+  'aws/unpinned-github-oidc': {
+    enterprise: 'SOC2 CC6.1 / ISO27001 A.8.5 / NIST PR.AA-01 (AWS OIDC Subject Pinning)',
+    municipalJa: 'デジタル庁ガバメントクラウド(AWS) 外部連携OIDC認証固定 / ISMAP 9.4.2',
+    municipalEn: 'Digital Agency GovCloud (AWS) OIDC Subject Pinning / ISMAP 9.4.2',
+    smeJa: '経産省サプライチェーン評価(委託先・外部接続認証の制限)',
+    smeEn: 'METI Supply-Chain Security (AWS OIDC Repository Pinning)',
+  },
+  'azure/public-storage-blob': {
+    enterprise: 'SOC2 CC6.1 / ISO27001 A.8.3 / NIST PR.DS-01 (Azure Blob Private Access)',
+    municipalJa: 'デジタル庁ガバメントクラウド(Azure) 匿名Blobアクセス禁止 / ISMAP 9.4',
+    municipalEn: 'Digital Agency GovCloud (Azure) Anonymous Blob Prohibition / ISMAP 9.4',
+    smeJa: '個人情報保護法第23条(クラウドストレージの外部公開防止)',
+    smeEn: 'APPI Art.23 (Azure Blob Public Access Prevention)',
+  },
+  'azure/public-database-network': {
+    enterprise: 'SOC2 CC6.6 / ISO27001 A.8.20 / NIST PR.IR-01 (Azure Private Link)',
+    municipalJa: '総務省 三層の対策・ガバメントクラウド(Azure) DB閉域網接続 / ISMAP 13.1',
+    municipalEn: 'MIC Three-Tier DB Isolation (Azure Private Endpoint) / ISMAP 13.1',
+    smeJa: '個人情報保護法第23条(データベースのインターネット直結遮断)',
+    smeEn: 'APPI Art.23 (Azure Database Public Network Isolation)',
   },
 };
 

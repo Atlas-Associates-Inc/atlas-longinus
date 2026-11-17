@@ -32,6 +32,11 @@ const advice: Record<string, string> = {
   'finops/storage-missing-lifecycle': 'Add a lifecycle_rule block to transition or expire stale objects automatically and prevent unbounded monthly storage cost growth.',
   'data/missing-cmek-encryption': 'Configure encryption { default_kms_key_name = ... } using a customer-managed Cloud KMS key (CMEK) to enforce cryptographic data sovereignty.',
   'cicd/unpinned-workflow-action': 'Pin GitHub Actions uses: steps to immutable commit SHAs (or verified release tags) and replace permissions: write-all with least-privilege read permissions.',
+  'aws/public-s3-bucket': 'Set S3 bucket ACL to "private" and enforce block_public_acls = true and block_public_policy = true on aws_s3_bucket_public_access_block.',
+  'aws/public-rds-instance': 'Set publicly_accessible = false on aws_db_instance and place the database in isolated private VPC subnets.',
+  'aws/unpinned-github-oidc': 'Constrain token.actions.githubusercontent.com:sub in assume_role_policy to a specific trusted repository (repo:owner/name:ref:refs/heads/main).',
+  'azure/public-storage-blob': 'Set allow_nested_items_to_be_public = false (and allow_blob_public_access = false) on azurerm_storage_account.',
+  'azure/public-database-network': 'Set public_network_access_enabled = false on Azure Database servers and route traffic through Azure Private Endpoint.',
 };
 
 function readSource(root: string, file: string): string | undefined {
@@ -50,7 +55,7 @@ export function proposeRemediations(findings: Finding[], directory: string): Rem
     if (!description) continue;
     const proposal: Remediation = { findingId: finding.id, file: finding.location.file, description, diff: '', automatic: false };
     // Application-specific policy cannot safely be invented. Emit only exact, reviewable edits.
-    if (['firebase/public-read', 'firebase/public-write', 'gcp/public-ingress', 'sql/public-authorized-network', 'bigquery/public-dataset-exposure', 'sre/single-zone-database'].includes(finding.ruleId)) {
+    if (['firebase/public-read', 'firebase/public-write', 'gcp/public-ingress', 'sql/public-authorized-network', 'bigquery/public-dataset-exposure', 'sre/single-zone-database', 'aws/public-s3-bucket', 'aws/public-rds-instance', 'azure/public-storage-blob', 'azure/public-database-network'].includes(finding.ruleId)) {
       try {
         const file = finding.location.file;
         if (!sources.has(file)) {
@@ -77,7 +82,16 @@ export function proposeRemediations(findings: Finding[], directory: string): Rem
           } else if (finding.ruleId === 'bigquery/public-dataset-exposure') {
             updated = line.replace(/"all(?:Authenticated)?Users"/g, '"projectReaders"');
           } else if (finding.ruleId === 'sre/single-zone-database') {
-            updated = line.replace(/"ZONAL"/g, '"REGIONAL"');
+            updated = line.replace(/"ZONAL"/g, '"REGIONAL"').replace(/\b(multi_az\s*=\s*)false\b/g, '$1true');
+          } else if (finding.ruleId === 'aws/public-s3-bucket') {
+            updated = line.replace(/"public-read(?:-write)?"/g, '"private"')
+              .replace(/\b(block_public_(?:acls|policy)\s*=\s*)false\b/g, '$1true');
+          } else if (finding.ruleId === 'aws/public-rds-instance') {
+            updated = line.replace(/\b(publicly_accessible\s*=\s*)true\b/g, '$1false');
+          } else if (finding.ruleId === 'azure/public-storage-blob') {
+            updated = line.replace(/\b(allow_(?:nested_items_to_be_public|blob_public_access)\s*=\s*)true\b/g, '$1false');
+          } else if (finding.ruleId === 'azure/public-database-network') {
+            updated = line.replace(/\b(public_network_access_enabled\s*=\s*)true\b/g, '$1false');
           } else {
             // Use source offsets so comments and quoted values on the line stay untouched.
             const code = strippedLines[finding.location.line - 1]

@@ -1270,3 +1270,61 @@ test('CEL function AST resolution suppresses write-restricted public asset bucke
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('Multi-cloud AWS (S3, RDS, GitHub OIDC) and Azure (Blob, PostgreSQL) Terraform exposures and diffs are detected', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'atlas-multicloud-'));
+  try {
+    writeFileSync(
+      join(directory, 'multicloud.tf'),
+      [
+        'resource "aws_s3_bucket_acl" "exports" {',
+        '  bucket = "corp-exports"',
+        '  acl    = "public-read-write"',
+        '}',
+        'resource "aws_db_instance" "core_db" {',
+        '  identifier          = "core-db"',
+        '  publicly_accessible = true',
+        '  multi_az            = false',
+        '}',
+        'resource "aws_iam_role" "gh_deploy" {',
+        '  name               = "gh-deploy"',
+        '  assume_role_policy = "{\\"Principal\\":{\\"Federated\\":\\"arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com\\"}}"',
+        '}',
+        'resource "azurerm_storage_account" "blobs" {',
+        '  name                            = "corpblobs"',
+        '  allow_nested_items_to_be_public = true',
+        '}',
+        'resource "azurerm_postgresql_flexible_server" "pg" {',
+        '  name                          = "corp-pg"',
+        '  public_network_access_enabled = true',
+        '}',
+      ].join('\n'),
+    );
+
+    const graph = scanDirectory(directory);
+    const rules = graph.findings.map(f => f.ruleId).sort();
+    assert.deepEqual(rules, [
+      'aws/public-rds-instance',
+      'aws/public-s3-bucket',
+      'aws/unpinned-github-oidc',
+      'azure/public-database-network',
+      'azure/public-storage-blob',
+      'sre/single-zone-database',
+    ]);
+    assert.equal(graph.paths.length, 4, 'Expected 4 confirmed cross-boundary data paths (AWS S3, AWS RDS, Azure Blob, Azure DB)');
+
+    const proposals = proposeRemediations(graph.findings, directory);
+    const diffs = proposals.map(p => p.diff).join('\n');
+    assert.match(diffs, /\+  acl    = "private"/);
+    assert.match(diffs, /\+  publicly_accessible = false/);
+    assert.match(diffs, /\+  multi_az            = true/);
+    assert.match(diffs, /\+  allow_nested_items_to_be_public = false/);
+    assert.match(diffs, /\+  public_network_access_enabled = false/);
+
+    const blueprintJa = formatBlueprint(graph, undefined, proposals, 'ja', 'municipal');
+    assert.match(blueprintJa, /AWS S3バケットの公開ACL/);
+    assert.match(blueprintJa, /Azure Storage Accountの匿名パブリックBlobアクセス許可/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
