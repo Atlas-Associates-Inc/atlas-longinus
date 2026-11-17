@@ -29,35 +29,32 @@ Run https://github.com/Atlas-Associates-Inc/atlas-longinus
 
 ---
 
-<details>
-<summary><strong>Global Overview (20 Languages) / 20言語クイック概要</strong></summary>
+### 🌐 20-Language 1-Line Copy-Paste AI Prompts
 
-> **Note:** The [English](#english) and [日本語](#日本語) sections below are the sole authoritative technical and security-boundary specifications for LONGINUS (`atlas-sovereign`), defining all CLI flags, input bounds, and operational guarantees.
+| Language | `--lang` | Paste This 1 Line into Your AI Agent (`Antigravity / Gemini CLI / Codex / Cursor / Windsurf`) |
+| :--- | :--- | :--- |
+| **[English](#english)** | `en` | `Run https://github.com/Atlas-Associates-Inc/atlas-longinus` |
+| **[日本語](#日本語)** | `ja` | `https://github.com/Atlas-Associates-Inc/atlas-longinus を実行して` |
+| **[简体中文](#zh-hans)** | `zh-Hans` | `运行 https://github.com/Atlas-Associates-Inc/atlas-longinus` |
+| **[繁體中文](#zh-hant)** | `zh-Hant` | `執行 https://github.com/Atlas-Associates-Inc/atlas-longinus` |
+| **[한국어](#ko)** | `ko` | `https://github.com/Atlas-Associates-Inc/atlas-longinus 실행해줘` |
+| **[Español](#es)** | `es` | `Ejecuta https://github.com/Atlas-Associates-Inc/atlas-longinus` |
+| **[Português](#pt)** | `pt` | `Execute https://github.com/Atlas-Associates-Inc/atlas-longinus` |
+| **[Français](#fr)** | `fr` | `Exécute https://github.com/Atlas-Associates-Inc/atlas-longinus` |
+| **[Deutsch](#de)** | `de` | `Führe https://github.com/Atlas-Associates-Inc/atlas-longinus aus` |
+| **[Italiano](#it)** | `it` | `Esegui https://github.com/Atlas-Associates-Inc/atlas-longinus` |
+| **[Русский](#ru)** | `ru` | `Запусти https://github.com/Atlas-Associates-Inc/atlas-longinus` |
+| **[Українська](#uk)** | `uk` | `Запусти https://github.com/Atlas-Associates-Inc/atlas-longinus` |
+| **[Polski](#pl)** | `pl` | `Uruchom https://github.com/Atlas-Associates-Inc/atlas-longinus` |
+| **[Nederlands](#nl)** | `nl` | `Voer https://github.com/Atlas-Associates-Inc/atlas-longinus uit` |
+| **[Türkçe](#tr)** | `tr` | `https://github.com/Atlas-Associates-Inc/atlas-longinus çalıştır` |
+| **[العربية](#ar)** | `ar` | `شغّل https://github.com/Atlas-Associates-Inc/atlas-longinus` |
+| **[हिन्दी](#hi)** | `hi` | `https://github.com/Atlas-Associates-Inc/atlas-longinus चलाएँ` |
+| **[Bahasa Indonesia](#id)** | `id` | `Jalankan https://github.com/Atlas-Associates-Inc/atlas-longinus` |
+| **[Tiếng Việt](#vi)** | `vi` | `Chạy https://github.com/Atlas-Associates-Inc/atlas-longinus` |
+| **[ไทย](#th)** | `th` | `รัน https://github.com/Atlas-Associates-Inc/atlas-longinus` |
 
-| Language | Tag | Just Paste into Your AI Agent (`Antigravity / Gemini CLI / Codex / Cursor / Windsurf`) | Summary |
-| --- | --- | --- | --- |
-| **English** | `en` | `Run https://github.com/Atlas-Associates-Inc/atlas-longinus` | Zero commands or flags to type—paste the 1-line prompt into your AI agent and LONGINUS automatically runs a read-only GCP × Firebase & 4-Stack Code Shield audit, outputting the 5-pillar scorecard, 30/60/90-day Blueprint, and review-only patches (Apache-2.0, Node.js >=22.18.0, 0 npm dependencies). |
-| **日本語 (Japanese)** | `ja` | `https://github.com/Atlas-Associates-Inc/atlas-longinus を実行して` | コマンドや説明文を1文字も書く必要なく、AIに左記の1行を貼るだけで自動実行プロトコルが発動し、5領域スコア・4-Stack監査・修正パッチ案を全自動出力します（Apache-2.0、Node.js >=22.18.0、npm依存0）。 |
-| **简体中文 (Simplified Chinese)** | `zh-Hans` | `运行 https://github.com/Atlas-Associates-Inc/atlas-longinus` | 无需输入任何命令、参数或说明，只需将左侧一行粘贴至 AI 代理，即可自动执行只读架构与代码安全审计并输出5大领域评分与修复补丁（Apache-2.0、Node.js >=22.18.0、0 npm 依赖）。 |
-| **繁體中文 (Traditional Chinese)** | `zh-Hant` | `執行 https://github.com/Atlas-Associates-Inc/atlas-longinus` | 無需輸入任何指令、參數或說明，只需將左側一行貼上至 AI 代理，即可自動執行唯讀架構與程式碼安全審計並輸出5大領域評分與修補建議（Apache-2.0、Node.js >=22.18.0、0 npm 相依性）。 |
-| **한국어 (Korean)** | `ko` | `https://github.com/Atlas-Associates-Inc/atlas-longinus 실행해줘` | 명령어나 옵션을 한 글자도 적을 필요 없이 AI 에이전트에 왼쪽 한 줄만 붙여넣으면 읽기 전용 아키텍처 및 코드 보안 감사가 자동 실행됩니다(Apache-2.0, Node.js >=22.18.0, npm 의존성 0개). |
-| **Español (Spanish)** | `es` | `Ejecuta https://github.com/Atlas-Associates-Inc/atlas-longinus` | Sin escribir comandos ni opciones: pegue esta línea en su agente de IA para ejecutar automáticamente la auditoría de arquitectura y seguridad en modo de solo lectura (Apache-2.0, Node.js >=22.18.0, 0 dependencias npm). |
-| **Português (Portuguese)** | `pt` | `Execute https://github.com/Atlas-Associates-Inc/atlas-longinus` | Sem digitar comandos ou opções: basta colar esta linha no seu agente de IA para executar automaticamente a auditoria somente leitura LONGINUS (Apache-2.0, Node.js >=22.18.0, 0 dependências npm). |
-| **Français (French)** | `fr` | `Exécute https://github.com/Atlas-Associates-Inc/atlas-longinus` | Sans taper la moindre commande ni option : collez simplement cette ligne dans votre agent IA pour lancer automatiquement l'audit en lecture seule LONGINUS (Apache-2.0, Node.js >=22.18.0, 0 dépendance npm). |
-| **Deutsch (German)** | `de` | `Führe https://github.com/Atlas-Associates-Inc/atlas-longinus aus` | Ohne Befehle oder Optionen einzutippen: Fügen Sie einfach diese Zeile in Ihren KI-Agenten ein, um das schreibgeschützte LONGINUS-Audit automatisch zu starten (Apache-2.0, Node.js >=22.18.0, 0 npm-Abhängigkeiten). |
-| **Italiano (Italian)** | `it` | `Esegui https://github.com/Atlas-Associates-Inc/atlas-longinus` | Senza digitare comandi o opzioni: incolla questa riga nel tuo agente IA per avviare automaticamente l'audit in sola lettura LONGINUS (Apache-2.0, Node.js >=22.18.0, 0 dipendenze npm). |
-| **Русский (Russian)** | `ru` | `Запусти https://github.com/Atlas-Associates-Inc/atlas-longinus` | Без ввода команд и параметров: просто вставьте эту строку в ваш ИИ-агент для автоматического запуска офлайн-аудита LONGINUS в режиме только для чтения (Apache-2.0, Node.js >=22.18.0, 0 зависимостей npm). |
-| **Українська (Ukrainian)** | `uk` | `Запусти https://github.com/Atlas-Associates-Inc/atlas-longinus` | Без введення команд чи параметрів: просто вставте цей рядок у ваш ШІ-агент для автоматичного запуску аудиту LONGINUS у режимі лише для читання (Apache-2.0, Node.js >=22.18.0, 0 залежностей npm). |
-| **Polski (Polish)** | `pl` | `Uruchom https://github.com/Atlas-Associates-Inc/atlas-longinus` | Bez wpisywania poleceń ani opcji: wklej tę linię do swojego agenta AI, aby automatycznie uruchomić audyt LONGINUS w trybie tylko do odczytu (Apache-2.0, Node.js >=22.18.0, 0 zależności npm). |
-| **Nederlands (Dutch)** | `nl` | `Voer https://github.com/Atlas-Associates-Inc/atlas-longinus uit` | Zonder commando's of opties te typen: plak deze regel in uw AI-agent om automatisch de alleen-lezen LONGINUS-audit uit te voeren (Apache-2.0, Node.js >=22.18.0, 0 npm-afhankelijkheden). |
-| **Türkçe (Turkish)** | `tr` | `https://github.com/Atlas-Associates-Inc/atlas-longinus çalıştır` | Hiçbir komut veya seçenek yazmadan: salt okunur LONGINUS denetimini otomatik başlatmak için bu satırı AI ajanınıza yapıştırın (Apache-2.0, Node.js >=22.18.0, 0 npm bağımlılığı). |
-| **العربية (Arabic)** | `ar` | `شغّل https://github.com/Atlas-Associates-Inc/atlas-longinus` | دون كتابة أي أوامر أو خيارات: فقط الصق هذا السطر في وكيل الذكاء الاصطناعي الخاص بك لتشغيل تدقيق LONGINUS للقراءة فقط تلقائيا (Apache-2.0، وNode.js >=22.18.0، و0 تبعيات npm). |
-| **हिन्दी (Hindi)** | `hi` | `https://github.com/Atlas-Associates-Inc/atlas-longinus चलाएँ` | कोई कमांड या विकल्प टाइप किए बिना—बस अपने AI एजेंट में यह एक पंक्ति पेस्ट करें और LONGINUS रीड-ओनली ऑडिट स्वतः चलेगा (Apache-2.0, Node.js >=22.18.0, 0 npm निर्भरताएँ)। |
-| **Bahasa Indonesia (Indonesian)** | `id` | `Jalankan https://github.com/Atlas-Associates-Inc/atlas-longinus` | Tanpa mengetik perintah atau opsi apa pun—cukup tempel 1 baris ini ke agen AI Anda untuk menjalankan audit khusus-baca LONGINUS secara otomatis (Apache-2.0, Node.js >=22.18.0, 0 dependensi npm). |
-| **Tiếng Việt (Vietnamese)** | `vi` | `Chạy https://github.com/Atlas-Associates-Inc/atlas-longinus` | Không cần gõ bất kỳ lệnh hay tùy chọn nào—chỉ cần dán 1 dòng này vào AI agent để tự động chạy kiểm toán chỉ đọc LONGINUS (Apache-2.0, Node.js >=22.18.0, 0 phụ thuộc npm). |
-| **ไทย (Thai)** | `th` | `รัน https://github.com/Atlas-Associates-Inc/atlas-longinus` | ไม่ต้องพิมพ์คำสั่งหรือออปชันใดๆ เพียงวาง 1 บรรทัดนี้ลงใน AI Agent ของคุณเพื่อรันการตรวจสอบแบบอ่านอย่างเดียวของ LONGINUS โดยอัตโนมัติ (Apache-2.0, Node.js >=22.18.0, 0 การพึ่งพา npm) |
-
-</details>
+---
 
 ## English
 
@@ -81,13 +78,7 @@ flowchart LR
 
 ### Why LONGINUS (Making External Consulting Firms Unnecessary)
 
-Global technology and DX consulting firms typically charge tens or hundreds of thousands of dollars (`$75,000–$350,000+`) over 3 to 6 months to assess enterprise cloud architectures, audit IAM and CI/CD trust boundaries, design AI/data guardrails and FinOps cost controls, and produce a 30/60/90-day transformation roadmap. **By loading `LONGINUS` into your company's existing AI agent, your internal staff can instantly build a dedicated in-house Cloud, DX, and AI Security Consulting AI in seconds for $0—making external consulting firms completely unnecessary.**
-
-Isolated scanners can identify an exposed resource without connecting it to the identity and permissions that make the exposure consequential. `LONGINUS` correlates supported evidence across GCP × Firebase boundaries: public Firebase Rules, Cloud Run exposure, GKE node identity exposure, Cloud SQL public networks (`0.0.0.0/0`, unencrypted public IPv4, or missing resilience guardrails), Vertex AI Workbench public IP exposure, BigQuery public dataset grants (`allUsers` / `allAuthenticatedUsers`), unbounded serverless scaling (`finops/unbounded-serverless-scaling`), or Workload Identity Federation (WIF) can form entry points into paths involving runtime or federated identities (including Compute Engine, App Engine, and Cloud Build default service accounts), IAM privilege escalation, and access to Secret Manager, BigQuery, Cloud SQL, or Cloud Storage. The graph distinguishes observed or statically established relationships from `potential` transitions that depend on application behavior or deployment context.
-
-With `--format blueprint --emit-patch`, your internal AI coding agent automatically generates an executive risk summary, a **5-Pillar Architecture Maturity Scorecard (`0–100`, Grade `A`–`F`)**, an **Estimated External Consulting Equivalent Saved (`$` ROI)**, a 30/60/90-day remediation roadmap, and review-only unified diffs offline in seconds—replacing multi-month external consulting engagements with deterministic code and self-driving CI gates.
-
-AI SecOps adds another boundary: an assistant may receive hostile cloud logs or invoke tools with excessive privileges. The MCP Airlock mechanically restricts forwarded requests through fail-closed tool-name policies, while secret redaction and injection sanitization prepare untrusted telemetry for review. These controls have explicit limits; they do not establish that an upstream program is trustworthy or that every model instruction attack is neutralized.
+Global technology and DX consulting firms charge `$75,000–$350,000+` over 3–6 months for cloud architecture assessments, IAM/WIF governance, AI/FinOps guardrails, and 30/60/90-day roadmaps. **`LONGINUS` turns your company's existing AI agent into a dedicated in-house Cloud, DX, and 4-Stack Code Security Consulting AI in seconds for `$0`—correlating cross-boundary GCP × Firebase attack paths, scoring 5 architecture pillars, and generating review-only remediation diffs offline.**
 
 ### What LONGINUS Can Do (6 Core Capabilities)
 
@@ -344,13 +335,7 @@ flowchart LR
 
 ### なぜ LONGINUS か（外部コンサルを一瞬で不要にする）
 
-グローバルな DX・テクノロジーコンサルティングファームにクラウド設計評価・IAM／WIF 統制・AI／データ基盤ガードレール設計・FinOps コスト統制・30/60/90日ロードマップ策定を依頼すると、通常 3〜6ヶ月で数千万円（¥1,000万〜¥5,000万円以上）の費用がかかります。**`LONGINUS` を各企業の担当者が自社の AI エージェントに読み込ませるだけで、そうしたコンサル会社が提供する知見・横断検査・改修パッチ生成を備えた「自社専用の超一流 DX・クラウド・AI コンサル AI」を一瞬（数秒・¥0）で社内構築でき、外部コンサルティング会社を一切不要にします。**
-
-個別のスキャナーでは、公開されたリソースを検出できても、その影響を決める ID と権限のつながりを見落とす場合があります。`LONGINUS` は、GCP × Firebase の境界をまたぐ対応済みの証拠を関連付けます。公開された Firebase Rules、Cloud Run、GKE ノード ID の露出、Cloud SQL の全公開ネットワーク（`0.0.0.0/0`、非暗号化公開 IPv4、または削除保護・自動バックアップ欠如）、Vertex AI Workbench の公開 IP 露出、BigQuery データセットの公開共有（`allUsers` / `allAuthenticatedUsers`）、サーバーレスの上限なしスケーリング（`finops/unbounded-serverless-scaling`）、Workload Identity Federation（WIF）を入口として、実行 ID またはフェデレーション ID（Compute Engine、App Engine、Cloud Build の既定サービスアカウントを含む）、IAM 権限昇格、Secret Manager・BigQuery・Cloud SQL・Cloud Storage へのアクセスに至る経路を扱います。グラフでは、観測済みまたは静的に確認できた関係と、アプリケーションの動作やデプロイ環境に依存する `potential` な遷移を区別します。
-
-さらに `--format blueprint --emit-patch --lang ja` を使うことで、自社の AI コーディングエージェントが経営・情シス向けのリスク要約、**5領域アーキテクチャ成熟度スコアカード（`0–100` 点・Grade `A`〜`F`）**、**外部コンサル削減効果の自動試算（`¥` ROI）**、30/60/90日の自律改修ロードマップ、およびレビュー専用の修正 diff を完全な日本語でオフラインかつ数秒で自動生成します。これにより、従来数ヶ月を要した高額な外部コンサルティング診断を、決定論的なコードと自走型 CI ゲートへ完全に置き換えます。
-
-AI SecOps には別の境界もあります。アシスタントは攻撃用の指示を含むクラウドログを受け取ったり、過剰な権限を持つツールを呼び出したりする可能性があります。MCP Airlock は、安全側に拒否するツール名ポリシーで転送要求を機械的に制限し、秘密情報の除去とインジェクションのサニタイズによって、信頼できないテレメトリーをレビュー可能な形にします。これらの制御には限界があり、上流プログラムの信頼性や、モデルへのあらゆる指示攻撃の無効化を証明するものではありません。
+グローバルな DX・テクノロジーコンサルティングファームにクラウド設計評価・IAM／WIF 統制・AI／データ基盤ガードレール・FinOps コスト統制・30/60/90日ロードマップ策定を依頼すると、通常 3〜6ヶ月で数千万円（¥1,000万〜¥5,000万円以上）の費用がかかります。**`LONGINUS` を自社の AI エージェントに読み込ませるだけで、GCP × Firebase クロス境界攻撃経路グラフ・4-Stack コード監査・5領域成熟度スコアカード・レビュー専用修正パッチ生成を備えた「自社専用の超一流コンサル AI」を数秒・¥0 で社内構築でき、外部コンサルを一切不要にします。**
 
 ### LONGINUS で何ができるか（6大機能）
 

@@ -81,18 +81,13 @@ test('OSS governance documents are bilingual, safe UTF-8 files and preserve repo
       for (const required of ['>=22.18.0', 'npm run check', 'npm test']) assert.ok(source.includes(required), `${file}: ${required}`);
     }
     if (file === 'README.md') {
-      const detailsMatch = source.match(/<details>([\s\S]*?)<\/details>/);
-      assert.ok(detailsMatch, 'README.md must contain a <details> block');
-      assert.ok(source.includes('<summary><strong>Global Overview (20 Languages) / 20言語クイック概要</strong></summary>'), 'README.md must contain expected summary');
-      const detailsContent = detailsMatch[1];
-      const rows = detailsContent.match(/^\| [^|]+ \| `[a-zA-Z-]+` \|/gm) ?? [];
-      assert.equal(rows.length, 20, 'README.md <details> must contain exact 20 table rows');
-      assert.ok(!detailsContent.includes('[!NOTE]'), 'README.md <details> must not use [!NOTE]');
-      assert.ok(detailsContent.includes('[English](#english)'), 'README.md <details> must delegate to English section');
-      assert.ok(detailsContent.includes('[日本語](#日本語)'), 'README.md <details> must delegate to Japanese section');
+      assert.equal(source.includes('<details'), false, 'README.md must not hide content inside collapsed <details> blocks');
+      const rows = source.match(/^\| \*\*\[[^\]]+\]\(#[^)]+\)\*\* \| `[a-zA-Z-]+` \|/gm) ?? [];
+      assert.equal(rows.length, 20, 'README.md must contain exact 20 visible language table rows');
+      assert.ok(!source.includes('[!NOTE]'), 'README.md must not use [!NOTE]');
       const tags = ['en', 'ja', 'zh-Hans', 'zh-Hant', 'ko', 'es', 'pt', 'fr', 'de', 'it', 'ru', 'uk', 'pl', 'nl', 'tr', 'ar', 'hi', 'id', 'vi', 'th'];
       for (const tag of tags) {
-        assert.ok(detailsContent.includes(`\`${tag}\``), `README.md <details> must contain tag \`${tag}\``);
+        assert.ok(source.includes(`\`${tag}\``), `README.md must contain tag \`${tag}\``);
       }
     }
   }
