@@ -276,6 +276,7 @@ export function parseTerraform(source: string, file: string, moduleLocals?: Read
     }
   }
   const privilegedTargets = new Set<string>();
+  const projectPrivilegedTargets = new Set<string>();
   let hasPinnedGithubWifProvider = false;
   let hasUnpinnedGithubWifProvider = false;
   for (const resource of resources) {
@@ -292,7 +293,12 @@ export function parseTerraform(source: string, file: string, moduleLocals?: Read
         const memberVal = value(resource.attributes, 'member', false, locals);
         if (memberVal) {
           const p = serviceIdentity(memberVal, module, accounts, locals);
-          if (p) privilegedTargets.add(p);
+          if (p) {
+            privilegedTargets.add(p);
+            if (resource.type.startsWith('google_project_iam_')) {
+              projectPrivilegedTargets.add(p);
+            }
+          }
         }
       }
     }
@@ -495,6 +501,7 @@ export function parseTerraform(source: string, file: string, moduleLocals?: Read
       ?? (type.startsWith('google_cloud_run_v2_service_iam_') ? value(attributes, 'name', false, locals) : undefined);
     const targetService = service ? referenceId(service, module) : undefined;
     const targetAccount = value(attributes, 'service_account_id', false, locals);
+    const targetAccountRef = targetAccount ? referenceId(targetAccount, module) : undefined;
     const target = targetAccount ? serviceIdentity(targetAccount, module, accounts, locals) : undefined;
     const project = value(attributes, 'project', false, locals);
     const serviceFamily = type.startsWith('google_cloud_run') ? 'run' : type.startsWith('google_cloudfunctions') ? 'cloudfunctions' : undefined;
@@ -510,6 +517,13 @@ export function parseTerraform(source: string, file: string, moduleLocals?: Read
       if (role === 'roles/iam.workloadIdentityUser' && hasPinnedGithubWifProvider && !hasUnpinnedGithubWifProvider &&
         /^principalSet:\/\/[^*\s]+\/attribute\.repository\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(member) &&
         target && !privilegedTargets.has(target)) {
+        continue;
+      }
+      if (type.startsWith('google_service_account_iam_') &&
+        role === 'roles/iam.serviceAccountUser' &&
+        targetAccountRef && accounts.has(targetAccountRef) &&
+        target && !projectPrivilegedTargets.has(target) &&
+        /^serviceAccount:/i.test(member)) {
         continue;
       }
       const principal = serviceIdentity(member, module, accounts, locals);

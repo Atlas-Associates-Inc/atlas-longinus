@@ -115,7 +115,7 @@ function parseCliArgs(args: readonly string[]): ParsedCliOptions {
     };
   }
 
-  if (hasAudit || emitSarif) {
+  if (hasAudit || emitSarif || positionals.length === 1 || explicitMode !== undefined) {
     return {
       command: 'audit',
       ...(positionals[0] !== undefined ? { targetPath: positionals[0] } : {}),
@@ -168,7 +168,7 @@ export async function runCli(args: readonly string[], io?: CliIoHooks): Promise<
       const targetPath = parsed.targetPath ?? process.cwd();
       const canonicalTarget = tryCanonicalizePath(targetPath);
       const report = await executeDefensiveAudit({
-        targetPath,
+        targetPath: canonicalTarget,
         mode: parsed.mode,
         ...(canonicalTarget === PROJECT_ROOT ? { excludeRelativePrefixes: ['test'] } : {}),
       });
@@ -201,11 +201,22 @@ export async function runCli(args: readonly string[], io?: CliIoHooks): Promise<
 function isDirectCliEntrypoint(): boolean {
   const invoked = process.argv[1];
   if (typeof invoked !== 'string' || invoked.length === 0) return false;
-  const selfFile = fileURLToPath(import.meta.url);
+  const candidates = [
+    fileURLToPath(import.meta.url),
+    fileURLToPath(new URL('../../bin/longinus.mjs', import.meta.url)),
+  ];
   try {
-    return fsSync.realpathSync(invoked) === fsSync.realpathSync(selfFile);
+    const realInvoked = fsSync.realpathSync(invoked);
+    return candidates.some((c) => {
+      try {
+        return realInvoked === fsSync.realpathSync(c);
+      } catch {
+        return false;
+      }
+    });
   } catch {
-    return path.resolve(invoked) === path.resolve(selfFile);
+    const absInvoked = path.resolve(invoked);
+    return candidates.some((c) => absInvoked === path.resolve(c));
   }
 }
 

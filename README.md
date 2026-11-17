@@ -12,7 +12,7 @@
 
 ## ⚡ 0-Second Start: Zero Commands to Memorize — Just Paste 1 Line into Your AI Agent
 
-You do not need to memorize or type a single CLI command, flag, or explanation. Simply paste the **1 line below** (in any of the 20 supported languages) into your AI agent (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, etc.):
+You do not need to memorize or type a single CLI command, flag, or explanation. Simply paste the **1 line below** (in any of the 20 supported languages) into your AI agent (**Antigravity / Gemini CLI / Codex / Cursor / Windsurf**, etc.):
 
 ```text
 Run https://github.com/Atlas-Associates-Inc/atlas-longinus
@@ -29,10 +29,12 @@ Run https://github.com/Atlas-Associates-Inc/atlas-longinus
 
 ---
 
-<details open>
-<summary><strong>🌐 20-Language 1-Line AI Prompts & Global Overview</strong></summary>
+<details>
+<summary><strong>Global Overview (20 Languages) / 20言語クイック概要</strong></summary>
 
-| Language | Tag | Just Paste into Your AI Agent (`Antigravity / Gemini CLI / Claude Code / Codex / Cursor`) | Summary |
+> **Note:** The [English](#english) and [日本語](#日本語) sections below are the sole authoritative technical and security-boundary specifications for LONGINUS (`atlas-sovereign`), defining all CLI flags, input bounds, and operational guarantees.
+
+| Language | Tag | Just Paste into Your AI Agent (`Antigravity / Gemini CLI / Codex / Cursor / Windsurf`) | Summary |
 | --- | --- | --- | --- |
 | **English** | `en` | `Run https://github.com/Atlas-Associates-Inc/atlas-longinus` | Zero commands or flags to type—paste the 1-line prompt into your AI agent and LONGINUS automatically runs a read-only GCP × Firebase & 4-Stack Code Shield audit, outputting the 5-pillar scorecard, 30/60/90-day Blueprint, and review-only patches (Apache-2.0, Node.js >=22.18.0, 0 npm dependencies). |
 | **日本語 (Japanese)** | `ja` | `https://github.com/Atlas-Associates-Inc/atlas-longinus を実行して` | コマンドや説明文を1文字も書く必要なく、AIに左記の1行を貼るだけで自動実行プロトコルが発動し、5領域スコア・4-Stack監査・修正パッチ案を全自動出力します（Apache-2.0、Node.js >=22.18.0、npm依存0）。 |
@@ -317,7 +319,7 @@ Test files run sequentially so deterministic wall-clock parser budgets do not co
 
 ## 日本語
 
-> ⚡ **0秒スタート（コマンドや説明文は1文字も不要）**: お使いの AI エージェント（**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** 等）に **以下の1行を貼るだけ** です：
+> ⚡ **0秒スタート（コマンドや説明文は1文字も不要）**: お使いの AI エージェント（**Antigravity / Gemini CLI / Codex / Cursor / Windsurf** 等）に **以下の1行を貼るだけ** です：
 > ```text
 > https://github.com/Atlas-Associates-Inc/atlas-longinus を実行して
 > ```
@@ -585,7 +587,7 @@ npm test
 <a id="zh-hans"></a>
 ## 简体中文 (Simplified Chinese)
 
-无需记忆或输入任何命令与参数，只需将以下 **1 行文本**粘贴到您的 AI 代理（**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** 等）中即可自动执行只读审计：
+无需记忆或输入任何命令与参数，只需将以下 **1 行文本**粘贴到您的 AI 代理（**Antigravity / Gemini CLI / Codex / Cursor / Windsurf** 等）中即可自动执行只读审计：
 
 ```text
 运行 https://github.com/Atlas-Associates-Inc/atlas-longinus
@@ -599,7 +601,7 @@ npm test
 <a id="zh-hant"></a>
 ## 繁體中文 (Traditional Chinese)
 
-無需記憶或輸入任何指令與參數，只需將以下 **1 行文字**貼上到您的 AI 代理（**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** 等）即可自動執行唯讀審計：
+無需記憶或輸入任何指令與參數，只需將以下 **1 行文字**貼上到您的 AI 代理（**Antigravity / Gemini CLI / Codex / Cursor / Windsurf** 等）即可自動執行唯讀審計：
 
 ```text
 執行 https://github.com/Atlas-Associates-Inc/atlas-longinus
@@ -613,7 +615,7 @@ npm test
 <a id="ko"></a>
 ## 한국어 (Korean)
 
-명령어나 옵션을 한 글자도 외울 필요 없이 AI 에이전트(**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** 등)에 아래 **한 줄만 붙여넣으면** 읽기 전용 감사가 자동 실행됩니다:
+명령어나 옵션을 한 글자도 외울 필요 없이 AI 에이전트(**Antigravity / Gemini CLI / Codex / Cursor / Windsurf** 등)에 아래 **한 줄만 붙여넣으면** 읽기 전용 감사가 자동 실행됩니다:
 
 ```text
 https://github.com/Atlas-Associates-Inc/atlas-longinus 실행해줘
@@ -627,7 +629,7 @@ https://github.com/Atlas-Associates-Inc/atlas-longinus 실행해줘
 <a id="es"></a>
 ## Español (Spanish)
 
-No necesita memorizar ni escribir ningún comando ni opción; simplemente pegue esta **1 línea** en su agente de IA (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, etc.):
+No necesita memorizar ni escribir ningún comando ni opción; simplemente pegue esta **1 línea** en su agente de IA (**Antigravity / Gemini CLI / Codex / Cursor / Windsurf**, etc.):
 
 ```text
 Ejecuta https://github.com/Atlas-Associates-Inc/atlas-longinus
@@ -641,7 +643,7 @@ Ejecuta https://github.com/Atlas-Associates-Inc/atlas-longinus
 <a id="pt"></a>
 ## Português (Portuguese)
 
-Você não precisa memorizar nenhum comando ou opção; basta colar esta **1 linha** no seu agente de IA (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, etc.):
+Você não precisa memorizar nenhum comando ou opção; basta colar esta **1 linha** no seu agente de IA (**Antigravity / Gemini CLI / Codex / Cursor / Windsurf**, etc.):
 
 ```text
 Execute https://github.com/Atlas-Associates-Inc/atlas-longinus
@@ -655,7 +657,7 @@ Execute https://github.com/Atlas-Associates-Inc/atlas-longinus
 <a id="fr"></a>
 ## Français (French)
 
-Aucune commande ni option à mémoriser : collez simplement cette **seule ligne** dans votre agent IA (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, etc.) :
+Aucune commande ni option à mémoriser : collez simplement cette **seule ligne** dans votre agent IA (**Antigravity / Gemini CLI / Codex / Cursor / Windsurf**, etc.) :
 
 ```text
 Exécute https://github.com/Atlas-Associates-Inc/atlas-longinus
@@ -669,7 +671,7 @@ Exécute https://github.com/Atlas-Associates-Inc/atlas-longinus
 <a id="de"></a>
 ## Deutsch (German)
 
-Sie müssen sich kein einziges Kommando merken – fügen Sie einfach diese **eine Zeile** in Ihren KI-Agenten (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** usw.) ein:
+Sie müssen sich kein einziges Kommando merken – fügen Sie einfach diese **eine Zeile** in Ihren KI-Agenten (**Antigravity / Gemini CLI / Codex / Cursor / Windsurf** usw.) ein:
 
 ```text
 Führe https://github.com/Atlas-Associates-Inc/atlas-longinus aus
@@ -683,7 +685,7 @@ Führe https://github.com/Atlas-Associates-Inc/atlas-longinus aus
 <a id="it"></a>
 ## Italiano (Italian)
 
-Non serve memorizzare alcun comando o opzione: incolla semplicemente questa **singola riga** nel tuo agente IA (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, ecc.):
+Non serve memorizzare alcun comando o opzione: incolla semplicemente questa **singola riga** nel tuo agente IA (**Antigravity / Gemini CLI / Codex / Cursor / Windsurf**, ecc.):
 
 ```text
 Esegui https://github.com/Atlas-Associates-Inc/atlas-longinus
@@ -697,7 +699,7 @@ Esegui https://github.com/Atlas-Associates-Inc/atlas-longinus
 <a id="ru"></a>
 ## Русский (Russian)
 
-Не нужно запоминать команды или флаги — просто вставьте эту **одну строку** в ваш ИИ-агент (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** и др.):
+Не нужно запоминать команды или флаги — просто вставьте эту **одну строку** в ваш ИИ-агент (**Antigravity / Gemini CLI / Codex / Cursor / Windsurf** и др.):
 
 ```text
 Запусти https://github.com/Atlas-Associates-Inc/atlas-longinus
@@ -711,7 +713,7 @@ Esegui https://github.com/Atlas-Associates-Inc/atlas-longinus
 <a id="uk"></a>
 ## Українська (Ukrainian)
 
-Не потрібно запам'ятовувати жодної команди — просто вставте цей **один рядок** у ваш ШІ-агент (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** тощо):
+Не потрібно запам'ятовувати жодної команди — просто вставте цей **один рядок** у ваш ШІ-агент (**Antigravity / Gemini CLI / Codex / Cursor / Windsurf** тощо):
 
 ```text
 Запусти https://github.com/Atlas-Associates-Inc/atlas-longinus
@@ -725,7 +727,7 @@ Esegui https://github.com/Atlas-Associates-Inc/atlas-longinus
 <a id="pl"></a>
 ## Polski (Polish)
 
-Nie musisz pamiętać żadnych poleceń ani opcji — po prostu wklej tę **jedną linię** do swojego agenta AI (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** itp.):
+Nie musisz pamiętać żadnych poleceń ani opcji — po prostu wklej tę **jedną linię** do swojego agenta AI (**Antigravity / Gemini CLI / Codex / Cursor / Windsurf** itp.):
 
 ```text
 Uruchom https://github.com/Atlas-Associates-Inc/atlas-longinus
@@ -739,7 +741,7 @@ Uruchom https://github.com/Atlas-Associates-Inc/atlas-longinus
 <a id="nl"></a>
 ## Nederlands (Dutch)
 
-U hoeft geen enkel commando te onthouden — plak gewoon deze **ene regel** in uw AI-agent (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, enz.):
+U hoeft geen enkel commando te onthouden — plak gewoon deze **ene regel** in uw AI-agent (**Antigravity / Gemini CLI / Codex / Cursor / Windsurf**, enz.):
 
 ```text
 Voer https://github.com/Atlas-Associates-Inc/atlas-longinus uit
@@ -753,7 +755,7 @@ Voer https://github.com/Atlas-Associates-Inc/atlas-longinus uit
 <a id="tr"></a>
 ## Türkçe (Turkish)
 
-Tek bir komut veya seçenek ezberlemenize gerek yok — AI ajanınıza (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** vb.) yalnızca şu **1 satırı** yapıştırın:
+Tek bir komut veya seçenek ezberlemenize gerek yok — AI ajanınıza (**Antigravity / Gemini CLI / Codex / Cursor / Windsurf** vb.) yalnızca şu **1 satırı** yapıştırın:
 
 ```text
 https://github.com/Atlas-Associates-Inc/atlas-longinus çalıştır
@@ -767,7 +769,7 @@ https://github.com/Atlas-Associates-Inc/atlas-longinus çalıştır
 <a id="ar"></a>
 ## العربية (Arabic)
 
-لا حاجة لحفظ أي أمر أو خيار على الإطلاق — فقط الصق هذا **السطر الواحد** في وكيل الذكاء الاصطناعي الخاص بك (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** إلخ):
+لا حاجة لحفظ أي أمر أو خيار على الإطلاق — فقط الصق هذا **السطر الواحد** في وكيل الذكاء الاصطناعي الخاص بك (**Antigravity / Gemini CLI / Codex / Cursor / Windsurf** إلخ):
 
 ```text
 شغّل https://github.com/Atlas-Associates-Inc/atlas-longinus
@@ -781,7 +783,7 @@ https://github.com/Atlas-Associates-Inc/atlas-longinus çalıştır
 <a id="hi"></a>
 ## हिन्दी (Hindi)
 
-आपको कोई भी कमांड या विकल्प याद रखने की आवश्यकता नहीं है—बस अपने AI एजेंट (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** आदि) में यह **1 पंक्ति** पेस्ट करें:
+आपको कोई भी कमांड या विकल्प याद रखने की आवश्यकता नहीं है—बस अपने AI एजेंट (**Antigravity / Gemini CLI / Codex / Cursor / Windsurf** आदि) में यह **1 पंक्ति** पेस्ट करें:
 
 ```text
 https://github.com/Atlas-Associates-Inc/atlas-longinus चलाएँ
@@ -795,7 +797,7 @@ https://github.com/Atlas-Associates-Inc/atlas-longinus चलाएँ
 <a id="id"></a>
 ## Bahasa Indonesia (Indonesian)
 
-Anda tidak perlu menghafal satu karakter perintah pun—cukup tempel **1 baris** ini ke agen AI Anda (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, dll.):
+Anda tidak perlu menghafal satu karakter perintah pun—cukup tempel **1 baris** ini ke agen AI Anda (**Antigravity / Gemini CLI / Codex / Cursor / Windsurf**, dll.):
 
 ```text
 Jalankan https://github.com/Atlas-Associates-Inc/atlas-longinus
@@ -809,7 +811,7 @@ Jalankan https://github.com/Atlas-Associates-Inc/atlas-longinus
 <a id="vi"></a>
 ## Tiếng Việt (Vietnamese)
 
-Bạn không cần nhớ bất kỳ câu lệnh hay tùy chọn nào—chỉ cần dán **1 dòng** này vào AI agent (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor**, v.v.):
+Bạn không cần nhớ bất kỳ câu lệnh hay tùy chọn nào—chỉ cần dán **1 dòng** này vào AI agent (**Antigravity / Gemini CLI / Codex / Cursor / Windsurf**, v.v.):
 
 ```text
 Chạy https://github.com/Atlas-Associates-Inc/atlas-longinus
@@ -823,7 +825,7 @@ Chạy https://github.com/Atlas-Associates-Inc/atlas-longinus
 <a id="th"></a>
 ## ไทย (Thai)
 
-ไม่ต้องจำคำสั่งหรือออปชันแม้แต่ตัวเดียว เพียงวาง **1 บรรทัด** นี้ลงใน AI Agent ของคุณ (**Antigravity / Gemini CLI / Claude Code / Codex / Cursor** ฯลฯ):
+ไม่ต้องจำคำสั่งหรือออปชันแม้แต่ตัวเดียว เพียงวาง **1 บรรทัด** นี้ลงใน AI Agent ของคุณ (**Antigravity / Gemini CLI / Codex / Cursor / Windsurf** ฯลฯ):
 
 ```text
 รัน https://github.com/Atlas-Associates-Inc/atlas-longinus

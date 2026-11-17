@@ -30,6 +30,46 @@ export interface StaticRule {
 
 const JS_TS_EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']);
 
+function isNonProductionOrTemplateFile(ctx: FileContext): boolean {
+  const rel = ctx.relativePath;
+  const base = ctx.baseName;
+  if (
+    /\.(?:example|sample|template|dist)$/i.test(base) ||
+    base.startsWith('.env.example') ||
+    base.startsWith('.env.sample') ||
+    base.startsWith('.env.template')
+  ) {
+    return true;
+  }
+  if (
+    ctx.ext === '.md' ||
+    ctx.ext === '.mdx' ||
+    ctx.ext === '.txt' ||
+    ctx.ext === '.arb' ||
+    /^(?:ai|docs)\//i.test(rel) ||
+    /(?:^|\/)(?:l10n|locales|i18n)\//i.test(rel)
+  ) {
+    return true;
+  }
+  if (
+    /(?:^|\/)(?:test|tests|__tests__|__mocks__)\//i.test(rel) ||
+    /\.(?:test|spec)\.[a-z0-9]+$/i.test(base) ||
+    /(?:^test_|_test|_spec)\.(?:dart|go|py|rs|ts|js|mjs|cjs|exs)$/i.test(base) ||
+    /^test_[a-z0-9_]+\.[a-z0-9]+$/i.test(base) ||
+    /(?:^|\/)config\/(?:dev|test)\.exs$/i.test(rel)
+  ) {
+    return true;
+  }
+  if (
+    base === 'google-services.json' ||
+    base === 'GoogleService-Info.plist' ||
+    base === 'firebase_options.dart'
+  ) {
+    return true;
+  }
+  return false;
+}
+
 function isCommentOrRegexDef(trimmedLine: string): boolean {
   return (
     trimmedLine.startsWith('//') ||
@@ -162,7 +202,8 @@ if (origin && ALLOWED_ORIGINS.has(origin)) {
     cwe: 'CWE-200',
     owaspAsvs: 'V2.10.4 Secret Segregation',
     appliesTo: (ctx) =>
-      JS_TS_EXTS.has(ctx.ext) || ctx.baseName.startsWith('.env') || ctx.baseName.startsWith('next.config'),
+      !isNonProductionOrTemplateFile(ctx) &&
+      (JS_TS_EXTS.has(ctx.ext) || ctx.baseName.startsWith('.env') || ctx.baseName.startsWith('next.config')),
     evaluate: (ctx) => findMatchingLines(ctx, (line) => PUBLIC_ENV_SECRET_RE.test(line)),
     rootCause:
       'NEXT_PUBLIC_ や VITE_ プレフィックス付きの環境変数はフロントエンド JS バンドルに平文埋め込みされるため、全ユーザーに秘密鍵が露出します。',
@@ -605,6 +646,7 @@ rows, err := db.QueryContext(ctx, "SELECT id, role FROM accounts WHERE email = $
     cwe: 'CWE-798',
     owaspAsvs: 'V2.10.4 Zero Hardcoded Credentials',
     appliesTo: (ctx) =>
+      !isNonProductionOrTemplateFile(ctx) &&
       ctx.ext !== '.lock' &&
       ctx.baseName !== 'pnpm-lock.yaml' &&
       ctx.baseName !== 'package-lock.json',
@@ -614,7 +656,22 @@ rows, err := db.QueryContext(ctx, "SELECT id, role FROM accounts WHERE email = $
         const idx = lineNum - 1;
         const line = ctx.redactedLines[idx] ?? '';
         const trimmed = line.trim();
-        if (!trimmed || isCommentOrRegexDef(trimmed)) continue;
+        if (!trimmed || isCommentOrRegexDef(trimmed) || trimmed.startsWith('#')) continue;
+        // Skip Firebase Web SDK public client apiKey inside firebaseConfig / initializeApp blocks
+        if (
+          /\bapiKey\s*:\s*['"`]?\[REDACTED_(?:GCP_API_KEY|SECRET)\]['"`]?/.test(line)
+        ) {
+          const windowText = ctx.redactedLines
+            .slice(Math.max(0, idx - 6), Math.min(ctx.redactedLines.length, idx + 7))
+            .join('\n');
+          if (
+            /\b(?:authDomain|messagingSenderId|appId|storageBucket|firebase\.initializeApp|FIREBASE_CONFIG|WEB_CONFIG)\b/.test(
+              windowText,
+            )
+          ) {
+            continue;
+          }
+        }
         hits.push({
           line: lineNum,
           snippet: sliceRedactedWindow(ctx.redactedLines, idx),

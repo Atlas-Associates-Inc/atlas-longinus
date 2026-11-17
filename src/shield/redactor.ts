@@ -15,13 +15,13 @@ export interface LinePreservingRedactionResult {
  * Supports both SCREAMING_SNAKE_CASE, kebab-case, and camelCase identifiers across all 4 stacks.
  */
 export const SECRET_KEYWORD_GROUP =
-  '(?:PASS(?:WORD|WD)|PWD|DSN|SECRET|API[_-]?KEY|PRIVATE[_-]?KEY|ACCESS[_-]?TOKEN|AUTH[_-]?TOKEN|REFRESH[_-]?TOKEN|SESSION[_-]?TOKEN|ID[_-]?TOKEN|BEARER[_-]?TOKEN|API[_-]?TOKEN|GITHUB[_-]?TOKEN|SLACK[_-]?TOKEN|CLIENT[_-]?SECRET|MASTER[_-]?KEY|SIGNING[_-]?KEY|ENCRYPTION[_-]?KEY|ADMIN[_-]?KEY|SERVICE[_-]?ROLE|CREDENTIAL|WEBHOOK[_-]?SECRET|DATABASE[_-]?URL|CONNECTION[_-]?STRING|PRIVATE)';
+  '(?:PASS(?:WORD|WD)|PWD|DSN|SECRET|API[_-]?KEY|PRIVATE[_-]?KEY|ACCESS[_-]?TOKEN|AUTH[_-]?TOKEN|REFRESH[_-]?TOKEN|SESSION[_-]?TOKEN|ID[_-]?TOKEN|BEARER[_-]?TOKEN|API[_-]?TOKEN|GITHUB[_-]?TOKEN|SLACK[_-]?TOKEN|CLIENT[_-]?SECRET|MASTER[_-]?KEY|SIGNING[_-]?KEY|ENCRYPTION[_-]?KEY|ADMIN[_-]?KEY|SERVICE[_-]?ROLE|CREDENTIAL|WEBHOOK[_-]?SECRET|DATABASE[_-]?URL|CONNECTION[_-]?STRING)';
 
 /**
  * Shared client-exposed environment variable detector used identically by redactor.ts and rules.ts.
  */
 export const PUBLIC_ENV_SECRET_RE = new RegExp(
-  `\\b(?:NEXT_PUBLIC|VITE|REACT_APP|EXPO_PUBLIC)_[A-Za-z0-9_]*${SECRET_KEYWORD_GROUP}[A-Za-z0-9_]*\\b`,
+  `\\b(?:NEXT_PUBLIC|VITE|REACT_APP|EXPO_PUBLIC)_(?!(?:FIREBASE|RECAPTCHA|APPCHECK|MAPBOX|GOOGLE_MAPS)_)[A-Za-z0-9_]*${SECRET_KEYWORD_GROUP}[A-Za-z0-9_]*\\b`,
   'i',
 );
 
@@ -73,9 +73,9 @@ const TOKEN_SHAPE_PATTERNS: readonly TokenShapePattern[] = [
     replacement: (_m: string, prefix: string) => `${prefix}[REDACTED_CONN_SECRET]`,
   },
   {
-    // Semicolon-delimited connection string credentials at start followed by ';' (e.g. Password=SECRET;Host=db)
+    // Semicolon-delimited connection string credentials at start followed by ';Key=' (e.g. Password=SECRET;Host=db)
     regex:
-      /\b((?:Password|Passwd|Pwd|SharedAccessKey|AccountKey|SecretKey|AccessKey)\s*=\s*)(?!\[REDACTED|\$\{|\$\()([^;'"`\s\r\n]+)(?=;)/gi,
+      /\b((?:Password|Passwd|Pwd|SharedAccessKey|AccountKey|SecretKey|AccessKey)\s*=\s*)(?!\[REDACTED|\$\{|\$\()([^;'"`\s\r\n]+)(?=;\s*[A-Za-z0-9_]+\s*=)/gi,
     replacement: (_m: string, prefix: string) => `${prefix}[REDACTED_CONN_SECRET]`,
   },
   {
@@ -151,7 +151,7 @@ function endsWithUnescapedBackslash(text: string): boolean {
 }
 
 const PURE_DYNAMIC_REF_RE =
-  /^(?:\$\([A-Za-z0-9_.\s/=-]+\)|\$\{\s*[A-Za-z_][A-Za-z0-9_.\[\]'"]*\s*\}|\$\{\{\s*[A-Za-z_][A-Za-z0-9_.]*\s*\}\}|\$[A-Za-z_][A-Za-z0-9_]*)$/;
+  /^(?:\$\([A-Za-z0-9_.\s/=-]+\)|\$\{\s*[A-Za-z_][A-Za-z0-9_.\[\]'"]*(?::-(?:true|false|\d+)?)?\s*\}|\$\{\{\s*[A-Za-z_][A-Za-z0-9_.]*\s*\}\}|\$[A-Za-z_][A-Za-z0-9_]*|--dart-define=[A-Za-z0-9_]+=\$\{[A-Za-z0-9_]+(?::-(?:true|false))?\})$/;
 
 const LEADING_PURE_DYNAMIC_REF_RE =
   /^(?:\$\([A-Za-z0-9_.\s/=-]+\)|\$\{\s*[A-Za-z_][A-Za-z0-9_.\[\]'"]*\s*\})/;
@@ -162,6 +162,31 @@ function isDynamicOrAlreadyRedacted(val: string): boolean {
   if (/^\.{2,}$/.test(trimmed)) return true;
   if (/^(?:\\[nrt0])+$/.test(trimmed)) return true;
   if (trimmed.includes('[REDACTED')) return true;
+  if (/^(?:\.{1,2}\/|\/)[A-Za-z0-9_./-]+(?:\.[A-Za-z0-9]+)?$/i.test(trimmed)) {
+    return true;
+  }
+  if (
+    /^(?:utf-?8|ascii|hex|base64|base64url|latin1|binary|ucs-?2|utf16le|string|number|boolean|object|function|undefined|symbol|bigint|sha256|sha384|sha512|sha1|md5|hmac|ed25519|rsa|ecdsa|localhost|127\.0\.0\.1|ci-dummy)$/i.test(
+      trimmed,
+    )
+  ) {
+    return true;
+  }
+  if (
+    /^[a-z][a-z0-9_]*(?:_private_key|_public_key|_signing_key|_encryption_key|_master_key|_secret_key|_session_token|_refresh_token|_access_token|_id_token|_enabled|_disabled|Enabled|Disabled|KeyName|StorageKey|PrefKey|ApiKey|ApiKeyIos|ApiKeyAndroid|CredentialOnDevice)$/.test(
+      trimmed,
+    ) ||
+    trimmed === '[Secret]'
+  ) {
+    return true;
+  }
+  if (
+    /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/.test(trimmed) &&
+    !/(?:CANARY|AUDIT|OUTSIDE|EXAMPLE|FAKE|SYNTHETIC)/.test(trimmed) &&
+    !/^(?:AKIA|ASIA)/.test(trimmed)
+  ) {
+    return true;
+  }
   return PURE_DYNAMIC_REF_RE.test(trimmed);
 }
 
@@ -378,11 +403,12 @@ function redactQuotedOrContinuationAt(
 function isLookupKeyContext(prefixBeforeQuote: string): boolean {
   return (
     /[A-Za-z0-9_$)\]]\s*\[\s*$/.test(prefixBeforeQuote) ||
-    /\b(?:getElementById|querySelector|querySelectorAll|getAttribute|Getenv|getenv|requiredEnvironment|hasOwnProperty|GetString|environ\.(?:get|setdefault)|(?:headers|cookies|params|searchParams|config|viper|settings|storage|Map)\.get)\s*\(\s*$/i.test(
+    /\bBuffer\.from\s*\(\s*[^,()]+\s*,\s*$/.test(prefixBeforeQuote) ||
+    /\b(?:getElementById|querySelector|querySelectorAll|getAttribute|Getenv|getenv|requiredEnvironment|defineSecret|defineString|require|import|toString|createHash|createHmac|OAuthProvider|hasOwnProperty|GetString|environ\.(?:get|setdefault)|(?:headers|cookies|params|searchParams|config|viper|settings|storage|Map)\.get)\s*\(\s*$/i.test(
       prefixBeforeQuote,
     ) ||
     /\.\s*(?:split|join)\s*\(\s*$/.test(prefixBeforeQuote) ||
-    /\btypeof\s+[A-Za-z0-9_$.[\]()]+?\s*(?:===|!==|==|!=)\s*$/.test(prefixBeforeQuote)
+    /\btypeof\s+[A-Za-z0-9_$.[\]()?]+?\s*(?:===|!==|==|!=)\s*$/.test(prefixBeforeQuote)
   );
 }
 
@@ -538,6 +564,7 @@ function redactGeneralCodeLine(
     const dockerOp = match[2];
     const goTypedEq = match[4];
     const keyQuote = match[5] ?? '';
+    const matchedKeyName = (match[1] ?? match[3] ?? match[6] ?? match[7] ?? '').trim();
     const typedEq = match[8];
     const generalOp = match[9] ?? '';
     const operator = dockerIdent
@@ -545,6 +572,31 @@ function redactGeneralCodeLine(
         ? '='
         : 'ENV'
       : (typedEq ?? goTypedEq ?? generalOp);
+    const prefixBeforeMatch = current.slice(0, match.index);
+    if (/\bcase\s+$/i.test(prefixBeforeMatch)) {
+      searchPos = match.index + match[0].length;
+      continue;
+    }
+    const isBooleanOrCheck =
+      operator === '||' &&
+      !/^\s*(?:(?:export\s+)?(?:const|let|var|final|val)\s+|[A-Za-z0-9_$.[\]]+\s*:?=(?![=>])|return\b)/.test(
+        prefixBeforeMatch,
+      );
+    if (isBooleanOrCheck) {
+      searchPos = match.index + match[0].length;
+      continue;
+    }
+    if (
+      /^(?:NEXT_PUBLIC|VITE|REACT_APP|EXPO_PUBLIC)_(?:FIREBASE|RECAPTCHA|APPCHECK|MAPBOX|GOOGLE_MAPS)_/i.test(
+        matchedKeyName,
+      ) ||
+      /_(?:DOC_ID|COLLECTION|FIELD|PATH|HEADER|NAME|TABLE|COLUMN|ERROR|CODE|MESSAGE|MSG|STATUS|EVENT|TYPE|MODE|BASIS|PREFIX|SUFFIX|LABEL|TITLE|REGEX|PATTERN|ID|LENGTH|SIZE|COUNT|LIMIT|TTL|MS|SEC|SECONDS|MINUTES|HOURS|DAYS|URL_PATH|ENDPOINT|PORT|HOST|ENABLED|DISABLED)$/i.test(
+        matchedKeyName,
+      )
+    ) {
+      searchPos = match.index + match[0].length;
+      continue;
+    }
     const rhsStart = match.index + match[0].length;
     const rest = current.slice(rhsStart);
 
@@ -625,8 +677,10 @@ function redactGeneralCodeLine(
     ) {
       const charBeforeMatch = match.index > 0 ? current[match.index - 1] : '';
       const baseIndent = (current.match(/^(\s*)/)?.[1] ?? '').length;
+      const isPureOrWithoutAssignment =
+        operator === '||' && !/[=:]/.test(current.slice(0, match.index));
       if (/^\s*(?:\/\/.*|#.*)?$/.test(rest)) {
-        if (charBeforeMatch !== '?') {
+        if (charBeforeMatch !== '?' && !isPureOrWithoutAssignment) {
           nextState = { kind: 'pending_rhs', operator, baseIndent, remainingLines: 5 };
         }
         searchPos = current.length;

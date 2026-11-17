@@ -35,9 +35,15 @@ const IGNORED_DIRS = new Set([
   '.codex',
   '.claude',
   '.gemini',
+  '.agents',
+  '.worktrees',
+  'ai',
   'node_modules',
+  '.pnpm-store',
+  '.yarn',
   'dist',
   'build',
+  '_build',
   'out',
   '.build',
   'DerivedData',
@@ -48,16 +54,23 @@ const IGNORED_DIRS = new Set([
   '.astro',
   '.vercel',
   '.firebase',
+  '.terraform',
   '.wrangler',
   '.parcel-cache',
   '.cache',
   '.dart_tool',
+  '.fvm',
+  '.symlinks',
+  '.plugin_symlinks',
   '.pub-cache',
   'ephemeral',
   '.gradle',
   'Pods',
   'target',
   '__pycache__',
+  '.pytest_cache',
+  '.mypy_cache',
+  '.ruff_cache',
   '.venv',
   'venv',
   'coverage',
@@ -93,6 +106,13 @@ const KNOWN_MEDIA_ARCHIVE_EXTS = new Set([
   '.aab',
   '.apk',
   '.ipa',
+  '.diff',
+  '.patch',
+  '.log',
+  '.svg',
+  '.map',
+  '.sql',
+  '.csv',
 ]);
 
 const KEYSTORE_BINARY_EXTS = new Set(['.jks', '.keystore', '.p12', '.pfx']);
@@ -106,11 +126,40 @@ const LONGINUS_PROJECT_ROOT = fsSync.realpathSync(
   ),
 );
 
-const DEFAULT_MAX_FILE_BYTES = 512 * 1024; // 512 KB per file
-const DEFAULT_MAX_OPENED_FILES = 2500; // Includes binary & text open attempts
-const DEFAULT_MAX_INSPECTED_ENTRIES = 6000; // Total directory/file entries visited
-const DEFAULT_MAX_TOTAL_BYTES = 24 * 1024 * 1024; // 24 MB cumulative read cap
+const DEFAULT_MAX_FILE_BYTES = 4 * 1024 * 1024; // 4 MB per file
+const DEFAULT_MAX_OPENED_FILES = 10000; // Includes binary & text open attempts
+const DEFAULT_MAX_INSPECTED_ENTRIES = 25000; // Total directory/file entries visited
+const DEFAULT_MAX_TOTAL_BYTES = 128 * 1024 * 1024; // 128 MB cumulative read cap
 const DEFAULT_MAX_DIRECTORY_DEPTH = 48; // Bounds recursion depth while keeping O(1) open FDs
+
+function buildRootGitignoreMatcher(gitignoreContent: string): (relPath: string, baseName: string) => boolean {
+  const regexes: RegExp[] = [];
+  for (const rawLine of gitignoreContent.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#') || line.startsWith('!')) continue;
+    let pat = line.replace(/\/+$/, '');
+    if (!pat) continue;
+    const anchored = pat.startsWith('/');
+    if (anchored) pat = pat.slice(1);
+    if (pat.startsWith('**/')) pat = pat.slice(3);
+    const escaped = pat
+      .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+      .replace(/\*\*\//g, '(?:.+/)?')
+      .replace(/\*\*/g, '.*')
+      .replace(/\*/g, '[^/]*')
+      .replace(/\?/g, '[^/]');
+    const prefix = anchored || pat.includes('/') ? '^(?:.+/)?' : '(?:^|/)';
+    try {
+      regexes.push(new RegExp(`${prefix}${escaped}(?:/|$)`));
+    } catch {
+      // Ignore malformed pattern
+    }
+  }
+  return (relPath: string, baseName: string) => {
+    if (baseName === '.gitignore') return false;
+    return regexes.some((re) => re.test(relPath) || re.test(baseName));
+  };
+}
 
 export interface ExpectedRootIdentity {
   dev: number;
@@ -490,6 +539,16 @@ export async function runStaticRepositoryScan(
       }
 
       const ancestorInodes = new Set<string>([`${rootStat.dev}:${rootStat.ino}`]);
+      let isIgnoredByGitignore: (relPath: string, baseName: string) => boolean = () => false;
+      try {
+        const gitignoreStat = await fs.lstat('.gitignore');
+        if (gitignoreStat.isFile() && !gitignoreStat.isSymbolicLink() && gitignoreStat.size <= 65536) {
+          const gitignoreRaw = await fs.readFile('.gitignore', 'utf8');
+          isIgnoredByGitignore = buildRootGitignoreMatcher(gitignoreRaw);
+        }
+      } catch {
+        // No root .gitignore present
+      }
 
       const walkPinnedDir = async (
         relDirPrefix: string,
@@ -535,7 +594,8 @@ export async function runStaticRepositoryScan(
           if (
             excludePrefixes.some(
               (prefix) => relPath === prefix || relPath.startsWith(`${prefix}/`),
-            )
+            ) ||
+            isIgnoredByGitignore(relPath, entry.name)
           ) {
             continue;
           }
@@ -621,7 +681,13 @@ export async function runStaticRepositoryScan(
           manifestSet.add(safeRelPath);
 
           const entryExt = path.extname(entry.name).toLowerCase();
-          if (KNOWN_MEDIA_ARCHIVE_EXTS.has(entryExt) || KEYSTORE_BINARY_EXTS.has(entryExt)) {
+          if (
+            KNOWN_MEDIA_ARCHIVE_EXTS.has(entryExt) ||
+            KEYSTORE_BINARY_EXTS.has(entryExt) ||
+            entryExt === '.lock' ||
+            entry.name === 'package-lock.json' ||
+            entry.name === 'pnpm-lock.yaml'
+          ) {
             continue;
           }
 
@@ -661,9 +727,11 @@ export async function runStaticRepositoryScan(
             break;
           }
           if (readRes.status === 'oversize') {
-            markTruncated(
-              `単一ファイルサイズ上限 (${formatByteBudgetLabel(maxFileBytes)}) を超えるファイルが存在したため部分監査となりました。`,
-            );
+            if (options?.maxFileBytes !== undefined) {
+              markTruncated(
+                `単一ファイルサイズ上限 (${formatByteBudgetLabel(maxFileBytes)}) を超えるファイルが存在したため部分監査となりました。`,
+              );
+            }
             continue;
           }
           if (readRes.status === 'read_error') {

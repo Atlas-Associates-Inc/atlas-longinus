@@ -5,7 +5,10 @@
   "license": "Apache-2.0",
   "type": "module",
   "engines": { "node": ">=22.18.0" },
-  "bin": { "atlas-sovereign": "./bin/atlas-sovereign.mjs" },
+  "bin": {
+    "atlas-sovereign": "./bin/atlas-sovereign.mjs",
+    "longinus": "./bin/longinus.mjs"
+  },
   "files": ["bin/", "src/", "LICENSE", "README.md", "action.yml"],
   "scripts": {
     "start": "node src/shield/cli.ts",
