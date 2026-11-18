@@ -6,7 +6,7 @@
 
 > 🌐 **20 Languages**: **[English](#english)** · **[日本語](#日本語)** · **[简体中文](#zh-hans)** · **[繁體中文](#zh-hant)** · **[한국어](#ko)** · **[Español](#es)** · **[Português](#pt)** · **[Français](#fr)** · **[Deutsch](#de)** · **[Italiano](#it)** · **[Русский](#ru)** · **[Українська](#uk)** · **[Polski](#pl)** · **[Nederlands](#nl)** · **[Türkçe](#tr)** · **[العربية](#ar)** · **[हिन्दी](#hi)** · **[Bahasa Indonesia](#id)** · **[Tiếng Việt](#vi)** · **[ไทย](#th)**
 >
-> Apache-2.0 · Node.js `>=22.18.0` · **0 npm dependencies (no `npm install` required)** · Loopback Web UI: `npm start` (`http://127.0.0.1:4310`)
+> Apache-2.0 · Node.js `>=22.18.0` · **0 npm dependencies (no `npm install` required)** · Loopback Web UI: `npm start` (`http://127.0.0.1:4310`) · **Last Updated / 最終更新日: `2026-11-18`**
 >
 > 🛡️ **Zero-Retention Military-Grade Security Guarantee (Offline & Online)**:
 > - **EN**: Whether running offline or online, target repositories are treated as **100% Read-Only (`O_RDONLY | O_DIRECTORY | O_NOFOLLOW`)**, ephemeral workspaces are isolated under **`0o700` ACL + Fernet (`AES-128-CBC + HMAC-SHA256`) encryption**, wiped upon audit completion via **US Department of Defense `DoD 5220.22-M` 3-pass overwrite (`0x00` → `0xFF` → `CSPRNG` + `fsync`)**, and an **`ECDSA P-256` cryptographically signed Certificate of Data Destruction** is automatically issued at the end of every Blueprint & PDF report.
@@ -64,6 +64,7 @@ Run https://github.com/Atlas-Associates-Inc/atlas-longinus
 Load this OSS repository (**LONGINUS**) into your company's AI agent to **instantly build an in-house Cloud, DX, and AI Security Consulting AI**—making external consulting firms completely unnecessary—powered by offline GCP × Firebase attack-path analysis, a 4-Stack Code & Secret Shield, a 5-pillar architecture maturity scorecard & consulting ROI estimator, autonomous 30/60/90-day remediation blueprints (`--format blueprint`), a read-only MCP Airlock, and optional Sovereign AI evidence review.
 
 - **Apache-2.0** — open source, instant in-house consulting AI for free (`$0`)
+- **Last Updated**: `2026-11-18`
 - **Node.js >=22.18.0** — native erasable TypeScript
 - **0 npm dependencies** — runtime and development
 - **100% Read-Only (Offline & Online) + `0o700` ACL + Fernet Encryption + DoD 5220.22-M 3-Pass Wipe + ECDSA P-256 Certificate of Data Destruction** — target repositories are strictly opened with `O_RDONLY | O_DIRECTORY | O_NOFOLLOW`; ephemeral workspaces are isolated under `0o700` ACL and Fernet (`AES-128-CBC + HMAC-SHA256`) encryption, overwritten upon completion via US Department of Defense `DoD 5220.22-M` 3-pass sanitization (`0x00` → `0xFF` → `CSPRNG` + `fsync`), and an **ECDSA P-256 cryptographically signed Certificate of Data Destruction** is automatically issued at the end of every Blueprint & PDF report
@@ -321,6 +322,7 @@ Test files run sequentially so deterministic wall-clock parser budgets do not co
 各企業の担当者が本リポジトリ（**LONGINUS**）を自社 AI エージェントに読み込ませるだけで、**高額な外部コンサルティングファームと同等以上の「自社専用 DX・クラウド・AI セキュリティコンサル AI」を一瞬で構築し、外部コンサルを一切不要にします**。オフラインの GCP × Firebase 攻撃経路解析、4-Stack Code Shield、5領域アーキテクチャ成熟度スコアカード＆外部コンサル削減額試算、30/60/90日の自律改修設計書（`--format blueprint --lang ja`）、読み取り専用 MCP Airlock、および任意の Sovereign AI 証拠検証を備えています。
 
 - **Apache-2.0** — オープンソース・完全無料で自社専用コンサル AI を即時構築（`¥0`）
+- **最終更新日**: `2026-11-18`
 - **Node.js >=22.18.0** — ネイティブ実行可能な erasable TypeScript
 - **npm 依存パッケージ 0** — 実行時・開発時ともに外部依存ゼロ（`npm install` 不要）
 - **オフライン／オンラインともに 100% 読み取り専用（Read-Only）＋ `0o700 ACL` ＋ `Fernet` 暗号化 ＋ `DoD 5220.22-M` 3パス消去 ＋ `ECDSA P-256` データ破棄証明書自動発行** — 対象リポジトリは `O_RDONLY | O_DIRECTORY | O_NOFOLLOW` で厳格保護。一時領域は `0o700 ACL`＋`Fernet (AES-128-CBC + HMAC-SHA256)` で暗号化し、監査終了時には米国国防総省規格 `DoD 5220.22-M` 3パス上書き消去（`0x00` → `0xFF` → `CSPRNG` + `fsync`）を実行のうえ、**`ECDSA P-256` 暗号署名入りのデータ破棄証明書** を設計書・PDF巻末に自動発行
