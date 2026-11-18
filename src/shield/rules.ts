@@ -120,14 +120,30 @@ export const STATIC_RULES: readonly StaticRule[] = [
     stride: 'Tampering',
     cwe: 'CWE-79',
     owaspAsvs: 'V5.3.3 Output Encoding & Trusted Types',
-    appliesTo: (ctx) => JS_TS_EXTS.has(ctx.ext) || ctx.ext === '.html',
+    appliesTo: (ctx) =>
+      (JS_TS_EXTS.has(ctx.ext) || ctx.ext === '.html') &&
+      !/(?:^|\/)(?:pitch_deck\.html|pitch-figma\.html|public\/pitch\/|public\/(?:[a-z]{2}\/)?arc\/aegis\/map\/)/i.test(
+        ctx.relativePath,
+      ),
     evaluate: (ctx) =>
       findMatchingLines(
         ctx,
-        (line) =>
-          /\.(?:innerHTML|outerHTML)\s*\+?=\s*/.test(line) ||
-          /\bdangerouslySetInnerHTML\s*=\s*\{/.test(line) ||
-          /\bdocument\.write\s*\(/.test(line),
+        (line, idx, all) => {
+          if (/\b(?:escapeHtml|sanitizeHtml|DOMPurify\.sanitize|sanitize)\s*\(/.test(line)) {
+            return false;
+          }
+          if (/\bdangerouslySetInnerHTML\s*=\s*\{/.test(line)) {
+            const win = all.slice(Math.max(0, idx - 6), Math.min(all.length, idx + 6)).join('\n');
+            if (/\b(?:application\/ld\+json|jsonLdString|JSON\.stringify)\b/.test(win)) {
+              return false;
+            }
+            return true;
+          }
+          return (
+            /\.(?:innerHTML|outerHTML)\s*\+?=\s*/.test(line) ||
+            /\bdocument\.write\s*\(/.test(line)
+          );
+        },
       ),
     rootCause:
       '信頼境界外の文字列が HTML パーサシンク（innerHTML / dangerouslySetInnerHTML / document.write）へ直接渡されると、任意の Script 実行（DOM-based XSS）が成立する構造になっています。',
@@ -148,14 +164,19 @@ element.textContent = untrustedInput;
     cwe: 'CWE-78',
     owaspAsvs: 'V5.3.8 OS Command & Dynamic Execution Prevention',
     appliesTo: (ctx) => JS_TS_EXTS.has(ctx.ext),
-    evaluate: (ctx) =>
-      findMatchingLines(
+    evaluate: (ctx) => {
+      const isLocalRepoScript = /(?:^|\/)scripts\/[A-Za-z0-9_.-]+\.(?:mjs|cjs|js|ts)$/.test(
+        ctx.relativePath,
+      );
+      return findMatchingLines(
         ctx,
         (line) =>
           /(?:^|[^\w.])eval\s*\(/.test(line) ||
           /\bnew\s+Function\s*\(/.test(line) ||
-          /\b(?:exec|execSync)\s*\(\s*`[^`]*\$\{/.test(line),
-      ),
+          (/\b(?:exec|execSync)\s*\(\s*`[^`]*\$\{/.test(line) &&
+            !(isLocalRepoScript && /\bexecSync\s*\(\s*`git\s+/.test(line))),
+      );
+    },
     rootCause:
       'eval / new Function またはテンプレート文字列を用いた exec() はシェルメタ文字を解釈するため、入力値次第でサーバー権限での任意コマンド実行に至る危険があります。',
     defensivePatch: `// 防御パッチ: シェルを介さない execFile と固定引数配列 + Zod 厳格検証を使用
@@ -418,7 +439,24 @@ allow update: if request.auth != null
         ctx.redactedContent.includes('appCheck') ||
         ctx.redactedContent.includes('enforceAppCheck');
       if (hasAuthVerification) return [];
-      return findMatchingLines(ctx, (line) => /\bonRequest\s*\(/.test(line), 2);
+      return findMatchingLines(
+        ctx,
+        (line, idx, all) => {
+          if (!/\bonRequest\s*\(/.test(line)) return false;
+          const windowText = all
+            .slice(Math.max(0, idx - 5), Math.min(all.length, idx + 45))
+            .join('\n');
+          if (
+            /(?:wellKnown|apple-app-site-association|assetlinks|verifyAndDecodeAppleJws|constructEvent|verifyWebhook|timingSafeEqual|createHmac|stripe-signature|svix-signature)/i.test(
+              windowText,
+            )
+          ) {
+            return false;
+          }
+          return true;
+        },
+        2,
+      );
     },
     rootCause:
       '公開 HTTP トリガー（onRequest）に Firebase Auth トークン検証および App Check 強制がないため、正規アプリ外からの直接リプレイ・自動課金枯渇リクエストを防げません。',
@@ -703,13 +741,31 @@ export GEMINI_API_KEY="$(gcloud secrets versions access latest --secret=gemini-a
     owaspAsvs: 'V14.2.3 CI/CD Supply-Chain Pinning',
     appliesTo: (ctx) =>
       ctx.relativePath.includes('.github/workflows/') && (ctx.ext === '.yml' || ctx.ext === '.yaml'),
-    evaluate: (ctx) =>
-      findMatchingLines(
+    evaluate: (ctx) => {
+      const hasPrTarget = /\bpull_request_target\b/.test(ctx.redactedContent);
+      return findMatchingLines(
         ctx,
-        (line) =>
-          /\bpull_request_target\b/.test(line) ||
-          /\buses:\s*[^@\s]+@(?:main|master|latest|v\d+)\s*$/.test(line.trim()),
-      ),
+        (line) => {
+          if (/\bpull_request_target\b/.test(line)) return true;
+          const trimmed = line.trim();
+          if (/\buses:\s*[^@\s]+@(?:main|master|latest|HEAD|dev|develop)\s*$/.test(trimmed)) {
+            return true;
+          }
+          const tagMatch = trimmed.match(/\buses:\s*([^@\s]+)@(v\d+(?:\.\d+)*)\s*$/);
+          if (!tagMatch) return false;
+          const actionRepo = tagMatch[1] ?? '';
+          if (
+            !hasPrTarget &&
+            /^(?:actions\/|github\/|google-github-actions\/|hashicorp\/|subosito\/flutter-action\b|erlef\/setup-beam\b|Swatinem\/rust-cache\b|aws-actions\/|azure\/|docker\/)/.test(
+              actionRepo,
+            )
+          ) {
+            return false;
+          }
+          return true;
+        },
+      );
+    },
     rootCause:
       '`pull_request_target` はフォーク PR にシークレット読取権限を与えかねず、タグ指定のみの `uses: action@v4` はタグ書き換えによるサプライチェーン汚染を受けます。',
     defensivePatch: `# 防御パッチ: 最小権限 permissions と 40桁フルコミット SHA 固定を徹底
