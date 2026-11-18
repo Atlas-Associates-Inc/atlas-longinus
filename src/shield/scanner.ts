@@ -554,6 +554,7 @@ export async function runStaticRepositoryScan(
         relDirPrefix: string,
         currentDirStat: Stats,
         depth: number,
+        parentGitignoreMatcher: (relPath: string, baseName: string) => boolean,
       ): Promise<void> => {
         if (abortAllWork) return;
 
@@ -585,6 +586,29 @@ export async function runStaticRepositoryScan(
 
         batch.sort((a, b) => a.name.localeCompare(b.name));
 
+        let activeGitignoreMatcher = parentGitignoreMatcher;
+        if (
+          relDirPrefix !== '' &&
+          batch.some((e) => e.name === '.gitignore' && e.isFile() && !e.isSymbolicLink())
+        ) {
+          try {
+            const subStat = await fs.lstat('.gitignore');
+            if (subStat.isFile() && !subStat.isSymbolicLink() && subStat.size <= 65536) {
+              const subRaw = await fs.readFile('.gitignore', 'utf8');
+              const subMatcher = buildRootGitignoreMatcher(subRaw);
+              activeGitignoreMatcher = (relPath: string, baseName: string) => {
+                if (parentGitignoreMatcher(relPath, baseName)) return true;
+                const subRel = relPath.startsWith(`${relDirPrefix}/`)
+                  ? relPath.slice(relDirPrefix.length + 1)
+                  : relPath;
+                return subMatcher(subRel, baseName);
+              };
+            }
+          } catch {
+            // Ignore unreadable nested .gitignore
+          }
+        }
+
         for (const entry of batch) {
           if (abortAllWork) break;
           if (!isSinglePathComponent(entry.name)) continue;
@@ -595,7 +619,7 @@ export async function runStaticRepositoryScan(
             excludePrefixes.some(
               (prefix) => relPath === prefix || relPath.startsWith(`${prefix}/`),
             ) ||
-            isIgnoredByGitignore(relPath, entry.name)
+            activeGitignoreMatcher(relPath, entry.name)
           ) {
             continue;
           }
@@ -636,7 +660,7 @@ export async function runStaticRepositoryScan(
 
               ancestorInodes.add(inodeKey);
               try {
-                await walkPinnedDir(relPath, childStat, depth + 1);
+                await walkPinnedDir(relPath, childStat, depth + 1, activeGitignoreMatcher);
               } finally {
                 ancestorInodes.delete(inodeKey);
               }
@@ -798,7 +822,7 @@ export async function runStaticRepositoryScan(
         }
       };
 
-      await walkPinnedDir('', rootStat, 0);
+      await walkPinnedDir('', rootStat, 0, isIgnoredByGitignore);
     } catch (err) {
       if (!(err instanceof DirectoryRaceAbortError)) {
         throw err;

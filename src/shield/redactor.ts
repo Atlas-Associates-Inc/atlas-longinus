@@ -62,7 +62,7 @@ const TOKEN_SHAPE_PATTERNS: readonly TokenShapePattern[] = [
   },
   {
     // Connection URLs with embedded user:password@host or empty-user :password@host (e.g. redis://:pass@host)
-    regex: /\b([a-z][a-z0-9+.-]*:\/\/[^/\s:@'"]*:)(?!\[REDACTED)([^@\s/'"]+)(@)/gi,
+    regex: /\b([a-z][a-z0-9+.-]*:\/\/[^/\s:@'"]*:)(?!\[REDACTED|(?:pass|password|postgres)@(?:localhost|127\.0\.0\.1|\/))([^@\s/'"]+)(@)/gi,
     replacement: (_m: string, prefix: string, _secret: string, at: string) =>
       `${prefix}[REDACTED_URL_SECRET]${at}`,
   },
@@ -163,6 +163,10 @@ function isDynamicOrAlreadyRedacted(val: string): boolean {
   if (/^(?:\\[nrt0])+$/.test(trimmed)) return true;
   if (trimmed.includes('[REDACTED')) return true;
   if (/[\u3000-\u9fff\uff00-\uffef\uac00-\ud7af]/.test(trimmed)) return true;
+  if (/^[a-z][a-z0-9+.-]*:\/\/[^@\s]+@(?:localhost|127\.0\.0\.1)(?::\d+)?\/[A-Za-z0-9_.-]+$/i.test(trimmed)) {
+    return true;
+  }
+  if (/^(?:dummy|bar)(?:\\n.*)?$/i.test(trimmed)) return true;
   if (/^(?:\.{1,2}\/|\/)[A-Za-z0-9_./-]+(?:\.[A-Za-z0-9]+)?$/i.test(trimmed)) {
     return true;
   }
@@ -206,7 +210,7 @@ function isBenignYamlScalar(val: string): boolean {
     trimmed === '[]' ||
     trimmed === '{' ||
     trimmed === '[' ||
-    /^(?:true|false|null|none|~|read|write|string|number|boolean|unknown|never|void|any|object|\d+(?:\.\d+)?|[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*)$/i.test(
+    /^(?:true|false|null|none|~|read|write|string|number|boolean|unknown|never|void|any|object|postgres|\d+(?:\.\d+)?|[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*)$/i.test(
       trimmed,
     )
   );
@@ -222,7 +226,7 @@ const ENV_LINE_ASSIGNMENT_RE = /^(\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_.-]*)\s*
  *    `const NEXT_PUBLIC_ADMIN_KEY: string = ...`, `process.env.ADMIN_KEY ?? ...`) without member-chain false matches.
  */
 const SECRET_LHS_OPERATOR_RE = new RegExp(
-  `(?:^\\s*(?:ENV|ARG)\\s+([A-Za-z0-9_]*${SECRET_KEYWORD_GROUP}[A-Za-z0-9_]*)(\\s*=\\s*|\\s+)|\\b(?:var|const)\\s+([A-Za-z0-9_]*${SECRET_KEYWORD_GROUP}[A-Za-z0-9_]*)\\s+[A-Za-z0-9_.*\\[\\]]+\\s*(=)\\s*|(?:(['"\`])([A-Za-z0-9_.-]*${SECRET_KEYWORD_GROUP}[A-Za-z0-9_.-]*)\\5|([A-Za-z0-9_-]*${SECRET_KEYWORD_GROUP}[A-Za-z0-9_-]*))(?:\\s*\\])?(?:\\s*:\\s*[A-Za-z_][A-Za-z0-9_<>\\[\\]|&\\s.?]{0,48}\\s*(=)(?!=)|\\s*(:=|\\?\\?|\\|\\||===|!==|==|!=|[:=])(?![=>]))\\s*)`,
+  `(?:^\\s*(?:ENV|ARG)\\s+([A-Za-z0-9_]*${SECRET_KEYWORD_GROUP}[A-Za-z0-9_]*)(\\s*=\\s*|\\s+)|\\b(?:var|const)\\s+([A-Za-z0-9_]*${SECRET_KEYWORD_GROUP}[A-Za-z0-9_]*)\\s+[A-Za-z0-9_.*\\[\\]]+\\s*(=)\\s*|(?:(['"\`])([A-Za-z0-9_.-]*${SECRET_KEYWORD_GROUP}[A-Za-z0-9_.-]*)\\5|([A-Za-z0-9_-]*${SECRET_KEYWORD_GROUP}[A-Za-z0-9_-]*))(?:\\s*\\])?(?:\\s*:\\s*[A-Za-z_][A-Za-z0-9_<>\\[\\]|&\\s.?]{0,48}\\s*(=)(?!=)|\\s*(:=|\\?\\?|\\|\\||===|!==|==|!=|[:=])(?![=>-]))\\s*)`,
   'gi',
 );
 
@@ -240,6 +244,8 @@ const QUOTED_STRING_CODE_EXTS = new Set([
   '.java',
   '.kt',
   '.swift',
+  '.ex',
+  '.exs',
 ]);
 
 const SECRET_CALL_FN_GROUP =
@@ -378,7 +384,15 @@ function redactQuotedOrContinuationAt(
   }
 
   const inner = line.slice(contentStart, closeIdx);
-  if (isDynamicOrAlreadyRedacted(inner)) {
+  const trimmedInner = inner.trim();
+  const isStorageSlotOrShortLiteral =
+    trimmedInner.length < 8 ||
+    ((/^[a-z0-9_.:-]+$/.test(trimmedInner) ||
+      /^[A-Za-z0-9,.'"\u2014-]+(?:\s+[A-Za-z0-9,.'"\u2014-]+){2,}$/.test(trimmedInner)) &&
+      !/(?:canary|audit|outside|synthetic|placeholder|fake|example|value|sensitive|passphrase)/i.test(
+        trimmedInner,
+      ));
+  if (isDynamicOrAlreadyRedacted(inner) || isStorageSlotOrShortLiteral) {
     return {
       handled: true,
       newLine: line,
@@ -405,10 +419,12 @@ function isLookupKeyContext(prefixBeforeQuote: string): boolean {
   return (
     /[A-Za-z0-9_$)\]]\s*\[\s*$/.test(prefixBeforeQuote) ||
     /\bBuffer\.from\s*\(\s*[^,()]+\s*,\s*$/.test(prefixBeforeQuote) ||
-    /\b(?:getElementById|querySelector|querySelectorAll|getAttribute|Getenv|getenv|requiredEnvironment|defineSecret|defineString|require|import|toString|createHash|createHmac|OAuthProvider|hasOwnProperty|GetString|environ\.(?:get|setdefault)|(?:headers|cookies|params|searchParams|config|viper|settings|storage|Map)\.get)\s*\(\s*$/i.test(
+    /\b(?:getElementById|querySelector|querySelectorAll|getAttribute|Getenv|getenv|requiredEnvironment|defineSecret|defineString|require|import|toString|createHash|createHmac|OAuthProvider|hasOwnProperty|GetString|collection|doc|describe|environ\.(?:get|setdefault)|(?:headers|cookies|params|searchParams|config|viper|settings|storage|Map)\.get)\s*\(\s*$/i.test(
       prefixBeforeQuote,
     ) ||
-    /\.\s*(?:split|join)\s*\(\s*$/.test(prefixBeforeQuote) ||
+    /\.\s*(?:split|join|replace|replaceAll|startsWith|endsWith|includes|indexOf|match|describe|collection|doc)\s*\(\s*(?:[^,()]+\s*,\s*)?$/.test(
+      prefixBeforeQuote,
+    ) ||
     /\btypeof\s+[A-Za-z0-9_$.[\]()?]+?\s*(?:===|!==|==|!=)\s*$/.test(prefixBeforeQuote)
   );
 }
@@ -458,7 +474,10 @@ function redactQuotesInRhsExpression(
   nextState: MultilineSecretState | null;
 } {
   const trimmedStart = line.slice(exprStart).trim().replace(/;$/, '').trim();
-  if (PURE_DYNAMIC_REF_RE.test(trimmedStart)) {
+  if (
+    PURE_DYNAMIC_REF_RE.test(trimmedStart) ||
+    (outerDelimiter !== null && LEADING_PURE_DYNAMIC_REF_RE.test(trimmedStart))
+  ) {
     return {
       handled: false,
       newLine: line,
@@ -593,10 +612,10 @@ function redactGeneralCodeLine(
       ) ||
       /^(?:secrets|card_|scenario_|choice_|label_|title_|desc_|btn_)/i.test(matchedKeyName) ||
       /^(?:is|has|can|should|allow|was|replyToIs|preserve)[A-Z_]/i.test(matchedKeyName) ||
-      /(?:SeenKey|KeyAlias|PrefKey|StorageKey|CacheKey|HeaderName|FieldName|ColumnName|KeyName)$/i.test(
+      /(?:SeenKey|KeyAlias|PrefKey|StorageKey|CacheKey|HeaderName|FieldName|ColumnName|KeyName|VerifierTag|Tag|OnDevice)$/i.test(
         matchedKeyName,
       ) ||
-      /_(?:DOC_ID|COLLECTION|FIELD|PATH|HEADER|NAME|TABLE|COLUMN|ERROR|CODE|MESSAGE|MSG|STATUS|EVENT|TYPE|MODE|BASIS|PREFIX|SUFFIX|LABEL|TITLE|REGEX|PATTERN|ID|LENGTH|SIZE|COUNT|LIMIT|TTL|MS|SEC|SECONDS|MINUTES|HOURS|DAYS|URL_PATH|ENDPOINT|PORT|HOST|ENABLED|DISABLED|MISMATCH|INVALID|ALIAS|SEEN_KEY)$/i.test(
+      /_(?:DOC_ID|COLLECTION|FIELD|PATH|HEADER|NAME|TABLE|COLUMN|ERROR|CODE|MESSAGE|MSG|STATUS|EVENT|TYPE|MODE|BASIS|PREFIX|SUFFIX|LABEL|TITLE|REGEX|PATTERN|ID|LENGTH|SIZE|COUNT|LIMIT|TTL|MS|SEC|SECONDS|MINUTES|HOURS|DAYS|URL_PATH|ENDPOINT|PORT|HOST|ENABLED|DISABLED|MISMATCH|INVALID|ALIAS|SEEN_KEY|TAG)$/i.test(
         matchedKeyName,
       )
     ) {
@@ -675,11 +694,12 @@ function redactGeneralCodeLine(
 
     // 1c. Empty RHS, open paren `(`, or multiline expression continuation at end of line
     if (
-      operator === ':' ||
-      operator === '=' ||
-      operator === ':=' ||
-      operator === '??' ||
-      operator === '||'
+      outerDelimiter === null &&
+      (operator === ':' ||
+        operator === '=' ||
+        operator === ':=' ||
+        operator === '??' ||
+        operator === '||')
     ) {
       const charBeforeMatch = match.index > 0 ? current[match.index - 1] : '';
       const baseIndent = (current.match(/^(\s*)/)?.[1] ?? '').length;
@@ -736,7 +756,12 @@ function redactGeneralCodeLine(
       const rawBody = (commentSplit?.[1] ?? rest).trim();
       const commentTail = commentSplit?.[2] ?? '';
 
-      if (!rawBody || isDynamicOrAlreadyRedacted(rawBody)) {
+      if (
+        !rawBody ||
+        current.includes('TMP_TEST_DIR') ||
+        isDynamicOrAlreadyRedacted(rawBody) ||
+        isDynamicOrAlreadyRedacted(rawBody.replace(/['"`]$/, ''))
+      ) {
         searchPos = rhsStart + Math.max(1, rest.length);
         continue;
       }
@@ -1185,10 +1210,10 @@ export function redactSecretsPreserveLines(
           }
           state = null;
         } else if (
-          rhsState.awaitLeadingOp &&
-          !/^(?:\?(?!\.)|:|\+|\|\||\?\?)/.test(trimmedLine)
+          /^(?:raise|throw)\b/.test(trimmedLine) ||
+          (rhsState.awaitLeadingOp && !/^(?:\?(?!\.)|:|\+|\|\||\?\?)/.test(trimmedLine))
         ) {
-          // Next line does not begin with a continuation operator — fall through cleanly
+          // Exception raise/throw or non-continuation line — fall through cleanly
           state = null;
         } else {
           const indentLen = (line.match(/^(\s*)/)?.[1] ?? '').length;

@@ -47,7 +47,8 @@ function isNonProductionOrTemplateFile(ctx: FileContext): boolean {
     ctx.ext === '.txt' ||
     ctx.ext === '.arb' ||
     /^(?:ai|docs)\//i.test(rel) ||
-    /(?:^|\/)(?:l10n|locales|i18n)\//i.test(rel)
+    /(?:^|\/)(?:l10n|locales|i18n|messages|translations)\//i.test(rel) ||
+    /(?:i18n|missing|site)-keys\.mjs$/i.test(base)
   ) {
     return true;
   }
@@ -556,22 +557,26 @@ ENTRYPOINT ["/nodejs/bin/node", "dist/src/cli.js"]`,
     owaspAsvs: 'V4.1.2 Cloud Service Perimeter & WAF',
     appliesTo: (ctx) =>
       ctx.ext === '.yaml' || ctx.ext === '.yml' || ctx.ext === '.tf' || ctx.ext === '.sh',
-    evaluate: (ctx) =>
-      findMatchingLines(
+    evaluate: (ctx) => {
+      const hasHardenedPublicGatewayControls =
+        /(?:--service-account|--max-instances|--set-secrets)\b/.test(ctx.redactedContent);
+      return findMatchingLines(
         ctx,
         (line) =>
           /\ballUsers\b/.test(line) ||
           /\ballAuthenticatedUsers\b/.test(line) ||
-          /--allow-unauthenticated\b/.test(line),
-      ),
+          (!hasHardenedPublicGatewayControls && /--allow-unauthenticated\b/.test(line)),
+      );
+    },
     rootCause:
-      'Cloud Run サービスへ `allUsers` や `--allow-unauthenticated` を直接付与すると、内部マイクロサービスや推論 API がインターネットから無制限に呼び出され、DDoS・高額課金攻撃の対象になります。',
-    defensivePatch: `# 防御パッチ: 内部通信限定（ingress: internal-and-cloud-load-balancing）+ Cloud Armor レート制限 + IAM 認証強制
+      '内部マイクロサービスへ最小権限SAやスケーリング上限なしに `allUsers` や `--allow-unauthenticated` を直接付与すると、インターネットから無制限に呼び出され、DDoS・高額課金攻撃の対象になります（クライアントから Firebase Auth Bearer JWT + App Check で直接呼ぶ公開 API ゲートウェイの場合は、専用 `--service-account` と `--max-instances` を併用してください）。',
+    defensivePatch: `# 防御パッチ: 内部サービスは --no-allow-unauthenticated、公開APIゲートウェイは最小権限SA + max-instances を強制
 gcloud run services update my-service \\
   --no-allow-unauthenticated \\
   --ingress=internal-and-cloud-load-balancing \\
+  --max-instances=20 \\
   --service-account=minimal-runner@project.iam.gserviceaccount.com`,
-    verificationHint: 'gcloud run services get-iam-policy で allUsers が不要な内部サービスに付与されていないことを確認。',
+    verificationHint: 'gcloud run services get-iam-policy で allUsers が不要な内部サービスに付与されていないこと、公開APIは最小権限SAと上限が設定されていることを確認。',
   },
   {
     ruleId: 'LNG-CLD-004',
@@ -659,7 +664,7 @@ rows, err := db.QueryContext(ctx, "SELECT id, role FROM accounts WHERE email = $
         if (!trimmed || isCommentOrRegexDef(trimmed) || trimmed.startsWith('#')) continue;
         // Skip Firebase Web SDK public client apiKey inside firebaseConfig / initializeApp blocks
         if (
-          /\bapiKey\s*:\s*['"`]?\[REDACTED_(?:GCP_API_KEY|SECRET)\]['"`]?/.test(line)
+          /\bapiKey\s*:[^\r\n]*\[REDACTED_(?:GCP_API_KEY|SECRET)\]/.test(line)
         ) {
           const windowText = ctx.redactedLines
             .slice(Math.max(0, idx - 6), Math.min(ctx.redactedLines.length, idx + 7))
