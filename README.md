@@ -6,7 +6,7 @@
 
 > 🌐 **20 Languages**: **[English](#english)** · **[日本語](#日本語)** · **[简体中文](#zh-hans)** · **[繁體中文](#zh-hant)** · **[한국어](#ko)** · **[Español](#es)** · **[Português](#pt)** · **[Français](#fr)** · **[Deutsch](#de)** · **[Italiano](#it)** · **[Русский](#ru)** · **[Українська](#uk)** · **[Polski](#pl)** · **[Nederlands](#nl)** · **[Türkçe](#tr)** · **[العربية](#ar)** · **[हिन्दी](#hi)** · **[Bahasa Indonesia](#id)** · **[Tiếng Việt](#vi)** · **[ไทย](#th)**
 >
-> Apache-2.0 · Node.js `>=22.18.0` · **0 npm dependencies (no `npm install` required)** · Loopback Web UI: `npm start` (`http://127.0.0.1:4310`) · **Last Updated / 最終更新日: `2026-11-18`**
+> Apache-2.0 · Node.js `>=22.18.0` · **0 npm dependencies (no `npm install` required)** · Loopback Web UI: `npm start` (`http://127.0.0.1:4310`) · **Last Updated / 最終更新日: `2026-11-19`**
 >
 > 🛡️ **Zero-Retention Military-Grade Security Guarantee (Offline & Online)**:
 > - **EN**: Whether running offline or online, target repositories are treated as **100% Read-Only (`O_RDONLY | O_DIRECTORY | O_NOFOLLOW`)**, ephemeral workspaces are isolated under **`0o700` ACL + Fernet (`AES-128-CBC + HMAC-SHA256`) encryption**, wiped upon audit completion via **US Department of Defense `DoD 5220.22-M` 3-pass overwrite (`0x00` → `0xFF` → `CSPRNG` + `fsync`)**, and an **`ECDSA P-256` cryptographically signed Certificate of Data Destruction** is automatically issued at the end of every Blueprint & PDF report.
@@ -64,7 +64,7 @@ Run https://github.com/Atlas-Associates-Inc/atlas-longinus
 Load this OSS repository (**LONGINUS**) into your company's AI agent to **instantly build an in-house Cloud, DX, and AI Security Consulting AI**—making external consulting firms completely unnecessary—powered by offline GCP × Firebase attack-path analysis, a 4-Stack Code & Secret Shield, a 5-pillar architecture maturity scorecard & consulting ROI estimator, autonomous 30/60/90-day remediation blueprints (`--format blueprint`), a read-only MCP Airlock, and optional Sovereign AI evidence review.
 
 - **Apache-2.0** — open source, instant in-house consulting AI for free (`$0`)
-- **Last Updated**: `2026-11-18`
+- **Last Updated**: `2026-11-19`
 - **Node.js >=22.18.0** — native erasable TypeScript
 - **0 npm dependencies** — runtime and development
 - **100% Read-Only (Offline & Online) + `0o700` ACL + Fernet Encryption + DoD 5220.22-M 3-Pass Wipe + ECDSA P-256 Certificate of Data Destruction** — target repositories are strictly opened with `O_RDONLY | O_DIRECTORY | O_NOFOLLOW`; ephemeral workspaces are isolated under `0o700` ACL and Fernet (`AES-128-CBC + HMAC-SHA256`) encryption, overwritten upon completion via US Department of Defense `DoD 5220.22-M` 3-pass sanitization (`0x00` → `0xFF` → `CSPRNG` + `fsync`), and an **ECDSA P-256 cryptographically signed Certificate of Data Destruction** is automatically issued at the end of every Blueprint & PDF report
@@ -84,16 +84,17 @@ flowchart LR
 
 Global technology and DX consulting firms charge `$75,000–$350,000+` over 3–6 months for cloud architecture assessments, IAM/WIF governance, AI/FinOps guardrails, and 30/60/90-day roadmaps. **`LONGINUS` turns your company's existing AI agent into a dedicated in-house Cloud, DX, and 4-Stack Code Security Consulting AI in seconds for `$0`—correlating cross-boundary GCP × Firebase attack paths, scoring 5 architecture pillars, and generating review-only remediation diffs offline.**
 
-### What LONGINUS Can Do (6 Core Capabilities)
+### What LONGINUS Can Do (7 Core Capabilities)
 
 | Capability | What It Does | Output / Value |
 | --- | --- | --- |
 | **1. Instant In-House Consulting AI (`$0`)** | Turns your existing internal AI (Gemini CLI, Antigravity, Vertex AI) into a Principal Cloud, DX & AI Security Consultant via a single copy-paste prompt. | Eliminates multi-month external consulting contracts (`$75,000–$350,000+`). |
 | **2. 5-Pillar Architecture Maturity Scorecard** | Scores your repository from `0–100` (`Grade A–F`) across *Firebase & Data Perimeter*, *Identity & Workload Federation*, *Cloud Workload & Database Hardening*, *AI / Vertex & Runtime Threat Governance*, and *FinOps Cost Guardrails & Resilience*. | Instant executive visibility and board-ready architecture grading. |
-| **3. Consulting ROI & Hours-Saved Estimator** | Calculates the equivalent external consulting cost (`$`) and consulting hours displaced by each automated blueprint run. | Quantifies immediate DX/security ROI for engineering and executive leadership. |
-| **4. Cross-Boundary Attack-Path Graph (`L0`)** | Connects public entry points (Firebase Rules, Cloud Run, GKE, Cloud SQL, Vertex AI Workbench, BigQuery, GitHub WIF, Cloud Audit Logs, SCC) to runtime identities and crown-jewel data offline in milliseconds. | Prioritizes truly reachable multi-hop attack paths over isolated noise. |
-| **5. Review-Only Remediation Patch Generator (`--emit-patch`)** | Generates review-only unified diffs (`firestore.rules`, `storage.rules`, Terraform Cloud Run/SQL/BigQuery/WIF) to `stdout` without ever modifying local files or cloud state. | Safe, human-approved remediation ready to apply in seconds. |
-| **6. Zero-Trust MCP Airlock (`L1`) & Sovereign AI Prover (`L2`)** | Wraps MCP servers in fail-closed read-only profiles (`scc`, `secops`, `firebase`, `cloudrun`, `developer-knowledge`, `prowler`, `semgrep`), redacts secrets/injections, and optionally runs orthogonal dual-lane AI exploit verification (`--prove`). | Prevents AI agent self-compromise, accidental cloud mutations, and credential leaks. |
+| **3. Orthogonal Engineering Craft & Testability Archetype Diagnosis (`craftProfile`)** | Decomposes codebases across 4 orthogonal axes (`algorithmicDepthScore` × `testabilityScore` × `determinismScore` × `securityBoundaryScore`) and flags structural asymmetry such as `ALGORITHMIC_MONOLITH_UNTESTABLE` (*"Good at Algorithms, Writes Untestable Code"*) vs `SOVEREIGN_ARCHITECT` via line-level `LNG-CRAFT-001..003` detectors (uninjected I/O + wall-clock/PRNG coupling, mutable global singletons, untested God-modules). | Pinpoints why high-complexity code fails isolated unit testing and provides Dependency Injection refactoring patches. |
+| **4. Consulting ROI & Hours-Saved Estimator** | Calculates the equivalent external consulting cost (`$`) and consulting hours displaced by each automated blueprint run. | Quantifies immediate DX/security ROI for engineering and executive leadership. |
+| **5. Cross-Boundary Attack-Path Graph (`L0`)** | Connects public entry points (Firebase Rules, Cloud Run, GKE, Cloud SQL, Vertex AI Workbench, BigQuery, GitHub WIF, Cloud Audit Logs, SCC) to runtime identities and crown-jewel data offline in milliseconds. | Prioritizes truly reachable multi-hop attack paths over isolated noise. |
+| **6. Review-Only Remediation Patch Generator (`--emit-patch`)** | Generates review-only unified diffs (`firestore.rules`, `storage.rules`, Terraform Cloud Run/SQL/BigQuery/WIF, AWS S3/RDS/OIDC, Azure Storage/PostgreSQL) to `stdout` without ever modifying local files or cloud state. | Safe, human-approved remediation ready to apply in seconds. |
+| **7. Zero-Trust MCP Airlock (`L1`) & Sovereign AI Prover (`L2`)** | Wraps MCP servers in fail-closed read-only profiles (`scc`, `secops`, `firebase`, `cloudrun`, `developer-knowledge`, `prowler`, `semgrep`), redacts secrets/injections, and optionally runs orthogonal dual-lane AI exploit verification (`--prove`). | Prevents AI agent self-compromise, accidental cloud mutations, and credential leaks. |
 
 ### How to Use & Quickstart CLI
 
@@ -322,7 +323,7 @@ Test files run sequentially so deterministic wall-clock parser budgets do not co
 各企業の担当者が本リポジトリ（**LONGINUS**）を自社 AI エージェントに読み込ませるだけで、**高額な外部コンサルティングファームと同等以上の「自社専用 DX・クラウド・AI セキュリティコンサル AI」を一瞬で構築し、外部コンサルを一切不要にします**。オフラインの GCP × Firebase 攻撃経路解析、4-Stack Code Shield、5領域アーキテクチャ成熟度スコアカード＆外部コンサル削減額試算、30/60/90日の自律改修設計書（`--format blueprint --lang ja`）、読み取り専用 MCP Airlock、および任意の Sovereign AI 証拠検証を備えています。
 
 - **Apache-2.0** — オープンソース・完全無料で自社専用コンサル AI を即時構築（`¥0`）
-- **最終更新日**: `2026-11-18`
+- **最終更新日**: `2026-11-19`
 - **Node.js >=22.18.0** — ネイティブ実行可能な erasable TypeScript
 - **npm 依存パッケージ 0** — 実行時・開発時ともに外部依存ゼロ（`npm install` 不要）
 - **オフライン／オンラインともに 100% 読み取り専用（Read-Only）＋ `0o700 ACL` ＋ `Fernet` 暗号化 ＋ `DoD 5220.22-M` 3パス消去 ＋ `ECDSA P-256` データ破棄証明書自動発行** — 対象リポジトリは `O_RDONLY | O_DIRECTORY | O_NOFOLLOW` で厳格保護。一時領域は `0o700 ACL`＋`Fernet (AES-128-CBC + HMAC-SHA256)` で暗号化し、監査終了時には米国国防総省規格 `DoD 5220.22-M` 3パス上書き消去（`0x00` → `0xFF` → `CSPRNG` + `fsync`）を実行のうえ、**`ECDSA P-256` 暗号署名入りのデータ破棄証明書** を設計書・PDF巻末に自動発行
@@ -342,16 +343,17 @@ flowchart LR
 
 グローバルな DX・テクノロジーコンサルティングファームにクラウド設計評価・IAM／WIF 統制・AI／データ基盤ガードレール・FinOps コスト統制・30/60/90日ロードマップ策定を依頼すると、通常 3〜6ヶ月で数千万円（¥1,000万〜¥5,000万円以上）の費用がかかります。**`LONGINUS` を自社の AI エージェントに読み込ませるだけで、GCP × Firebase クロス境界攻撃経路グラフ・4-Stack コード監査・5領域成熟度スコアカード・レビュー専用修正パッチ生成を備えた「自社専用の超一流コンサル AI」を数秒・¥0 で社内構築でき、外部コンサルを一切不要にします。**
 
-### LONGINUS で何ができるか（6大機能）
+### LONGINUS で何ができるか（7大機能）
 
 | 機能領域 | できること | 得られる成果・価値 |
 | --- | --- | --- |
 | **① 自社AIの即時コンサルAI化（`¥0`）** | 普段使っている社内 AI（Gemini CLI、Antigravity、Vertex AI 等）にコピペ1回で「プリンシパル DX・クラウド・AI コンサルタント」の頭脳と検査エンジンを実装。 | 数千万円・数ヶ月の外部コンサル契約をゼロにし、社内に知見を100%蓄積。 |
 | **② 5領域アーキテクチャ成熟度スコアカード** | ① Firebase・データ境界、② IAM・WIF、③ ワークロード・DB堅牢化、④ AI / Vertex・実行時脅威統制、⑤ FinOps コスト統制・レジリエンスの5軸を `0–100` 点（`Grade A〜F`）で自動採点。 | 経営会議・情シス報告にそのまま使える客観的な成熟度評価。 |
-| **③ 外部コンサル削減 ROI の自動試算** | 解析したリソース・指摘・攻撃経路の規模から、外部コンサルに依頼した場合の相当費用（`¥`）と削減工数（時間）を自動算出。 | DX・セキュリティ内製化の投資対効果（ROI）を即座に定量証明。 |
-| **④ クロス境界の攻撃経路グラフ解析（`L0`）** | 単なる設定ミスの羅列ではなく、「どこから侵入され（Firebase / Cloud Run / GKE / Cloud SQL / Vertex AI / BigQuery / GitHub WIF）、どの実行SAを経由し、どの機密データに至るか」をオフライン・数ミリ秒で特定。 | 本当に危険な到達可能経路（`BLOCKER` / `HIGH`）だけを優先遮断。 |
-| **⑤ レビュー専用の自動修正パッチ生成（`--emit-patch`）** | 対象ファイルを一切勝手に書き換えず、人間が承認してすぐ適用できる安全な修正 unified diff（Firebase Rules、Cloud SQL、BigQuery、WIF 等）を標準出力へ生成。 | 本番障害リスクなしで最小権限化・公開遮断を即日完了。 |
-| **⑥ ゼロトラスト MCP Airlock（`L1`）& Sovereign AI Prover（`L2`）** | 社内 AI が使う MCP サーバーから破壊的操作（delete/update/deploy 等）を機械的に遮断し、ログ内の秘密情報・プロンプト注入を除去。さらに任意で2系統の独立 AI（`Argon High` × `Hydrogen XHigh`）による深層検証を実行。 | AI エージェント自身の暴走・乗っ取り・情報漏洩を根本から防止。 |
+| **③ 直交エンジニアリング・クラフト＆テスタビリティ診断（`craftProfile`）** | アルゴリズム深度（`algorithmicDepthScore`）× テスタビリティ（`testabilityScore`）× 決定論性（`determinismScore`）× セキュリティ境界（`securityBoundaryScore`）の4直交軸に分解し、`ALGORITHMIC_MONOLITH_UNTESTABLE`（*「アルゴリズムは優秀だが、I/O・グローバル状態・非決定論クロックが密結合で単体テスト不能」*）等の非対称アーキタイプを `LNG-CRAFT-001..003` で行番号特定。 | 単一スコアでは見えない設計上の密結合・テスト不能要因を暴き、DI疎結合化の指針を提示。 |
+| **④ 外部コンサル削減 ROI の自動試算** | 解析したリソース・指摘・攻撃経路の規模から、外部コンサルに依頼した場合の相当費用（`¥`）と削減工数（時間）を自動算出。 | DX・セキュリティ内製化の投資対効果（ROI）を即座に定量証明。 |
+| **⑤ クロス境界の攻撃経路グラフ解析（`L0`）** | 単なる設定ミスの羅列ではなく、「どこから侵入され（Firebase / Cloud Run / GKE / Cloud SQL / Vertex AI / BigQuery / GitHub WIF）、どの実行SAを経由し、どの機密データに至るか」をオフライン・数ミリ秒で特定。 | 本当に危険な到達可能経路（`BLOCKER` / `HIGH`）だけを優先遮断。 |
+| **⑥ レビュー専用の自動修正パッチ生成（`--emit-patch`）** | 対象ファイルを一切勝手に書き換えず、人間が承認してすぐ適用できる安全な修正 unified diff（Firebase Rules、Cloud SQL、BigQuery、WIF、AWS S3/RDS/OIDC、Azure Storage/PostgreSQL 等）を標準出力へ生成。 | 本番障害リスクなしで最小権限化・公開遮断を即日完了。 |
+| **⑦ ゼロトラスト MCP Airlock（`L1`）& Sovereign AI Prover（`L2`）** | 社内 AI が使う MCP サーバーから破壊的操作（delete/update/deploy 等）を機械的に遮断し、ログ内の秘密情報・プロンプト注入を除去。さらに任意で2系統の独立 AI（`Argon High` × `Hydrogen XHigh`）による深層検証を実行。 | AI エージェント自身の暴走・乗っ取り・情報漏洩を根本から防止。 |
 
 ### 使い方・クイックスタート CLI
 
