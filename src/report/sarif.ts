@@ -12,7 +12,7 @@ export function toSarif(graph: GraphResult, version = '0.1.0', prover?: DualProv
     version: '2.1.0',
     runs: [{
       tool: { driver: {
-        name: 'Atlas Sovereign', version, informationUri: 'https://github.com/Atlas-Associates-Inc/atlas-sovereign',
+        name: 'LONGINUS', version, informationUri: 'https://github.com/Atlas-Associates-Inc/atlas-longinus',
         rules: ids.map(id => {
           const finding = graph.findings.find(item => item.ruleId === id)!;
           return { id, name: id.replace(/[^A-Za-z0-9]/g, '_'), shortDescription: { text: displayText(finding.title) }, defaultConfiguration: { level: level(finding.severity) } };

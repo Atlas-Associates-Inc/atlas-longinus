@@ -186,6 +186,8 @@ export interface StaticScanResult {
   repoName: string;
   scannedFiles: number;
   inspectedEntries: number;
+  docAndConfigFiles: number;
+  docAndConfigBytes: number;
   totalBytesRead: number;
   scanTruncated: boolean;
   truncationReason?: string;
@@ -474,6 +476,8 @@ export async function runStaticRepositoryScan(
     let scannedFiles = 0;
     let openedFiles = 0;
     let inspectedEntries = 0;
+    let docAndConfigFiles = 0;
+    let docAndConfigBytes = 0;
     let totalBytesRead = 0;
     let scanTruncated = false;
     let abortAllWork = false;
@@ -794,8 +798,14 @@ export async function runStaticRepositoryScan(
 
           scannedFiles += 1;
           const rawContent = buf.toString('utf8');
-          const stack = classifyFileStack(safeRelPath);
-          stackFileCounts[stack] += 1;
+          if (isDocOrConfigArtifact(safeRelPath, entry.name, entryExt)) {
+            docAndConfigFiles += 1;
+            docAndConfigBytes += buf.length;
+          }
+          if (!isProseOrSpecDocOnly(safeRelPath, entry.name, entryExt)) {
+            const stack = classifyFileStack(safeRelPath);
+            stackFileCounts[stack] += 1;
+          }
 
           const isEnvFile = entry.name === '.env' || entry.name.startsWith('.env.');
           const redaction = redactSecretsPreserveLines(rawContent, { isEnvFile, ext: entryExt });
@@ -953,6 +963,8 @@ export async function runStaticRepositoryScan(
       repoName: redactSecrets(repoName).redactedText,
       scannedFiles,
       inspectedEntries,
+      docAndConfigFiles,
+      docAndConfigBytes,
       totalBytesRead,
       scanTruncated,
       redactedSecretsCount,
@@ -1286,6 +1298,47 @@ export function buildStackSummaries(scan: StaticScanResult): StackPostureSummary
 }
 
 const CODE_FILE_EXT_RE = /\.(?:ts|tsx|js|jsx|mjs|cjs|dart|py|go|rs|ex|exs|java|kt|swift)$/i;
+const DOC_OR_CONFIG_EXTS = new Set([
+  '.md',
+  '.mdx',
+  '.txt',
+  '.rst',
+  '.adoc',
+  '.json',
+  '.ndjson',
+  '.yaml',
+  '.yml',
+  '.toml',
+  '.xml',
+  '.plist',
+  '.rules',
+  '.tf',
+  '.tfvars',
+]);
+const PROSE_ONLY_EXTS = new Set(['.md', '.mdx', '.txt', '.rst', '.adoc']);
+
+function isDocOrConfigArtifact(relPath: string, baseName: string, ext: string): boolean {
+  return (
+    DOC_OR_CONFIG_EXTS.has(ext) ||
+    baseName === 'Dockerfile' ||
+    baseName.startsWith('Dockerfile.') ||
+    relPath.startsWith('docs/')
+  );
+}
+
+function isProseOrSpecDocOnly(relPath: string, baseName: string, ext: string): boolean {
+  if (PROSE_ONLY_EXTS.has(ext)) return true;
+  if (/(?:^|[._-])(?:openapi|swagger|asyncapi)\.(?:ya?ml|json)$/i.test(baseName)) return true;
+  if (
+    relPath.startsWith('docs/') &&
+    !CODE_FILE_EXT_RE.test(relPath) &&
+    ext !== '.tf' &&
+    ext !== '.rules'
+  ) {
+    return true;
+  }
+  return false;
+}
 const TEST_FILE_PATH_RE =
   /(?:^|\/)(?:test|tests|__tests__|spec|integration_test)\//i;
 const TEST_FILE_NAME_RE =

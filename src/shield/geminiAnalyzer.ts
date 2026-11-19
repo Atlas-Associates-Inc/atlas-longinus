@@ -766,8 +766,11 @@ export function buildDeterministicThreatSynthesis(scan: StaticScanResult): {
     },
   };
 
+  const hasEvaluatedCodeOrStack =
+    Object.values(scan.stackFileCounts).some((c) => c > 0) || scan.findings.length > 0;
+
   const strideMatrix: StrideScoreItem[] = STRIDE_CATEGORIES.map((category) => {
-    if (scan.scannedFiles === 0) {
+    if (scan.scannedFiles === 0 || !hasEvaluatedCodeOrStack) {
       return {
         category,
         exposureScore: 0,
@@ -811,9 +814,11 @@ export function buildDeterministicThreatSynthesis(scan: StaticScanResult): {
   const executiveSummary =
     scan.scannedFiles === 0
       ? `${truncPrefix}⚠️ 【未評価 / UNSCOPED】${safeRepoName}（走査対象ファイル 0 件）: リポジトリ内に評価可能なソースコード・IaC・構成ファイルが提出されていないため、セキュリティ制御および実クラウド環境の適合性は一切証明されません。`
-      : scan.findings.length === 0
-        ? `${truncPrefix}${safeRepoName}（走査ファイル ${scan.scannedFiles} 件）では重大な静的露出は検出されず、CSP・境界隔離・依存ロック等の主要な予防制御が確認されました。継続的な CI ゲート監視を維持してください。`
-        : `${truncPrefix}${safeRepoName}（走査ファイル ${scan.scannedFiles} 件）にて合計 ${scan.findings.length} 件（Critical ${criticals} 件 / High ${highs} 件）の構造的リスク箇所を検出しました。攻撃を受ける前に信頼境界のデフォルト拒否化・機密分離・CSP/TLS 強制パッチを優先適用してください。`;
+      : !hasEvaluatedCodeOrStack
+        ? `${truncPrefix}⚠️ 【コード未評価 / UNSCOPED】${safeRepoName}（設計・文書ファイル ${scan.scannedFiles} 件のみ検出、実行コード・IaC 0 件）: ドキュメント棚卸しのみ実施しました。実行コードおよびクラウドリソースが未提出のためセキュリティ適合性は証明されません。`
+        : scan.findings.length === 0
+          ? `${truncPrefix}${safeRepoName}（走査ファイル ${scan.scannedFiles} 件）では重大な静的露出は検出されず、CSP・境界隔離・依存ロック等の主要な予防制御が確認されました。継続的な CI ゲート監視を維持してください。`
+          : `${truncPrefix}${safeRepoName}（走査ファイル ${scan.scannedFiles} 件）にて合計 ${scan.findings.length} 件（Critical ${criticals} 件 / High ${highs} 件）の構造的リスク箇所を検出しました。攻撃を受ける前に信頼境界のデフォルト拒否化・機密分離・CSP/TLS 強制パッチを優先適用してください。`;
 
   const priorityRoadmap: RoadmapStep[] = [
     {
@@ -948,7 +953,7 @@ export async function executeDefensiveAudit(params: {
     }
   }
 
-  const activeStacks = stackSummaries.filter((s) => s.detectedFiles > 0);
+  const activeStacks = stackSummaries.filter((s) => s.evaluated);
   const stackAvg =
     activeStacks.length > 0
       ? activeStacks.reduce((sum, s) => sum + s.defenseScore, 0) / activeStacks.length
@@ -971,6 +976,8 @@ export async function executeDefensiveAudit(params: {
     durationMs,
     scannedFiles: scan.scannedFiles,
     inspectedEntries: scan.inspectedEntries,
+    docAndConfigFiles: scan.docAndConfigFiles,
+    docAndConfigBytes: scan.docAndConfigBytes,
     scanTruncated: scan.scanTruncated,
     redactedSecretsCount: scan.redactedSecretsCount,
     analysisModeUsed: params.mode,

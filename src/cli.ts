@@ -10,6 +10,7 @@ import { runProver } from './prove/dual-prover.ts';
 import { formatBlueprint, formatTable, meetsThreshold } from './report/formatter.ts';
 import { proposeRemediations } from './report/remediation.ts';
 import { toSarif } from './report/sarif.ts';
+import { executeDefensiveAudit } from './shield/geminiAnalyzer.ts';
 import { SUPPORTED_LANGUAGES } from './types.ts';
 import type { AirlockProfileId, ConsultingAudience, McpConfigClient, ProverMode, ReportLanguage, Severity } from './types.ts';
 
@@ -160,8 +161,22 @@ export async function main(args: string[]): Promise<number> {
   // A provider cannot turn an incomplete local scan into a successful gate.
   const prover = values.prove && !incomplete ? await runProver(graph, { mode: values['prover-mode'] as ProverMode }) : undefined;
   const remediations = values['emit-patch'] ? proposeRemediations(graph.findings, directory) : [];
+  const selfRoot = tryRealpath(fileURLToPath(new URL('../', import.meta.url)));
+  const realDir = tryRealpath(directory) ?? directory;
+  let shieldReport: Awaited<ReturnType<typeof executeDefensiveAudit>> | undefined;
+  if (values.format === 'blueprint' && !incomplete) {
+    try {
+      shieldReport = await executeDefensiveAudit({
+        targetPath: realDir,
+        mode: 'deterministic',
+        ...(selfRoot && realDir === selfRoot ? { excludeRelativePrefixes: ['test'] } : {}),
+      });
+    } catch {
+      shieldReport = undefined;
+    }
+  }
   const report = values.format === 'table' ? formatTable(graph, prover, remediations, lang)
-    : values.format === 'blueprint' ? formatBlueprint(graph, prover, remediations, lang, audience)
+    : values.format === 'blueprint' ? formatBlueprint(graph, prover, remediations, lang, audience, { shieldReport })
     : JSON.stringify(JSON.parse(redactSecrets(JSON.stringify(values.format === 'sarif' ? toSarif(graph, version, prover, remediations)
       : { ...graph, ...(prover ? { prover } : {}), ...(values['emit-patch'] ? { remediations } : {}) }))), null, 2) + '\n';
   process.stdout.write(values.format === 'table' || values.format === 'blueprint' ? redactSecrets(report) : report);

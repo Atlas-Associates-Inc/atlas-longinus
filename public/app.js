@@ -119,7 +119,10 @@
    */
   function renderReport(report) {
     latestReport = report;
-    const isUnscoped = report.scannedFiles === 0;
+    const isUnscoped =
+      report.scannedFiles === 0 ||
+      (Array.isArray(report.stackSummaries) &&
+        report.stackSummaries.every((s) => !s.evaluated));
 
     overallScoreEl.textContent = isUnscoped ? 'N/A' : String(report.overallDefenseScore);
     overallScoreEl.className = isUnscoped

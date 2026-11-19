@@ -68,11 +68,13 @@ function formatUnifiedBlueprintAndShield(
   lang: ReportLanguage,
 ): string {
   const isJa = lang === 'ja';
-  const shieldUnscoped = shieldReport.scannedFiles === 0;
+  const shieldUnscoped =
+    shieldReport.scannedFiles === 0 ||
+    shieldReport.stackSummaries.every((s) => !s.evaluated);
   const overallScoreLabel = shieldUnscoped
     ? isJa
-      ? '**N/A (UNSCOPED — 走査対象ファイル 0 件のため未評価)**'
-      : '**N/A (UNSCOPED — 0 files scanned)**'
+      ? '**N/A (UNSCOPED — 評価対象のコード・構成ファイル 0 件のため未評価)**'
+      : '**N/A (UNSCOPED — 0 code/stack files evaluated)**'
     : `**${shieldReport.overallDefenseScore}/100**`;
 
   const sectionLines: string[] = [
@@ -377,7 +379,9 @@ export async function runCli(args: readonly string[], io?: CliIoHooks): Promise<
       if (parsed.emitBlueprint) {
         const graph = scanDirectory(canonicalTarget);
         const remediations = parsed.emitPatch ? proposeRemediations(graph.findings, canonicalTarget) : [];
-        const blueprintMarkdown = formatBlueprint(graph, undefined, remediations, parsed.lang, parsed.audience);
+        const blueprintMarkdown = formatBlueprint(graph, undefined, remediations, parsed.lang, parsed.audience, {
+          shieldReport: report,
+        });
         out(formatUnifiedBlueprintAndShield(blueprintMarkdown, report, parsed.lang));
       } else if (parsed.emitSarif) {
         const sarif = buildSarifReport(report);

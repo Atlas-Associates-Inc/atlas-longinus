@@ -1,6 +1,33 @@
 import type { ConsultingAudience, DualProverVerdict, GraphResult, Remediation, ReportLanguage, Severity } from '../types.ts';
+import type { AuditReport } from '../shield/types.ts';
 import { executeEphemeralFernetDoDCycle } from '../airlock/destruction-certificate.ts';
 import { redactSecrets } from '../airlock/sanitizer.ts';
+
+export interface BlueprintFormatOptions {
+  shieldReport?: AuditReport;
+}
+
+export interface ConsultingWorkItem {
+  id: 'wbs-1-docs' | 'wbs-2-cloud-iac' | 'wbs-3-code-shield' | 'wbs-4-craft' | 'wbs-5-patch-prover' | 'wbs-6-compliance';
+  titleJa: string;
+  titleEn: string;
+  basisJa: string;
+  basisEn: string;
+  roleJa: string;
+  roleEn: string;
+  hours: number;
+  hourlyRateJpy: number;
+  hourlyRateUsd: number;
+  subtotalJpy: number;
+  subtotalUsd: number;
+}
+
+export interface ConsultingWbsEstimate {
+  items: ConsultingWorkItem[];
+  totalHours: number;
+  totalJpy: number;
+  totalUsd: number;
+}
 
 export const severityRank: Record<Severity, number> = { blocker: 0, high: 1, medium: 2, low: 3, info: 4 };
 
@@ -225,7 +252,7 @@ function localizeRemediationJa(text: string): string {
 
 export function formatTable(graph: GraphResult, prover?: DualProverVerdict, remediations: Remediation[] = [], lang: ReportLanguage = 'en'): string {
   if (lang === 'ja') {
-    const lines = ['Atlas Sovereign', '重大度    場所      検出内容'];
+    const lines = ['LONGINUS', '重大度    場所      検出内容'];
     for (const finding of graph.findings) {
       const titleJa = RULE_TITLE_JA[finding.ruleId] ?? displayText(finding.title);
       const msgJa = RULE_MESSAGE_JA[finding.ruleId] ?? displayText(finding.message);
@@ -245,7 +272,7 @@ export function formatTable(graph: GraphResult, prover?: DualProverVerdict, reme
     }
     return lines.join('\n') + '\n';
   }
-  const lines = ['Atlas Sovereign', 'SEVERITY  LOCATION  FINDING'];
+  const lines = ['LONGINUS', 'SEVERITY  LOCATION  FINDING'];
   for (const finding of graph.findings) {
     lines.push(`${finding.severity.toUpperCase().padEnd(8)}  ${displayText(finding.location.file)}:${finding.location.line}  ${displayText(finding.title)} [${finding.ruleId}]`);
     lines.push(`          ${displayText(finding.message)}`);
@@ -502,7 +529,241 @@ function scoreGrade(score: number, incomplete: boolean): string {
   return 'F';
 }
 
-export function formatBlueprint(graph: GraphResult, prover?: DualProverVerdict, remediations: Remediation[] = [], lang: ReportLanguage = 'en', audience: ConsultingAudience = 'enterprise'): string {
+const WBS_RATES_BY_AUDIENCE: Record<
+  ConsultingAudience,
+  Record<'docs' | 'cloud' | 'appsec' | 'craft' | 'patch' | 'compliance', { jpy: number; usd: number; roleJa: string; roleEn: string }>
+> = {
+  sme: {
+    docs: { jpy: 25_000, usd: 170, roleJa: 'リードコンサルタント', roleEn: 'Lead Consultant' },
+    cloud: { jpy: 32_000, usd: 215, roleJa: 'Cloud Security Architect', roleEn: 'Cloud Security Architect' },
+    appsec: { jpy: 30_000, usd: 200, roleJa: 'AppSec Engineer', roleEn: 'AppSec Engineer' },
+    craft: { jpy: 35_000, usd: 235, roleJa: 'Principal Architect', roleEn: 'Principal Architect' },
+    patch: { jpy: 32_000, usd: 215, roleJa: 'Staff Security Engineer', roleEn: 'Staff Security Engineer' },
+    compliance: { jpy: 28_000, usd: 190, roleJa: 'Compliance Lead Auditor', roleEn: 'Compliance Lead Auditor' },
+  },
+  municipal: {
+    docs: { jpy: 30_000, usd: 200, roleJa: 'リードコンサルタント', roleEn: 'Lead Consultant' },
+    cloud: { jpy: 38_000, usd: 255, roleJa: 'Cloud Security Architect', roleEn: 'Cloud Security Architect' },
+    appsec: { jpy: 35_000, usd: 235, roleJa: 'AppSec Engineer', roleEn: 'AppSec Engineer' },
+    craft: { jpy: 42_000, usd: 280, roleJa: 'Principal Architect', roleEn: 'Principal Architect' },
+    patch: { jpy: 38_000, usd: 255, roleJa: 'Staff Security Engineer', roleEn: 'Staff Security Engineer' },
+    compliance: { jpy: 36_000, usd: 240, roleJa: 'Compliance Lead Auditor', roleEn: 'Compliance Lead Auditor' },
+  },
+  enterprise: {
+    docs: { jpy: 35_000, usd: 240, roleJa: 'リードコンサルタント', roleEn: 'Lead Consultant' },
+    cloud: { jpy: 45_000, usd: 300, roleJa: 'Cloud Security Architect', roleEn: 'Cloud Security Architect' },
+    appsec: { jpy: 40_000, usd: 270, roleJa: 'AppSec Engineer', roleEn: 'AppSec Engineer' },
+    craft: { jpy: 50_000, usd: 335, roleJa: 'Principal Architect', roleEn: 'Principal Architect' },
+    patch: { jpy: 45_000, usd: 300, roleJa: 'Staff Security Engineer', roleEn: 'Staff Security Engineer' },
+    compliance: { jpy: 45_000, usd: 300, roleJa: 'Compliance Lead Auditor', roleEn: 'Compliance Lead Auditor' },
+  },
+};
+
+function roundHalfHour(raw: number): number {
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  return Math.max(0.5, Math.round(raw * 2) / 2);
+}
+
+function buildWorkItem(params: {
+  id: ConsultingWorkItem['id'];
+  titleJa: string;
+  titleEn: string;
+  basisJa: string;
+  basisEn: string;
+  rate: { jpy: number; usd: number; roleJa: string; roleEn: string };
+  hours: number;
+}): ConsultingWorkItem {
+  return {
+    id: params.id,
+    titleJa: params.titleJa,
+    titleEn: params.titleEn,
+    basisJa: params.basisJa,
+    basisEn: params.basisEn,
+    roleJa: params.rate.roleJa,
+    roleEn: params.rate.roleEn,
+    hours: params.hours,
+    hourlyRateJpy: params.rate.jpy,
+    hourlyRateUsd: params.rate.usd,
+    subtotalJpy: Math.round(params.hours * params.rate.jpy),
+    subtotalUsd: Math.round(params.hours * params.rate.usd),
+  };
+}
+
+export function computeConsultingWbs(params: {
+  graph: GraphResult;
+  prover?: DualProverVerdict;
+  remediations: Remediation[];
+  audience: ConsultingAudience;
+  shieldReport?: AuditReport;
+}): ConsultingWbsEstimate {
+  const { graph, prover, remediations, audience, shieldReport } = params;
+  const incomplete = graph.findings.some(finding => finding.ruleId.startsWith('scan/'));
+  if (incomplete) {
+    return { items: [], totalHours: 0, totalJpy: 0, totalUsd: 0 };
+  }
+
+  const rates = WBS_RATES_BY_AUDIENCE[audience];
+  const items: ConsultingWorkItem[] = [];
+  const iacFindings = graph.findings.filter(f => !f.ruleId.startsWith('scan/'));
+  const distinctIacRules = new Set(iacFindings.map(f => f.ruleId));
+
+  // 1. Docs & Config Inventory
+  const docCount = shieldReport
+    ? shieldReport.docAndConfigFiles
+    : new Set(iacFindings.map(f => f.location.file)).size;
+  const docBytes = shieldReport ? shieldReport.docAndConfigBytes : 0;
+  if (docCount > 0) {
+    const docKb = Math.max(1, Math.round(docBytes / 1024));
+    const hours = roundHalfHour(0.5 + docCount * 0.2 + (docBytes / 65_536) * 0.25);
+    items.push(
+      buildWorkItem({
+        id: 'wbs-1-docs',
+        titleJa: '1. 要件・設計ドキュメント／構成棚卸し',
+        titleEn: '1. Docs & Configuration Inventory',
+        basisJa: `文書・構成ファイル ${docCount} 件${docBytes > 0 ? ` (${docKb} KB)` : ''}`,
+        basisEn: `${docCount} doc/config files${docBytes > 0 ? ` (${docKb} KB)` : ''}`,
+        rate: rates.docs,
+        hours,
+      }),
+    );
+  }
+
+  // 2. L0 Cloud IaC & Attack-Path Analysis
+  const iacCounts: Record<Severity, number> = { blocker: 0, high: 0, medium: 0, low: 0, info: 0 };
+  for (const f of iacFindings) iacCounts[f.severity]++;
+  const hasCloudScope = graph.nodes.length > 0 || graph.edges.length > 0 || iacFindings.length > 0;
+  if (hasCloudScope) {
+    const hours = roundHalfHour(
+      0.5 +
+        graph.nodes.length * 0.25 +
+        graph.edges.length * 0.1 +
+        graph.paths.length * 0.75 +
+        iacCounts.blocker * 1.5 +
+        iacCounts.high * 1.0 +
+        iacCounts.medium * 0.5 +
+        iacCounts.low * 0.25,
+    );
+    items.push(
+      buildWorkItem({
+        id: 'wbs-2-cloud-iac',
+        titleJa: '2. L0 クラウド IaC ＆ 攻撃経路解析',
+        titleEn: '2. L0 Cloud IaC & Attack-Path Analysis',
+        basisJa: `ノード ${graph.nodes.length} · エッジ ${graph.edges.length} · 経路 ${graph.paths.length} · 指摘 (B:${iacCounts.blocker}/H:${iacCounts.high}/M:${iacCounts.medium}/L:${iacCounts.low})`,
+        basisEn: `${graph.nodes.length} nodes · ${graph.edges.length} edges · ${graph.paths.length} paths · findings (B:${iacCounts.blocker}/H:${iacCounts.high}/M:${iacCounts.medium}/L:${iacCounts.low})`,
+        rate: rates.cloud,
+        hours,
+      }),
+    );
+  }
+
+  // 3. 4-Stack Code & 1,529-Pattern Secret Audit
+  const evaluatedStacks = shieldReport ? shieldReport.stackSummaries.filter(s => s.evaluated) : [];
+  const stackFiles = evaluatedStacks.reduce((sum, s) => sum + s.detectedFiles, 0);
+  if (
+    shieldReport !== undefined &&
+    (evaluatedStacks.length > 0 || shieldReport.findings.length > 0 || shieldReport.redactedSecretsCount > 0)
+  ) {
+    const cCrit = shieldReport.findings.filter(f => f.severity === 'critical').length;
+    const cHigh = shieldReport.findings.filter(f => f.severity === 'high').length;
+    const cMed = shieldReport.findings.filter(f => f.severity === 'medium').length;
+    const cLow = shieldReport.findings.filter(f => f.severity === 'low').length;
+    const hours = roundHalfHour(
+      0.5 +
+        stackFiles * 0.1 +
+        evaluatedStacks.length * 0.5 +
+        cCrit * 1.5 +
+        cHigh * 1.0 +
+        cMed * 0.5 +
+        cLow * 0.2 +
+        Math.min(5, shieldReport.redactedSecretsCount * 0.1),
+    );
+    items.push(
+      buildWorkItem({
+        id: 'wbs-3-code-shield',
+        titleJa: '3. 4-Stack コード＆1,529種シークレット監査',
+        titleEn: '3. 4-Stack Code & 1,529-Pattern Secret Audit',
+        basisJa: `対象 ${stackFiles} 件 (${evaluatedStacks.length} stacks) · 指摘 (C:${cCrit}/H:${cHigh}/M:${cMed}/L:${cLow}) · マスク ${shieldReport.redactedSecretsCount} 件`,
+        basisEn: `${stackFiles} files (${evaluatedStacks.length} stacks) · findings (C:${cCrit}/H:${cHigh}/M:${cMed}/L:${cLow}) · ${shieldReport.redactedSecretsCount} redacted`,
+        rate: rates.appsec,
+        hours,
+      }),
+    );
+  }
+
+  // 4. Orthogonal Craft & Testability Structure Diagnosis (LNG-CRAFT)
+  if (shieldReport !== undefined && shieldReport.craftProfile.metrics.productionCodeFiles > 0) {
+    const m = shieldReport.craftProfile.metrics;
+    const hs = shieldReport.craftProfile.untestableHotspots.length;
+    const hours = roundHalfHour(0.5 + m.productionCodeFiles * 0.08 + m.algorithmicSignalCount * 0.15 + hs * 0.75);
+    items.push(
+      buildWorkItem({
+        id: 'wbs-4-craft',
+        titleJa: '4. 直交クラフト＆テスタビリティ診断 (LNG-CRAFT)',
+        titleEn: '4. Orthogonal Craft & Testability Diagnosis (LNG-CRAFT)',
+        basisJa: `本番コード ${m.productionCodeFiles} 件 · アルゴリズム信号 ${m.algorithmicSignalCount} · 非対称結合 ${hs} 件`,
+        basisEn: `${m.productionCodeFiles} prod files · ${m.algorithmicSignalCount} algo signals · ${hs} untestable hotspots`,
+        rate: rates.craft,
+        hours,
+      }),
+    );
+  }
+
+  // 5. Remediation Patch Synthesis & L2 AI Prover
+  const propCount = remediations.length;
+  const diffCount = remediations.filter(r => r.diff && r.diff.trim().length > 0).length;
+  const laneCount = prover ? Object.keys(prover.lanes).length : 0;
+  if (propCount > 0 || prover !== undefined) {
+    const hours = roundHalfHour(
+      (propCount > 0 ? 0.5 + diffCount * 0.75 + (propCount - diffCount) * 0.25 : 0) +
+        (prover ? 1.5 + laneCount * 0.75 : 0),
+    );
+    items.push(
+      buildWorkItem({
+        id: 'wbs-5-patch-prover',
+        titleJa: '5. 是正パッチ生成＆L2 AI Prover 検証',
+        titleEn: '5. Remediation Patch Synthesis & L2 AI Prover',
+        basisJa: `修正提案 ${propCount} 件 (Unified Diff ${diffCount} 件)${prover ? ` · L2 Prover (${prover.mode}, ${laneCount} 系統)` : ''}`,
+        basisEn: `${propCount} proposals (${diffCount} unified diffs)${prover ? ` · L2 Prover (${prover.mode}, ${laneCount} lanes)` : ''}`,
+        rate: rates.patch,
+        hours,
+      }),
+    );
+  }
+
+  // 6. Regulatory Compliance Mapping & 30/60/90-Day Roadmap
+  const hasCodeScope = evaluatedStacks.length > 0;
+  if (hasCloudScope || hasCodeScope) {
+    const shieldDistinctRules = shieldReport ? new Set(shieldReport.findings.map(f => f.ruleId)).size : 0;
+    const ruleTypes = distinctIacRules.size + shieldDistinctRules;
+    const audFactor = audience === 'enterprise' ? 1.5 : audience === 'municipal' ? 1.25 : 1.0;
+    const hours = roundHalfHour((1.0 + ruleTypes * 0.5) * audFactor);
+    items.push(
+      buildWorkItem({
+        id: 'wbs-6-compliance',
+        titleJa: '6. 法規制マッピング＆30/60/90日ロードマップ設計',
+        titleEn: '6. Regulatory Mapping & 30/60/90-Day Roadmap',
+        basisJa: `検出ルール種別 ${ruleTypes} 種 × ${audience.toUpperCase()} 係数 (${audFactor}x)`,
+        basisEn: `${ruleTypes} distinct rules × ${audience.toUpperCase()} factor (${audFactor}x)`,
+        rate: rates.compliance,
+        hours,
+      }),
+    );
+  }
+
+  const totalHours = Number(items.reduce((sum, i) => sum + i.hours, 0).toFixed(1));
+  const totalJpy = items.reduce((sum, i) => sum + i.subtotalJpy, 0);
+  const totalUsd = items.reduce((sum, i) => sum + i.subtotalUsd, 0);
+  return { items, totalHours, totalJpy, totalUsd };
+}
+
+export function formatBlueprint(
+  graph: GraphResult,
+  prover?: DualProverVerdict,
+  remediations: Remediation[] = [],
+  lang: ReportLanguage = 'en',
+  audience: ConsultingAudience = 'enterprise',
+  options: BlueprintFormatOptions = {},
+): string {
   const counts: Record<Severity, number> = { blocker: 0, high: 0, medium: 0, low: 0, info: 0 };
   const pillarPenalties = new Map<string, number>(PILLARS.map(pillar => [pillar, 0]));
   const locusPenalties = new Map<string, { domain: string; penalty: number }>();
@@ -535,12 +796,14 @@ export function formatBlueprint(graph: GraphResult, prover?: DualProverVerdict, 
   const rawAverage = Math.round(pillarScores.reduce((sum, item) => sum + item.score, 0) / PILLARS.length);
   const overallScore = incomplete || unscoped ? 0 : rawAverage;
   const grade = unscoped ? 'UNSCOPED' : scoreGrade(overallScore, incomplete);
-  const estimatedHoursSaved = unscoped
-    ? 0
-    : Math.max(40, graph.nodes.length * 4 + graph.findings.length * 6 + graph.paths.length * 8);
-  const estimatedJpySaved = estimatedHoursSaved * 35_000;
-  const estimatedUsdSaved = Math.round(estimatedJpySaved / 150);
-  const intakeSummary = `audience=${audience} grade=${grade} score=${unscoped ? 'N/A' : `${overallScore}/100`} blocker=${counts.blocker} high=${counts.high} medium=${counts.medium} low=${counts.low} nodes=${graph.nodes.length} paths=${graph.paths.length} patches=${remediations.filter(item => item.diff).length}`;
+  const wbs = computeConsultingWbs({
+    graph,
+    prover,
+    remediations,
+    audience,
+    ...(options.shieldReport !== undefined ? { shieldReport: options.shieldReport } : {}),
+  });
+  const intakeSummary = `audience=${audience} grade=${grade} score=${unscoped ? 'N/A' : `${overallScore}/100`} wbsHours=${wbs.totalHours.toFixed(1)}h blocker=${counts.blocker} high=${counts.high} medium=${counts.medium} low=${counts.low} nodes=${graph.nodes.length} paths=${graph.paths.length} patches=${remediations.filter(item => item.diff).length}`;
   const destructionCert = executeEphemeralFernetDoDCycle(intakeSummary);
 
   if (lang === 'ja') {
@@ -555,11 +818,15 @@ export function formatBlueprint(graph: GraphResult, prover?: DualProverVerdict, 
     const scoreLineJa = unscoped
       ? `- アーキテクチャ成熟度スコア: N/A (Grade: UNSCOPED — 構成ファイル未提出)`
       : `- アーキテクチャ成熟度スコア: ${overallScore}/100 (Grade: ${grade})`;
-    const roiLineJa = unscoped
-      ? `- 外部コンサル削減効果の試算: ¥0（解析対象のクラウドリソース・構成ファイル 0 件）`
-      : `- 外部コンサル削減効果の試算: 約 ¥${estimatedJpySaved.toLocaleString('en-US')} 相当（約 ${estimatedHoursSaved} 時間分の外部コンサル工数を ¥0 で代替）`;
+    const roiLineJa = wbs.totalHours === 0
+      ? `- 外部コンサル削減効果の試算: ¥0（実測WBS工数 0.0h — 評価対象ファイル 0 件）`
+      : `- 外部コンサル削減効果の試算: ¥${wbs.totalJpy.toLocaleString('en-US')}（実測WBS工数 合計 ${wbs.totalHours.toFixed(1)}h · 実行 ${wbs.items.length} 工程を ¥0 で代替）`;
+    const wbsRowsJa = wbs.items.length > 0
+      ? wbs.items.map(item =>
+        `| ${item.titleJa} | ${item.basisJa} | ${item.roleJa} | ${item.hours.toFixed(1)}h | ¥${item.hourlyRateJpy.toLocaleString('en-US')}/h | ¥${item.subtotalJpy.toLocaleString('en-US')} |`)
+      : ['| 該当作業なし (入力 0件) | 走査対象ファイル 0 件 | - | 0.0h | ¥0/h | ¥0 |'];
     const lines = [
-      '# Atlas Sovereign — 自律型クラウド・DX・AI コンサルティング＆セキュリティ設計書',
+      '# LONGINUS — 自律型クラウド・DX・AI コンサルティング＆セキュリティ設計書',
       '',
       '## 1. エグゼクティブリスク要約（社内専属コンサルAI — 外部コンサル不要）',
       `- 対象コンサルプロファイル: ${audienceLabelJa}`,
@@ -578,6 +845,12 @@ export function formatBlueprint(graph: GraphResult, prover?: DualProverVerdict, 
       }
     }
     lines.push(
+      '',
+      '### 外部コンサル代替工数・費用明細（WBS 都度積算）',
+      '| 作業項目 | 算定根拠 | 専門単価区分 | 工数 (h) | 単価 | 小計 |',
+      '| --- | --- | --- | ---: | ---: | ---: |',
+      ...wbsRowsJa,
+      `| **合計** | **実行済み ${wbs.items.length} 項目** | - | **${wbs.totalHours.toFixed(1)}h** | - | **¥${wbs.totalJpy.toLocaleString('en-US')}** |`,
       '',
       '### 5領域アーキテクチャ成熟度スコアカード',
       '| コンサル評価領域 | スコア | グレード |',
@@ -641,7 +914,7 @@ export function formatBlueprint(graph: GraphResult, prover?: DualProverVerdict, 
     lines.push(
       '',
       '## 7. 組織別コンサル成果物＆自律実行モード（社内専属コンサルAI — Apache-2.0）',
-      '- **社内専属コンサルAI即時構築（Apache-2.0、¥0／完全無料）**: `Atlas Sovereign` を自社の AI エージェントに読み込ませるだけで、外部コンサルティングファームを一切不要にする社内専属コンサルAIを即座に構築できます。',
+      '- **社内専属コンサルAI即時構築（Apache-2.0、¥0／完全無料）**: `LONGINUS` を自社の AI エージェントに読み込ませるだけで、外部コンサルティングファームを一切不要にする社内専属コンサルAIを即座に構築できます。',
       '- **🏛️ 地方自治体・公共機関向け（財政課・議会予算要求＆委託先SIer指示用）**: 上記マッピング表を「総務省ガイドライン（三層の対策・β\'モデル）・デジタル庁ガバメントクラウド利用基準・ISMAP」適合根拠および庁内稟議・SIer是正指示書としてそのまま転記可能です。',
       '- **🏢 中小企業・ひとり情シス向け（大手取引先・金融機関・補助金提出用）**: 上記マッピング表を「経済産業省サプライチェーン対策評価制度・IPA情報セキュリティ5か条・個人情報保護法第23条（安全管理措置）」の取引先提出用回答シートとしてそのまま活用可能です。',
       `- **Redacted Sprint Intake Summary**: \`${intakeSummary}\``,
@@ -669,11 +942,15 @@ export function formatBlueprint(graph: GraphResult, prover?: DualProverVerdict, 
   const scoreLineEn = unscoped
     ? `- Architecture Maturity Score: N/A (Grade: UNSCOPED — 0 infrastructure inputs analyzed)`
     : `- Architecture Maturity Score: ${overallScore}/100 (Grade: ${grade})`;
-  const roiLineEn = unscoped
-    ? `- Estimated External Consulting Equivalent Saved: $0 (0 cloud/IaC inputs analyzed)`
-    : `- Estimated External Consulting Equivalent Saved: ~$${estimatedUsdSaved.toLocaleString('en-US')} (~${estimatedHoursSaved} consulting hours displaced for $0)`;
+  const roiLineEn = wbs.totalHours === 0
+    ? `- Estimated External Consulting Equivalent Saved: $0 (0.0h — 0 auditable files submitted)`
+    : `- Estimated External Consulting Equivalent Saved: $${wbs.totalUsd.toLocaleString('en-US')} (${wbs.totalHours.toFixed(1)}h across ${wbs.items.length} WBS workstreams displaced for $0)`;
+  const wbsRowsEn = wbs.items.length > 0
+    ? wbs.items.map(item =>
+      `| ${item.titleEn} | ${item.basisEn} | ${item.roleEn} | ${item.hours.toFixed(1)}h | $${item.hourlyRateUsd.toLocaleString('en-US')}/h | $${item.subtotalUsd.toLocaleString('en-US')} |`)
+    : ['| None (0 Inputs) | 0 auditable files submitted | - | 0.0h | $0/h | $0 |'];
   const lines = [
-    '# Atlas Sovereign — Autonomous Cloud/DX/AI Consulting & Security Blueprint',
+    '# LONGINUS — Autonomous Cloud/DX/AI Consulting & Security Blueprint',
     '',
     '## 1. Executive Risk Summary (In-House Consulting AI — Zero External Consultants Needed)',
     `- Consulting Profile: ${audienceLabelEn}`,
@@ -692,6 +969,12 @@ export function formatBlueprint(graph: GraphResult, prover?: DualProverVerdict, 
     }
   }
   lines.push(
+    '',
+    '### External Consulting WBS Effort & Fee Breakdown',
+    '| Work Item | Basis | Specialist Role | Effort (h) | Rate | Subtotal |',
+    '| --- | --- | --- | ---: | ---: | ---: |',
+    ...wbsRowsEn,
+    `| **Total** | **${wbs.items.length} executed workstreams** | - | **${wbs.totalHours.toFixed(1)}h** | - | **$${wbs.totalUsd.toLocaleString('en-US')}** |`,
     '',
     '### 5-Pillar Architecture Maturity Scorecard',
     '| Consulting Pillar | Score | Grade |',
@@ -752,7 +1035,7 @@ export function formatBlueprint(graph: GraphResult, prover?: DualProverVerdict, 
   lines.push(
     '',
     '## 7. Execution Mode & Audience Deliverables (In-House Consulting AI — Apache-2.0)',
-    '- **Instant In-House Consulting AI (Apache-2.0, $0 / Free)**: Load `Atlas Sovereign` into your company\'s AI agent to instantly build an enterprise, municipal, or SME Cloud/DX/AI consulting AI in-house, making external consulting firms completely unnecessary.',
+    '- **Instant In-House Consulting AI (Apache-2.0, $0 / Free)**: Load `LONGINUS` into your company\'s AI agent to instantly build an enterprise, municipal, or SME Cloud/DX/AI consulting AI in-house, making external consulting firms completely unnecessary.',
     '- **Municipal & Public Sector Deliverable (`--audience municipal`)**: Directly maps findings to Government Cloud data residency, disaster BCP multi-zone HA, and ISMAP controls for budget proposals and vendor RFP verification.',
     '- **SME & Supply-Chain Deliverable (`--audience sme`)**: Provides a plain-language 3-step remediation prescription, FinOps monthly cloud bill protection, and partner security assessment evidence.',
     `- **Redacted Sprint Intake Summary**: \`${intakeSummary}\``,

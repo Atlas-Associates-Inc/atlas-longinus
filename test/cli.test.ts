@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { lstatSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -352,7 +352,7 @@ test('package explicitly includes only distribution files and action run uses an
 test('--format blueprint emits executive roadmap, control domains, diffs and execution tiers', () => {
   const clean = cli(['audit', hardened, '--format', 'blueprint']);
   assert.equal(clean.status, 0, clean.stderr);
-  assert.match(clean.stdout, /# Atlas Sovereign — Autonomous Cloud\/DX\/AI Consulting & Security Blueprint/);
+  assert.match(clean.stdout, /# LONGINUS — Autonomous Cloud\/DX\/AI Consulting & Security Blueprint/);
   assert.match(clean.stdout, /Architecture Maturity Score: 100\/100 \(Grade: A\)/);
   assert.match(clean.stdout, /No findings in the analyzed inputs/);
 
@@ -376,7 +376,7 @@ test('--format blueprint emits executive roadmap, control domains, diffs and exe
 
   const jaBlueprint = cli(['audit', vulnerable, '--format', 'blueprint', '--emit-patch', '--lang', 'ja', '--audience', 'municipal']);
   assert.equal(jaBlueprint.status, 1, jaBlueprint.stderr);
-  assert.match(jaBlueprint.stdout, /# Atlas Sovereign — 自律型クラウド・DX・AI コンサルティング＆セキュリティ設計書/);
+  assert.match(jaBlueprint.stdout, /# LONGINUS — 自律型クラウド・DX・AI コンサルティング＆セキュリティ設計書/);
   assert.match(jaBlueprint.stdout, /## 1\. エグゼクティブリスク要約/);
   assert.match(jaBlueprint.stdout, /地方自治体・ガバメントクラウド向け/);
   assert.match(jaBlueprint.stdout, /### 5領域アーキテクチャ成熟度スコアカード/);
@@ -456,11 +456,107 @@ test('empty/unscoped repositories never falsely emit 100/100 Grade A or full SOC
     });
     assert.ifError(unifiedEmpty.error);
     assert.equal(unifiedEmpty.status, 0, unifiedEmpty.stderr);
-    assert.match(unifiedEmpty.stdout, /\*\*N\/A \(UNSCOPED — 走査対象ファイル 0 件のため未評価\)\*\*/);
+    assert.match(unifiedEmpty.stdout, /\*\*N\/A \(UNSCOPED — 評価対象のコード・構成ファイル 0 件のため未評価\)\*\*/);
     assert.match(unifiedEmpty.stdout, /\| TypeScript \/ Next\.js \/ Node \| 0 \| N\/A \(対象 0件\) \| - \|/);
     assert.match(unifiedEmpty.stdout, /\| Flutter \/ Dart \+ Firebase \| 0 \| N\/A \(対象 0件\) \| - \|/);
     assert.match(unifiedEmpty.stdout, /`UNSCOPED_NO_SOURCE_CODE`/);
   } finally {
     rmSync(emptyDir, { recursive: true, force: true });
+  }
+});
+
+test('WBS consulting estimator scales deterministically across empty, docs-only, small-code, large-IaC+patch and audience tiers without false Grade A', () => {
+  const parseEnSummary = (stdout: string) => {
+    const m = stdout.match(/Estimated External Consulting Equivalent Saved: \$(\d[\d,]*) \((\d+(?:\.\d+)?)h/);
+    assert.ok(m, `Expected English WBS summary in output:\n${stdout.slice(0, 600)}`);
+    return { fee: Number(m[1].replace(/,/g, '')), hours: Number(m[2]) };
+  };
+  const parseJaSummary = (stdout: string) => {
+    const m = stdout.match(/外部コンサル削減効果の試算: ¥(\d[\d,]*)（実測WBS工数 (?:合計 )?(\d+(?:\.\d+)?)h/);
+    assert.ok(m, `Expected Japanese WBS summary in output:\n${stdout.slice(0, 600)}`);
+    return { fee: Number(m[1].replace(/,/g, '')), hours: Number(m[2]) };
+  };
+
+  const docsDir = mkdtempSync(join(tmpdir(), 'longinus-wbs-docs-'));
+  const codeDir = mkdtempSync(join(tmpdir(), 'longinus-wbs-code-'));
+  const emptyDir = mkdtempSync(join(tmpdir(), 'longinus-wbs-empty-'));
+  try {
+    // Case 1: Empty directory -> 0.0h / $0 / ¥0 + UNSCOPED
+    const emptyEn = cli(['audit', emptyDir, '--format', 'blueprint']);
+    assert.equal(emptyEn.status, 0, emptyEn.stderr);
+    const emptyRes = parseEnSummary(emptyEn.stdout);
+    assert.equal(emptyRes.fee, 0);
+    assert.equal(emptyRes.hours, 0);
+    assert.match(emptyEn.stdout, /Grade: UNSCOPED/);
+    assert.equal(emptyEn.stdout.includes('Grade: A'), false);
+
+    // Case 2: Docs-only directory -> WBS item 1 only, hours > 0, fee > 0, security still UNSCOPED
+    writeFileSync(join(docsDir, 'README.md'), '# Architecture Notes\nZero cloud IaC yet.\n');
+    writeFileSync(join(docsDir, 'openapi.yaml'), 'openapi: 3.1.0\ninfo:\n  title: Demo\n  version: 1.0.0\n');
+    const docsEn = cli(['audit', docsDir, '--format', 'blueprint']);
+    assert.equal(docsEn.status, 0, docsEn.stderr);
+    const docsRes = parseEnSummary(docsEn.stdout);
+    assert.ok(docsRes.hours > 0 && docsRes.fee > 0, 'Docs-only should bill Docs Inventory work item');
+    assert.match(docsEn.stdout, /1\. Docs & Configuration Inventory/);
+    assert.equal(docsEn.stdout.includes('2. L0 Cloud IaC'), false);
+    assert.equal(docsEn.stdout.includes('3. 4-Stack Code'), false);
+    assert.equal(docsEn.stdout.includes('Grade: A'), false);
+    assert.match(docsEn.stdout, /Scan Status: UNSCOPED/);
+
+    const docsUnifiedJa = spawnSync(process.execPath, [join(root, 'bin/longinus.mjs'), docsDir, '--blueprint', '--lang', 'ja'], {
+      cwd: root, encoding: 'utf8', timeout: 10_000, maxBuffer: 1024 * 1024,
+      env: { PATH: process.env.PATH, LANG: 'C' },
+    });
+    assert.ifError(docsUnifiedJa.error);
+    assert.equal(docsUnifiedJa.status, 0, docsUnifiedJa.stderr);
+    assert.match(docsUnifiedJa.stdout, /1\. 要件・設計ドキュメント／構成棚卸し/);
+    assert.match(docsUnifiedJa.stdout, /\*\*N\/A \(UNSCOPED — 評価対象のコード・構成ファイル 0 件のため未評価\)\*\*/);
+    assert.equal(docsUnifiedJa.stdout.includes('Grade: A'), false);
+
+    // Case 3: Small code directory -> adds 4-Stack + LNG-CRAFT + Compliance WBS, fee > docsOnlyFee
+    mkdirSync(join(codeDir, 'src'), { recursive: true });
+    writeFileSync(
+      join(codeDir, 'src', 'crypto.ts'),
+      'import crypto from "node:crypto";\nexport const sign = (d: Uint8Array) => crypto.createHmac("sha256", "k").update(d).digest();\n',
+    );
+    writeFileSync(join(codeDir, 'package.json'), '{"name":"demo","version":"1.0.0"}\n');
+    writeFileSync(join(codeDir, 'package-lock.json'), '{"lockfileVersion":3}\n');
+    const codeEn = cli(['audit', codeDir, '--format', 'blueprint']);
+    assert.equal(codeEn.status, 0, codeEn.stderr);
+    const codeRes = parseEnSummary(codeEn.stdout);
+    assert.ok(codeRes.hours > docsRes.hours);
+    assert.ok(codeRes.fee > docsRes.fee);
+    assert.match(codeEn.stdout, /3\. 4-Stack Code/);
+    assert.match(codeEn.stdout, /4\. Orthogonal Craft/);
+    assert.match(codeEn.stdout, /6\. Regulatory Mapping/);
+    assert.equal(codeEn.stdout.includes('Grade: A'), false, 'Cloud L0 remains UNSCOPED without IaC');
+
+    // Case 4: Large IaC without patch vs with --emit-patch
+    const largeNoPatch = cli(['audit', vulnerable, '--format', 'blueprint']);
+    assert.equal(largeNoPatch.status, 1, largeNoPatch.stderr);
+    const largeNoPatchRes = parseEnSummary(largeNoPatch.stdout);
+    assert.equal(largeNoPatch.stdout.includes('5. Remediation Patch Synthesis'), false);
+
+    const largeWithPatch = cli(['audit', vulnerable, '--format', 'blueprint', '--emit-patch']);
+    assert.equal(largeWithPatch.status, 1, largeWithPatch.stderr);
+    const largeWithPatchRes = parseEnSummary(largeWithPatch.stdout);
+    assert.match(largeWithPatch.stdout, /5\. Remediation Patch Synthesis/);
+    assert.ok(largeWithPatchRes.hours > largeNoPatchRes.hours && largeNoPatchRes.hours > codeRes.hours);
+    assert.ok(largeWithPatchRes.fee > largeNoPatchRes.fee && largeNoPatchRes.fee > codeRes.fee);
+
+    // Case 5: Audience tier scaling (sme < municipal < enterprise) in EN ($) and JA (¥)
+    const smeEn = parseEnSummary(cli(['audit', vulnerable, '--format', 'blueprint', '--emit-patch', '--audience', 'sme']).stdout);
+    const munEn = parseEnSummary(cli(['audit', vulnerable, '--format', 'blueprint', '--emit-patch', '--audience', 'municipal']).stdout);
+    const entEn = parseEnSummary(cli(['audit', vulnerable, '--format', 'blueprint', '--emit-patch', '--audience', 'enterprise']).stdout);
+    assert.ok(smeEn.fee < munEn.fee && munEn.fee < entEn.fee, `Expected USD fee ordering sme<municipal<enterprise: ${smeEn.fee}, ${munEn.fee}, ${entEn.fee}`);
+
+    const smeJa = parseJaSummary(cli(['audit', vulnerable, '--format', 'blueprint', '--emit-patch', '--lang', 'ja', '--audience', 'sme']).stdout);
+    const munJa = parseJaSummary(cli(['audit', vulnerable, '--format', 'blueprint', '--emit-patch', '--lang', 'ja', '--audience', 'municipal']).stdout);
+    const entJa = parseJaSummary(cli(['audit', vulnerable, '--format', 'blueprint', '--emit-patch', '--lang', 'ja', '--audience', 'enterprise']).stdout);
+    assert.ok(smeJa.fee < munJa.fee && munJa.fee < entJa.fee, `Expected JPY fee ordering sme<municipal<enterprise: ${smeJa.fee}, ${munJa.fee}, ${entJa.fee}`);
+  } finally {
+    rmSync(emptyDir, { recursive: true, force: true });
+    rmSync(docsDir, { recursive: true, force: true });
+    rmSync(codeDir, { recursive: true, force: true });
   }
 });

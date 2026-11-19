@@ -131,6 +131,8 @@ export interface AuditReport {
   durationMs: number;
   scannedFiles: number;
   inspectedEntries: number;
+  docAndConfigFiles: number;
+  docAndConfigBytes: number;
   scanTruncated: boolean;
   truncationReason?: string;
   redactedSecretsCount: number;
