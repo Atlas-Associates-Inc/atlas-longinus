@@ -970,6 +970,7 @@ export async function executeDefensiveAudit(params: {
     stackSummaries,
     trustGraph: scan.trustGraph,
     findings: mergedFindings,
+    craftProfile: scan.craftProfile,
     destructionCertificate,
   };
 

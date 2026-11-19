@@ -96,6 +96,46 @@ function formatUnifiedBlueprintAndShield(
         `| ${s.label} | ${s.detectedFiles} | **${s.defenseScore}/100** | C:${s.criticalCount} / H:${s.highCount} / M:${s.mediumCount} / L:${s.lowCount} |`,
     ),
     '',
+    isJa
+      ? '### 直交エンジニアリング・クラフト＆テスタビリティ診断 (Orthogonal Skill & Testability Archetype)'
+      : '### Orthogonal Engineering Craft & Testability Archetype Diagnosis',
+    isJa
+      ? `- **診断アーキタイプ**: \`${shieldReport.craftProfile.archetypeId}\` — **${shieldReport.craftProfile.archetypeLabel}**`
+      : `- **Diagnosed Archetype**: \`${shieldReport.craftProfile.archetypeId}\` — **${shieldReport.craftProfile.archetypeLabel}**`,
+    isJa
+      ? `- **構造診断サマリー**: ${shieldReport.craftProfile.diagnosisSummary}`
+      : `- **Structural Diagnosis**: ${shieldReport.craftProfile.diagnosisSummary}`,
+    '',
+    isJa
+      ? '| 直交スキル評価軸 (Orthogonal Axis) | スコア | 構造テレメトリ指標 |'
+      : '| Orthogonal Evaluation Axis | Score | Structural Telemetry Metric |',
+    '| --- | ---: | --- |',
+    isJa
+      ? `| アルゴリズム・暗号・データ構造深度 | **${shieldReport.craftProfile.dimensions.algorithmicDepthScore}/100** | アルゴリズム/暗号プリミティブ信号: ${shieldReport.craftProfile.metrics.algorithmicSignalCount} 件 |`
+      : `| Algorithmic, Crypto & Data-Structure Depth | **${shieldReport.craftProfile.dimensions.algorithmicDepthScore}/100** | Algorithmic/Crypto Primitive Signals: ${shieldReport.craftProfile.metrics.algorithmicSignalCount} |`,
+    isJa
+      ? `| テスタビリティ・DI疎結合度 (Testability) | **${shieldReport.craftProfile.dimensions.testabilityScore}/100** | 本番コード: ${shieldReport.craftProfile.metrics.productionCodeFiles} / テスト: ${shieldReport.craftProfile.metrics.testFiles} (比率: ${shieldReport.craftProfile.metrics.testToCodeRatio}) · I/O密結合: ${shieldReport.craftProfile.metrics.coupledIoInAlgorithmicFiles} 件 |`
+      : `| Testability & Dependency Injection Decoupling | **${shieldReport.craftProfile.dimensions.testabilityScore}/100** | Prod Files: ${shieldReport.craftProfile.metrics.productionCodeFiles} / Tests: ${shieldReport.craftProfile.metrics.testFiles} (Ratio: ${shieldReport.craftProfile.metrics.testToCodeRatio}) · Coupled I/O in Algo: ${shieldReport.craftProfile.metrics.coupledIoInAlgorithmicFiles} |`,
+    isJa
+      ? `| 決定論性・境界制御 (Determinism & Bounds) | **${shieldReport.craftProfile.dimensions.determinismScore}/100** | 非注入クロック/PRNG状態: ${shieldReport.craftProfile.metrics.uninjectedNonDeterminismFiles} 件 · 巨大Godモジュール: ${shieldReport.craftProfile.metrics.oversizedGodModules} 件 |`
+      : `| Determinism & Resource Bounds | **${shieldReport.craftProfile.dimensions.determinismScore}/100** | Uninjected Clock/PRNG Files: ${shieldReport.craftProfile.metrics.uninjectedNonDeterminismFiles} · Untested God-Modules: ${shieldReport.craftProfile.metrics.oversizedGodModules} |`,
+    isJa
+      ? `| セキュリティ信頼境界 (Security Boundary) | **${shieldReport.craftProfile.dimensions.securityBoundaryScore}/100** | 4-Stack ゼロトラスト境界防御スコア連動 |`
+      : `| Security & Trust Boundary Isolation | **${shieldReport.craftProfile.dimensions.securityBoundaryScore}/100** | Coupled with 4-Stack Zero-Trust Boundary Posture |`,
+    '',
+    ...(shieldReport.craftProfile.untestableHotspots.length > 0
+      ? [
+          isJa
+            ? '#### Untestable Code / 非対称結合ホットスポット (`LNG-CRAFT-001..003`)'
+            : '#### Untestable Code & Asymmetry Hotspots (`LNG-CRAFT-001..003`)',
+          ...shieldReport.craftProfile.untestableHotspots.flatMap((h) => [
+            `- **[\`${h.ruleId}\`]** \`${h.filePath}:${h.line}\` — **${h.title}**`,
+            `  - ${h.asymmetrySignal}`,
+            `  - *Refactoring*: ${h.refactoringPatch}`,
+          ]),
+          '',
+        ]
+      : []),
     isJa ? '### 4-Stack コードレベル優先指摘一覧' : '### 4-Stack Code-Level Prioritized Findings',
   ];
 

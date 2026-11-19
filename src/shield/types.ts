@@ -83,6 +83,44 @@ export interface RoadmapStep {
   action: string;
 }
 
+export type EngineeringArchetypeId =
+  | 'SOVEREIGN_ARCHITECT'
+  | 'ALGORITHMIC_MONOLITH_UNTESTABLE'
+  | 'WELL_TESTED_SURFACE_SHALLOW_CORE'
+  | 'FAST_PROTOTYPE_COUPLED'
+  | 'BALANCED_PRODUCTION_ENGINEER';
+
+export interface UntestableCodeHotspot {
+  ruleId: 'LNG-CRAFT-001' | 'LNG-CRAFT-002' | 'LNG-CRAFT-003';
+  title: string;
+  filePath: string;
+  line: number;
+  asymmetrySignal: string;
+  refactoringPatch: string;
+}
+
+export interface EngineeringCraftProfile {
+  archetypeId: EngineeringArchetypeId;
+  archetypeLabel: string;
+  diagnosisSummary: string;
+  dimensions: {
+    algorithmicDepthScore: number;
+    testabilityScore: number;
+    determinismScore: number;
+    securityBoundaryScore: number;
+  };
+  metrics: {
+    productionCodeFiles: number;
+    testFiles: number;
+    testToCodeRatio: number;
+    algorithmicSignalCount: number;
+    coupledIoInAlgorithmicFiles: number;
+    uninjectedNonDeterminismFiles: number;
+    oversizedGodModules: number;
+  };
+  untestableHotspots: UntestableCodeHotspot[];
+}
+
 export interface AuditReport {
   auditId: string;
   targetPath: string;
@@ -109,6 +147,7 @@ export interface AuditReport {
     edges: TrustBoundaryEdge[];
   };
   findings: SecurityFinding[];
+  craftProfile: EngineeringCraftProfile;
   destructionCertificate: DestructionCertificate;
 }
 

@@ -999,4 +999,54 @@ describe('Longinus Defensive Security Invariants', () => {
       await fs.rm(r3Tmp, { recursive: true, force: true });
     }
   });
+
+  it('diagnoses orthogonal engineering craft archetypes (ALGORITHMIC_MONOLITH_UNTESTABLE vs SOVEREIGN_ARCHITECT)', async () => {
+    const tmpCraft = await fs.mkdtemp(path.join(os.tmpdir(), 'longinus-craft-archetype-'));
+    try {
+      await fs.mkdir(path.join(tmpCraft, 'src'), { recursive: true });
+      await fs.writeFile(
+        path.join(tmpCraft, 'src', 'cryptoGraphEngine.ts'),
+        [
+          'import crypto from "node:crypto";',
+          'import fs from "node:fs";',
+          'export function solveShortestRatchetPath(adj: Map<string, string[]>, payload: Uint8Array) {',
+          '  const mac = crypto.createHmac("sha256", "key").update(payload).digest();',
+          '  const sig = crypto.timingSafeEqual(mac, mac);',
+          '  const shifted = (payload[0]! << 4) | (payload[1]! >> 2);',
+          '  const stamp = Date.now();',
+          '  (globalThis as Record<string, unknown>).lastRatchetRun = stamp;',
+          '  fs.writeFileSync("/tmp/ratchet-audit.bin", mac);',
+          '  void fetch("https://telemetry.example.com/ingest", { method: "POST" });',
+          '  return { sig, shifted, stamp };',
+          '}',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const scan = await runStaticRepositoryScan(tmpCraft);
+      assert.equal(scan.craftProfile.archetypeId, 'ALGORITHMIC_MONOLITH_UNTESTABLE');
+      assert.match(scan.craftProfile.archetypeLabel, /Good at Algorithms, Writes Untestable Code/);
+      assert.ok(scan.craftProfile.dimensions.algorithmicDepthScore >= 70);
+      assert.ok(scan.craftProfile.dimensions.testabilityScore < 65);
+      assert.ok(
+        scan.craftProfile.untestableHotspots.some(
+          (h) => h.ruleId === 'LNG-CRAFT-001' && h.filePath === 'src/cryptoGraphEngine.ts',
+        ),
+      );
+      assert.ok(
+        scan.craftProfile.untestableHotspots.some(
+          (h) => h.ruleId === 'LNG-CRAFT-002' && h.filePath === 'src/cryptoGraphEngine.ts',
+        ),
+      );
+
+      const selfScan = await runStaticRepositoryScan(PROJECT_ROOT, {
+        excludeRelativePrefixes: ['test'],
+      });
+      assert.equal(selfScan.craftProfile.archetypeId, 'SOVEREIGN_ARCHITECT');
+      assert.ok(selfScan.craftProfile.dimensions.algorithmicDepthScore >= 85);
+      assert.equal(selfScan.craftProfile.dimensions.testabilityScore, 100);
+    } finally {
+      await fs.rm(tmpCraft, { recursive: true, force: true });
+    }
+  });
 });

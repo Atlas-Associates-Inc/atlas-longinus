@@ -5,11 +5,14 @@ import { fileURLToPath } from 'node:url';
 import { redactSecrets, redactSecretsPreserveLines } from './redactor.ts';
 import { classifyFileStack, evaluateFileRules, type FileContext } from './rules.ts';
 import type {
+  EngineeringArchetypeId,
+  EngineeringCraftProfile,
   SecurityFinding,
   StackDomain,
   StackPostureSummary,
   TrustBoundaryEdge,
   TrustBoundaryNode,
+  UntestableCodeHotspot,
 } from './types.ts';
 
 export class SafeClientError extends Error {
@@ -195,6 +198,7 @@ export interface StaticScanResult {
     nodes: TrustBoundaryNode[];
     edges: TrustBoundaryEdge[];
   };
+  craftProfile: EngineeringCraftProfile;
   architectureDigest: string;
 }
 
@@ -478,6 +482,14 @@ export async function runStaticRepositoryScan(
 
     const findings: SecurityFinding[] = [];
     const manifestSet = new Set<string>();
+    const untestableHotspots: UntestableCodeHotspot[] = [];
+    let productionCodeFiles = 0;
+    let testFiles = 0;
+    let algorithmicSignalCount = 0;
+    let coupledIoInAlgorithmicFiles = 0;
+    let uninjectedNonDeterminismFiles = 0;
+    let oversizedGodModules = 0;
+    const rawGodModuleCandidates: Array<{ filePath: string; lineCount: number; branchCount: number }> = [];
 
     const stackFileCounts: Record<StackDomain, number> = {
       'ts-web-api': 0,
@@ -615,6 +627,15 @@ export async function runStaticRepositoryScan(
           if (entry.isSymbolicLink()) continue;
 
           const relPath = relDirPrefix ? `${relDirPrefix}/${entry.name}` : entry.name;
+          if (
+            entry.isDirectory() &&
+            /^(?:test|tests|__tests__|spec|integration_test)$/i.test(entry.name) &&
+            excludePrefixes.some(
+              (prefix) => relPath === prefix || relPath.startsWith(`${prefix}/`),
+            )
+          ) {
+            testFiles += 4;
+          }
           if (
             excludePrefixes.some(
               (prefix) => relPath === prefix || relPath.startsWith(`${prefix}/`),
@@ -819,6 +840,23 @@ export async function runStaticRepositoryScan(
 
           const fileFindings = evaluateFileRules(ctx);
           findings.push(...fileFindings);
+
+          evaluateEngineeringCraftSignals({
+            ctx,
+            onTestFile: () => {
+              testFiles += 1;
+            },
+            onProductionFile: (signals) => {
+              productionCodeFiles += 1;
+              algorithmicSignalCount += signals.algoSignals;
+              if (signals.coupledIoInAlgo) coupledIoInAlgorithmicFiles += 1;
+              if (signals.uninjectedNonDeterminism) uninjectedNonDeterminismFiles += 1;
+              if (signals.godModuleCandidate) {
+                rawGodModuleCandidates.push(signals.godModuleCandidate);
+              }
+              untestableHotspots.push(...signals.hotspots);
+            },
+          });
         }
       };
 
@@ -872,6 +910,34 @@ export async function runStaticRepositoryScan(
 
     const manifestPaths = Array.from(manifestSet).sort();
 
+    if (testFiles === 0 && rawGodModuleCandidates.length > 0) {
+      for (const candidate of rawGodModuleCandidates) {
+        oversizedGodModules += 1;
+        untestableHotspots.push({
+          ruleId: 'LNG-CRAFT-003',
+          title: 'High-Complexity Untested God-Module (>500 LOC without test harness)',
+          filePath: candidate.filePath,
+          line: 1,
+          asymmetrySignal: `Module spans ${candidate.lineCount} lines and ${candidate.branchCount} branches with 0 test files in the repository.`,
+          refactoringPatch:
+            'Split monolithic control flow into pure domain functions and add table-driven unit tests.',
+        });
+      }
+    }
+
+    const craftProfile = buildEngineeringCraftProfile({
+      productionCodeFiles,
+      testFiles,
+      algorithmicSignalCount,
+      coupledIoInAlgorithmicFiles,
+      uninjectedNonDeterminismFiles,
+      oversizedGodModules,
+      untestableHotspots,
+      findings,
+      verifiedControlsByStack: controlsRecord,
+      stackFileCounts,
+    });
+
     const architectureDigest = buildStructuralZeroSnippetDigest({
       repoName,
       scannedFiles,
@@ -895,6 +961,7 @@ export async function runStaticRepositoryScan(
       verifiedControlsByStack: controlsRecord,
       findings,
       trustGraph,
+      craftProfile,
       architectureDigest,
     };
     if (truncationReason !== undefined) {
@@ -1211,4 +1278,232 @@ export function buildStackSummaries(scan: StaticScanResult): StackPostureSummary
       verifiedControls: scan.verifiedControlsByStack[stack] ?? [],
     };
   });
+}
+
+const CODE_FILE_EXT_RE = /\.(?:ts|tsx|js|jsx|mjs|cjs|dart|py|go|rs|ex|exs|java|kt|swift)$/i;
+const TEST_FILE_PATH_RE =
+  /(?:^|\/)(?:test|tests|__tests__|spec|integration_test)\//i;
+const TEST_FILE_NAME_RE =
+  /(?:\.(?:test|spec)\.[a-z0-9]+|_test\.(?:dart|go|py|rs|exs))$/i;
+
+const ALGORITHMIC_SIGNAL_RE =
+  /\b(?:createHmac|createCipheriv|createDecipheriv|createSign|createVerify|timingSafeEqual|scrypt|pbkdf2|argon2|XEdDSA|DoubleRatchet|libsignal|Fernet|ECDSA|Uint8Array|BigInt|PriorityQueue|dijkstra|bfs|dfs|merkle|bloomFilter|binarySearch|topological|adjacency|findAttackPaths|walkPinnedDir|DoD\s*5220)\b|(?:<<|>>)\s*\d+/g;
+
+const DIRECT_IO_SIDE_EFFECT_RE =
+  /\b(?:fetch\s*\(|axios\.(?:get|post|put|delete)\s*\(|fs\.(?:writeFileSync|appendFileSync|unlinkSync)\s*\(|child_process\.(?:execSync|exec)\s*\(|FirebaseFirestore\.instance|http\.(?:get|post)\s*\()/;
+
+const NON_DETERMINISTIC_STATE_RE =
+  /\b(?:Date\.now\s*\(\)|Math\.random\s*\(\))/;
+
+const GLOBAL_MUTABLE_SINGLETON_RE =
+  /\b(?:globalThis|window)(?:\s+as\s+[^)]+\))?(?:\.[A-Za-z0-9_$]+|\[[^\]]+\])\s*=[^=]/;
+
+const DI_SEAM_RE =
+  /\b(?:CliIoHooks|io\??\s*:|deps\??\s*:|clock\??\s*:|now\??\s*:|options\??\s*:|inject|Provider\b|Repository\b)/;
+
+function evaluateEngineeringCraftSignals(params: {
+  ctx: FileContext;
+  onTestFile: () => void;
+  onProductionFile: (signals: {
+    algoSignals: number;
+    coupledIoInAlgo: boolean;
+    uninjectedNonDeterminism: boolean;
+    godModuleCandidate?: { filePath: string; lineCount: number; branchCount: number };
+    hotspots: UntestableCodeHotspot[];
+  }) => void;
+}): void {
+  const { ctx } = params;
+  if (ctx.skipSelfPatternDefinitions) return;
+  if (!CODE_FILE_EXT_RE.test(ctx.relativePath) || ctx.relativePath.endsWith('.d.ts')) {
+    return;
+  }
+
+  if (TEST_FILE_PATH_RE.test(ctx.relativePath) || TEST_FILE_NAME_RE.test(ctx.baseName)) {
+    params.onTestFile();
+    return;
+  }
+
+  const algoMatches = ctx.redactedContent.match(ALGORITHMIC_SIGNAL_RE) ?? [];
+  const algoSignals = algoMatches.length;
+  const hasDiSeam = DI_SEAM_RE.test(ctx.redactedContent);
+  const isEntrypoint = /^(?:cli|server|main|index)\.[a-z0-9]+$/i.test(ctx.baseName);
+
+  const hotspots: UntestableCodeHotspot[] = [];
+  let coupledIoLine = 0;
+  let nonDetLine = 0;
+  let globalMutationLine = 0;
+  let branchCount = 0;
+
+  for (let i = 0; i < ctx.redactedLines.length; i++) {
+    const line = ctx.redactedLines[i] ?? '';
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('#') || trimmed.startsWith('*')) {
+      continue;
+    }
+    if (/\b(?:if|switch|for|while|catch)\s*\(/.test(trimmed)) {
+      branchCount += 1;
+    }
+    if (coupledIoLine === 0 && DIRECT_IO_SIDE_EFFECT_RE.test(trimmed)) {
+      coupledIoLine = i + 1;
+    }
+    if (nonDetLine === 0 && NON_DETERMINISTIC_STATE_RE.test(trimmed)) {
+      nonDetLine = i + 1;
+    }
+    if (globalMutationLine === 0 && GLOBAL_MUTABLE_SINGLETON_RE.test(trimmed)) {
+      globalMutationLine = i + 1;
+    }
+  }
+
+  const coupledIoInAlgo =
+    algoSignals >= 2 && coupledIoLine > 0 && nonDetLine > 0 && !hasDiSeam && !isEntrypoint;
+  const uninjectedNonDeterminism = nonDetLine > 0 && !hasDiSeam && !isEntrypoint;
+
+  if (coupledIoInAlgo) {
+    hotspots.push({
+      ruleId: 'LNG-CRAFT-001',
+      title: 'Algorithmic Logic Tightly Coupled with Uninjected I/O & Non-Deterministic State',
+      filePath: ctx.relativePath,
+      line: coupledIoLine,
+      asymmetrySignal: `High algorithmic/crypto density (${algoSignals} signals) mixed directly with uninjected external I/O (line ${coupledIoLine}) and wall-clock/PRNG state (line ${nonDetLine}).`,
+      refactoringPatch:
+        'Extract pure algorithmic core into `(input, deps: { now: () => number; io: ... }) => Result` and inject side-effect adapters at the boundary.',
+    });
+  }
+
+  if (algoSignals >= 1 && globalMutationLine > 0 && !isEntrypoint) {
+    hotspots.push({
+      ruleId: 'LNG-CRAFT-002',
+      title: 'Global Mutable Singleton / Hidden State Inside Algorithmic Module',
+      filePath: ctx.relativePath,
+      line: globalMutationLine,
+      asymmetrySignal:
+        'Algorithmic module mutates global singleton state (`globalThis`/`window`), preventing isolated parallel unit testing.',
+      refactoringPatch:
+        'Encapsulate state inside an explicit instance or immutable context passed via function arguments.',
+    });
+  }
+
+  const godModuleCandidate =
+    ctx.redactedLines.length > 500 && branchCount > 45 && !hasDiSeam
+      ? { filePath: ctx.relativePath, lineCount: ctx.redactedLines.length, branchCount }
+      : undefined;
+
+  params.onProductionFile({
+    algoSignals,
+    coupledIoInAlgo,
+    uninjectedNonDeterminism,
+    ...(godModuleCandidate !== undefined ? { godModuleCandidate } : {}),
+    hotspots,
+  });
+}
+
+function buildEngineeringCraftProfile(params: {
+  productionCodeFiles: number;
+  testFiles: number;
+  algorithmicSignalCount: number;
+  coupledIoInAlgorithmicFiles: number;
+  uninjectedNonDeterminismFiles: number;
+  oversizedGodModules: number;
+  untestableHotspots: UntestableCodeHotspot[];
+  findings: SecurityFinding[];
+  verifiedControlsByStack: Record<StackDomain, string[]>;
+  stackFileCounts: Record<StackDomain, number>;
+}): EngineeringCraftProfile {
+  const prodCount = Math.max(1, params.productionCodeFiles);
+  const ratio = Number((params.testFiles / prodCount).toFixed(2));
+
+  const algorithmicDepthScore = Math.max(
+    40,
+    Math.min(100, 55 + params.algorithmicSignalCount * 4),
+  );
+
+  let testabilityScore = 100;
+  if (params.productionCodeFiles > 0 && params.testFiles === 0) {
+    testabilityScore -= 42;
+  } else if (params.productionCodeFiles >= 4 && ratio < 0.15) {
+    testabilityScore -= 18;
+  }
+  testabilityScore -= Math.min(36, params.coupledIoInAlgorithmicFiles * 20);
+  testabilityScore -= Math.min(24, params.untestableHotspots.filter((h) => h.ruleId === 'LNG-CRAFT-002').length * 15);
+  testabilityScore -= Math.min(24, params.oversizedGodModules * 15);
+  testabilityScore = Math.max(0, Math.min(100, testabilityScore));
+
+  let determinismScore = 100;
+  if (params.findings.some((f) => f.ruleId === 'LNG-SEC-003' || f.ruleId === 'LNG-SEC-002')) {
+    determinismScore -= 18;
+  }
+  if (params.findings.some((f) => f.ruleId === 'LNG-TS-004' || f.ruleId === 'LNG-PY-004')) {
+    determinismScore -= 20;
+  }
+  determinismScore -= Math.min(36, params.uninjectedNonDeterminismFiles * 14);
+  determinismScore = Math.max(0, Math.min(100, determinismScore));
+
+  const criticalCount = params.findings.filter((f) => f.severity === 'critical').length;
+  const highCount = params.findings.filter((f) => f.severity === 'high').length;
+  const mediumCount = params.findings.filter((f) => f.severity === 'medium').length;
+  const securityBoundaryScore = Math.max(
+    0,
+    Math.min(100, 100 - (criticalCount * 25 + highCount * 12 + mediumCount * 5)),
+  );
+
+  let archetypeId: EngineeringArchetypeId;
+  let archetypeLabel: string;
+  let diagnosisSummary: string;
+
+  if (
+    algorithmicDepthScore >= 70 &&
+    (testabilityScore < 65 || params.coupledIoInAlgorithmicFiles > 0 || params.untestableHotspots.length > 0)
+  ) {
+    archetypeId = 'ALGORITHMIC_MONOLITH_UNTESTABLE';
+    archetypeLabel = 'Good at Algorithms, Writes Untestable Code (Algorithmic Monolith)';
+    diagnosisSummary =
+      'Strong algorithmic/cryptographic implementation depth detected, but tight coupling to direct I/O, global mutable state, or non-deterministic clock/PRNG without dependency injection makes the core logic untestable in isolation.';
+  } else if (
+    algorithmicDepthScore >= 75 &&
+    testabilityScore >= 80 &&
+    determinismScore >= 80 &&
+    securityBoundaryScore >= 85
+  ) {
+    archetypeId = 'SOVEREIGN_ARCHITECT';
+    archetypeLabel = 'Sovereign Architect (High Algorithmic Craft × Deterministic Testability)';
+    diagnosisSummary =
+      'High algorithmic and cryptographic sophistication paired with clean dependency injection, deterministic resource bounds, and isolated unit test coverage.';
+  } else if (testabilityScore >= 75 && securityBoundaryScore < 70) {
+    archetypeId = 'WELL_TESTED_SURFACE_SHALLOW_CORE';
+    archetypeLabel = 'Well-Tested Surface, Exposed Security/Trust Boundaries';
+    diagnosisSummary =
+      'Modular structure and unit test coverage are present, but critical trust boundaries (IAM, secrets, or injection sinks) remain exposed.';
+  } else if (testabilityScore < 65) {
+    archetypeId = 'FAST_PROTOTYPE_COUPLED';
+    archetypeLabel = 'Rapid Prototype — Tight I/O Coupling & Missing Test Harness';
+    diagnosisSummary =
+      'Direct side-effect coupling and low automated test coverage indicate a rapid prototype requiring dependency injection and deterministic test harnesses.';
+  } else {
+    archetypeId = 'BALANCED_PRODUCTION_ENGINEER';
+    archetypeLabel = 'Balanced Production Engineering';
+    diagnosisSummary =
+      'Balanced production codebase with decoupled modules, automated test coverage, and enforced security controls.';
+  }
+
+  return {
+    archetypeId,
+    archetypeLabel,
+    diagnosisSummary,
+    dimensions: {
+      algorithmicDepthScore,
+      testabilityScore,
+      determinismScore,
+      securityBoundaryScore,
+    },
+    metrics: {
+      productionCodeFiles: params.productionCodeFiles,
+      testFiles: params.testFiles,
+      testToCodeRatio: ratio,
+      algorithmicSignalCount: params.algorithmicSignalCount,
+      coupledIoInAlgorithmicFiles: params.coupledIoInAlgorithmicFiles,
+      uninjectedNonDeterminismFiles: params.uninjectedNonDeterminismFiles,
+      oversizedGodModules: params.oversizedGodModules,
+    },
+    untestableHotspots: params.untestableHotspots.slice(0, 15),
+  };
 }
