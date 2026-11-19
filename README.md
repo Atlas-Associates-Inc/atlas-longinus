@@ -96,6 +96,38 @@ Global technology and DX consulting firms charge `$75,000–$350,000+` over 3–
 | **6. Review-Only Remediation Patch Generator (`--emit-patch`)** | Generates review-only unified diffs (`firestore.rules`, `storage.rules`, Terraform Cloud Run/SQL/BigQuery/WIF, AWS S3/RDS/OIDC, Azure Storage/PostgreSQL) to `stdout` without ever modifying local files or cloud state. | Safe, human-approved remediation ready to apply in seconds. |
 | **7. Zero-Trust MCP Airlock (`L1`) & Sovereign AI Prover (`L2`)** | Wraps MCP servers in fail-closed read-only profiles (`scc`, `secops`, `firebase`, `cloudrun`, `developer-knowledge`, `prowler`, `semgrep`), redacts secrets/injections, and optionally runs orthogonal dual-lane AI exploit verification (`--prove`). | Prevents AI agent self-compromise, accidental cloud mutations, and credential leaks. |
 
+### Supported Clouds, Application Stacks & Compliance Matrix
+
+> **Honest Unscoped Reporting**: LONGINUS scores strictly from submitted static artifacts. If a repository contains 0 cloud IaC/IAM/Rules or 0 source files in a domain, LONGINUS reports **`UNSCOPED / N/A`**—it never awards a false `100/100 Grade A` or fake compliance alignment on unsubmitted infrastructure or live runtime issues (such as HTTP 429 quota exhaustion, shared tokens, or HTTP 414 protocol errors).
+
+#### A. Supported Clouds & Infrastructure (`L0` Attack-Path Graph)
+
+| Cloud / Platform | Covered Services & Resources | Supported Input Formats | Key Rules (`--emit-patch` Diffs) |
+| :--- | :--- | :--- | :--- |
+| **Google Cloud (GCP)** | Cloud Run, Cloud Functions, GKE, Cloud SQL, Vertex AI Workbench, BigQuery, GCS, Secret Manager, IAM, WIF, Cloud Build, Cloud KMS (CMEK) | `*.tf` (Terraform), `*iam*.json`, `policy.json`, `.github/workflows/*.yml` | `gcp/*`, `iam/*`, `wif/*`, `gke/*`, `sql/*`, `vertex/*`, `bigquery/*`, `finops/*`, `data/*`, `gov/*`, `sre/*` (16 rules + Unified Diffs) |
+| **Firebase** | Cloud Firestore, Cloud Storage, Firebase Hosting, Functions (`onRequest`/`onCall`), App Check | `firestore.rules`, `storage.rules`, `firebase.json` | `firebase/public-read`, `firebase/public-write`, `firebase/recursive-wildcard`, `firebase/privilege-fields` (`hasOnly` diffs) |
+| **Amazon Web Services (AWS)** | Amazon S3 (`aws_s3_bucket*`), Amazon RDS (`aws_db_instance`), IAM GitHub OIDC (`aws_iam_role`) | `*.tf` (Terraform) | `aws/public-s3-bucket`, `aws/public-rds-instance`, `aws/unpinned-github-oidc` + Terraform Unified Diffs |
+| **Microsoft Azure** | Azure Blob Storage (`azurerm_storage_*`), Azure Database PostgreSQL/MySQL/MSSQL | `*.tf` (Terraform) | `azure/public-storage-blob`, `azure/public-database-network` + Terraform Unified Diffs |
+| **Runtime Telemetry (Optional)** | GCP Cloud Audit Logs, Security Command Center (SCC) | `*cloud-audit*.json/.ndjson`, `*audit-log*.json`, `*scc*.json` | `audit/logging-tampering`, `audit/iam-persistence`, `audit/impersonation-chain`, `audit/sensitive-data-access`, `scc/active-finding` |
+
+#### B. Supported Application Languages & Code Stacks (`4-Stack Code Shield` + `Craft Profile`)
+
+| Stack Domain | Supported Languages & Frameworks | Key Rules & Orthogonal Diagnostics |
+| :--- | :--- | :--- |
+| **`ts-web-api`** | TypeScript, JavaScript, React, Next.js, Node.js, HTML | `LNG-TS-001..005` (DOM XSS, Command Injection, Wildcard CORS, Weak PRNG, SQLi) |
+| **`flutter-firebase`** | Flutter, Dart, Firebase Functions (`functions/*.js/.ts`), Rules | `LNG-FB-001..003`, `LNG-FL-001..002` (App Check, TLS Pinning, Keystore Segregation) |
+| **`python-go-cloud`** | Python, Go, Elixir, `Dockerfile`, `cloudbuild.yaml`, K8s/Compose YAML | `LNG-PY-001..004`, `LNG-GO-001`, `LNG-CLD-001..003` (`shell=True`, SQLi, SSRF, Non-Root Docker, Slowloris) |
+| **`supply-chain-secrets`** | Polyglot Source, `.env*`, GitHub Actions, Lockfiles, Keystores (`.jks`, `.p12`, `.pem`) | `LNG-SEC-001..005` + **1,529-pattern secret redaction**, SHA/tag pinning, OIDC injection |
+| **`craftProfile` (Orthogonal)** | Production Code (`TS/JS/Dart/Python/Go/Rust/Elixir/Java/Kotlin/Swift`) vs Tests | `LNG-CRAFT-001..003` (flags `ALGORITHMIC_MONOLITH_UNTESTABLE` vs `SOVEREIGN_ARCHITECT`) |
+
+#### C. Regulatory & Framework Compliance Mapping (`--audience enterprise|municipal|sme`)
+
+| Audience Flag | Mapped Standards & Regulatory Frameworks |
+| :--- | :--- |
+| **`--audience enterprise`** | **SOC 2 Type II** (`CC6.1`–`CC8.1`, `A1.1`–`A1.2`) · **ISO/IEC 27001:2022** (`A.5.34`, `A.8.2`–`A.8.25`) · **NIST CSF 2.0 & NIST AI RMF** |
+| **`--audience municipal`** | **Japan MIC Municipal Security Guidelines** (Three-Tier / β' Model) · **Digital Agency GovCloud Standards** · **ISMAP** |
+| **`--audience sme`** | **METI Supply-Chain Security Evaluation** · **Japan APPI Art. 23 & 28** · **IPA 5 Cyber Hygiene Principles & Ransomware Resilience** |
+
 ### How to Use & Quickstart CLI
 
 Use this checkout with Node.js **>=22.18.0**; no install or build step is required:
@@ -355,6 +387,38 @@ flowchart LR
 | **⑥ レビュー専用の自動修正パッチ生成（`--emit-patch`）** | 対象ファイルを一切勝手に書き換えず、人間が承認してすぐ適用できる安全な修正 unified diff（Firebase Rules、Cloud SQL、BigQuery、WIF、AWS S3/RDS/OIDC、Azure Storage/PostgreSQL 等）を標準出力へ生成。 | 本番障害リスクなしで最小権限化・公開遮断を即日完了。 |
 | **⑦ ゼロトラスト MCP Airlock（`L1`）& Sovereign AI Prover（`L2`）** | 社内 AI が使う MCP サーバーから破壊的操作（delete/update/deploy 等）を機械的に遮断し、ログ内の秘密情報・プロンプト注入を除去。さらに任意で2系統の独立 AI（`Argon High` × `Hydrogen XHigh`）による深層検証を実行。 | AI エージェント自身の暴走・乗っ取り・情報漏洩を根本から防止。 |
 
+### 対応クラウド・アプリケーション言語・法規制コンプライアンス完全一覧
+
+> **⚠️ 未評価（UNSCOPED）の誠実表記保証**: LONGINUS は提出された静的ファイルのみを評価します。対象の IaC / Rules / ソースコードが **0件** の領域を誤って `100/100 Grade A` や `SOC2適合` と判定せず **`UNSCOPED / N/A（未評価）`** として明示します（実環境の HTTP 429 クォータ枯渇や共有トークン等のランタイム障害は保証対象外）。
+
+#### A. 対応クラウド＆インフラ（`L0` 統合攻撃経路グラフ）
+
+| クラウド / 基盤 | 対応リソース・サービス | 自動検出するファイル形式 | 主な検出ルール ＆ `--emit-patch` 自動修正 diff |
+| :--- | :--- | :--- | :--- |
+| **Google Cloud (GCP)** | Cloud Run, Cloud Functions, GKE, Cloud SQL, Vertex AI Workbench, BigQuery, GCS, Secret Manager, IAM, WIF, Cloud Build, Cloud KMS (CMEK) | `*.tf` (Terraform), `*iam*.json`, `policy.json`, `.github/workflows/*.yml` | `gcp/*`, `iam/*`, `wif/*`, `gke/*`, `sql/*`, `vertex/*`, `bigquery/*`, `finops/*`, `data/*`, `gov/*`（東京/大阪リージョン固定）, `sre/*`（全16ルール＋自動修正 diff） |
+| **Firebase** | Cloud Firestore, Cloud Storage, Firebase Hosting, Functions (`onRequest`/`onCall`), App Check | `firestore.rules`, `storage.rules`, `firebase.json` | `firebase/public-read`, `firebase/public-write`, `firebase/recursive-wildcard`, `firebase/privilege-fields`（`hasOnly` 自動パッチ生成） |
+| **AWS (Amazon Web Services)** | Amazon S3 (`aws_s3_bucket*`), Amazon RDS (`aws_db_instance`), AWS IAM GitHub OIDC (`aws_iam_role`) | `*.tf` (Terraform) | `aws/public-s3-bucket`, `aws/public-rds-instance`, `aws/unpinned-github-oidc` ＋ Terraform 自動修正 diff |
+| **Microsoft Azure** | Azure Blob Storage (`azurerm_storage_*`), Azure Database PostgreSQL/MySQL/MSSQL | `*.tf` (Terraform) | `azure/public-storage-blob`, `azure/public-database-network` ＋ Terraform 自動修正 diff |
+| **クラウド監査ログ（任意提出）** | GCP Cloud Audit Logs、Security Command Center (SCC) エクスポート | `*cloud-audit*.json/.ndjson`, `*audit-log*.json`, `*scc*.json` | `audit/logging-tampering`, `audit/iam-persistence`, `audit/impersonation-chain`, `audit/sensitive-data-access`, `scc/active-finding` |
+
+#### B. 対応アプリケーション言語＆コードスタック（`4-Stack Code Shield` + `Craft Profile`）
+
+| スタック分類 | 対応言語・フレームワーク | 主な検出ルール ＆ 直交アーキタイプ診断 |
+| :--- | :--- | :--- |
+| **`ts-web-api`** | TypeScript, JavaScript, React, Next.js, Node.js, HTML | `LNG-TS-001..005`（DOM XSS、OSコマンド注入、CORS全許可、弱PRNG、SQLi） |
+| **`flutter-firebase`** | Flutter, Dart, Firebase Functions (`functions/*.js/.ts`), Security Rules | `LNG-FB-001..003`, `LNG-FL-001..002`（App Check、TLS検証強制、鍵平文保存） |
+| **`python-go-cloud`** | Python, Go, Elixir, `Dockerfile`, `cloudbuild.yaml`, K8s/Compose YAML | `LNG-PY-001..004`, `LNG-GO-001`, `LNG-CLD-001..003`（`shell=True`、SSRF、root実行禁止、Slowloris対策） |
+| **`supply-chain-secrets`** | 全言語ソースコード、`.env*`、GitHub Actions、ロックファイル、`.jks`/`.p12`/`.pem` | `LNG-SEC-001..005` ＋ **1,529種機密自動 `[REDACTED]` マスク**、Action/OIDC 固定検証 |
+| **`craftProfile` (直交診断)** | 本番コード（`TS/JS/Dart/Python/Go/Rust/Elixir/Java/Kotlin/Swift`）× テスト比率 | `LNG-CRAFT-001..003`（`ALGORITHMIC_MONOLITH_UNTESTABLE`＝「アルゴリズム優秀だがテスト不能」等を特定） |
+
+#### C. 対応コンプライアンス・法規制マッピング（`--audience enterprise|municipal|sme`）
+
+| プロファイル | 自動マッピングされる法規制・セキュリティ基準 |
+| :--- | :--- |
+| **`--audience enterprise`** | **SOC 2 Type II** (`CC6.1`〜`CC8.1`, `A1.1`〜`A1.2`) ／ **ISO/IEC 27001:2022** (`A.5.34`, `A.8.2`〜`A.8.25`) ／ **NIST CSF 2.0 & NIST AI RMF** |
+| **`--audience municipal`** | **総務省 地方公共団体情報セキュリティガイドライン**（三層の対策・β'モデル） ／ **デジタル庁 ガバメントクラウド利用基準** ／ **ISMAP 管理基準** |
+| **`--audience sme`** | **経済産業省 サプライチェーン対策評価制度** ／ **個人情報保護法第23条・第28条** ／ **IPA 情報セキュリティ5か条・ランサムウェア対策** |
+
 ### 使い方・クイックスタート CLI
 
 Node.js **>=22.18.0** で、この checkout から実行できます。インストール・ビルドは不要です。`--lang ja`（または環境変数 `ATLAS_LANG=ja`）を指定すると日本語、`--lang en` で英語で出力されます。
@@ -586,7 +650,13 @@ npm test
 ```
 
 - **核心能力**: 离线/在线均 100% 只读（`O_RDONLY | O_NOFOLLOW`）、临时目录 `0o700 ACL` + `Fernet (AES-128-CBC + HMAC-SHA256)` 加密、美国国防部 `DoD 5220.22-M` 3 次覆写销毁与 `ECDSA P-256` 签名数据销毁证书自动签发；GCP × Firebase 跨边界攻击路径分析（支持 CEL 函数与 `let` 绑定 AST 解析、管理员受控公开资产零误报、作用域级扣分去重）、4-Stack 源码与密钥护盾（1,529 种密钥模式脱敏）、5 大领域架构成熟度评分卡（0–100 分）、30/60/90 天修复路线图、只读 MCP Airlock 及本地 Web 控制台（`http://127.0.0.1:4310`）。
-- **技术规格**: Apache-2.0 开源免费（0 外部 npm 依赖，Node.js `>=22.18.0`，支持 `--lang zh-Hans`）。
+- **技术规格**: Apache-2.0 开源免费（0 外部 npm 依赖，Node.js `>=22.18.0`，支持 `--lang zh-Hans`）。零文件领域如实标注 `UNSCOPED / N/A`（绝不虚报 `100/100` 或 SOC2 合格）。
+
+| 覆盖维度 | 支持对象（云 / 语言 / 标准） | 输入与关键规则 (`--emit-patch` / `LNG-*`) |
+| :--- | :--- | :--- |
+| **A. 云与基础设施 (`L0`)** | **GCP** (Cloud Run/GKE/Cloud SQL/Vertex AI/BigQuery/WIF/KMS) · **Firebase** (Firestore/Storage/Functions/App Check) · **AWS** (S3/RDS/OIDC) · **Azure** (Blob/PostgreSQL) · **Cloud Audit Logs & SCC** | `*.tf`, `*iam*.json`, `firestore.rules`, `storage.rules`, `*cloud-audit*.ndjson`, `*scc*.json` |
+| **B. 应用代码栈 + 工艺诊断 (`4-Stack + craftProfile`)** | **TS/Next.js/Node** · **Flutter/Dart/Firebase** · **Python/Go/Elixir/Docker** · **Secrets/CI/GitHub Actions** · **多语言工程工艺正交诊断** (`TS/JS/Dart/Py/Go/Rust/Elixir/Java/Kotlin/Swift`) | `LNG-TS-001..005`, `LNG-FB/FL-*`, `LNG-PY/GO/CLD-*`, `LNG-SEC-001..005` (1,529 类机密脱敏), `LNG-CRAFT-001..003` (`ALGORITHMIC_MONOLITH_UNTESTABLE`) |
+| **C. 合规与法规映射 (`--audience`)** | **`enterprise`** (SOC 2 Type II · ISO/IEC 27001:2022 · NIST CSF 2.0/AI RMF) · **`municipal`** (日本总务省三层对策 · 数字厅 GovCloud · ISMAP) · **`sme`** (经产省供应链 · APPI §23/28 · IPA) | 基于静态规则自动关联条款；零配置提交一律显示 `UNSCOPED` |
 
 ---
 
@@ -600,7 +670,13 @@ npm test
 ```
 
 - **核心能力**: 離線／線上皆 100% 唯讀（`O_RDONLY | O_NOFOLLOW`）、暫存區 `0o700 ACL` + `Fernet (AES-128-CBC + HMAC-SHA256)` 加密、美國國防部 `DoD 5220.22-M` 3 次覆寫抹除與 `ECDSA P-256` 數位簽章資料銷毀證明書自動簽發；GCP × Firebase 跨邊界攻擊路徑分析（支援 CEL 函式與 `let` 綁定 AST 解析、管理員受控公開資產零誤報、消除三重扣分）、4-Stack 原始碼與金鑰護盾、5 大領域架構成熟度評分卡（0–100 分）、30/60/90 天修復藍圖、唯讀 MCP Airlock 及本機 Web 儀表板（`http://127.0.0.1:4310`）。
-- **技術規範**: Apache-2.0 開源免費（0 外部 npm 相依性，Node.js `>=22.18.0`，支援 `--lang zh-Hant`）。
+- **技術規範**: Apache-2.0 開源免費（0 外部 npm 相依性，Node.js `>=22.18.0`，支援 `--lang zh-Hant`）。零檔案領域如實標示 `UNSCOPED / N/A`（絕不誤判 `100/100` 或 SOC2 合格）。
+
+| 涵蓋維度 | 支援雲端 / 語言 / 法規標準 | 輸入與關鍵規則 (`--emit-patch` / `LNG-*`) |
+| :--- | :--- | :--- |
+| **A. 雲端與基礎設施 (`L0`)** | **GCP** (Cloud Run/GKE/Cloud SQL/Vertex AI/BigQuery/WIF/KMS) · **Firebase** (Firestore/Storage/Functions/App Check) · **AWS** (S3/RDS/OIDC) · **Azure** (Blob/PostgreSQL) · **Cloud Audit Logs & SCC** | `*.tf`, `*iam*.json`, `firestore.rules`, `storage.rules`, `*cloud-audit*.ndjson`, `*scc*.json` |
+| **B. 應用程式碼棧 + 工藝診斷 (`4-Stack + craftProfile`)** | **TS/Next.js/Node** · **Flutter/Dart/Firebase** · **Python/Go/Elixir/Docker** · **Secrets/CI** · **正交可測試性架構診斷** (`TS/JS/Dart/Py/Go/Rust/Elixir/Java/Kotlin/Swift`) | `LNG-TS-001..005`, `LNG-FB/FL-*`, `LNG-PY/GO/CLD-*`, `LNG-SEC-001..005` (1,529 種金鑰遮罩), `LNG-CRAFT-001..003` (`ALGORITHMIC_MONOLITH_UNTESTABLE`) |
+| **C. 合規與法規對應 (`--audience`)** | **`enterprise`** (SOC 2 Type II · ISO/IEC 27001:2022 · NIST CSF 2.0/AI RMF) · **`municipal`** (日本總務省指引 · GovCloud · ISMAP) · **`sme`** (經產省供應鏈 · 個資法 §23/28 · IPA) | 依靜態規則自動對應條款；未提交檔案一律顯示 `UNSCOPED` |
 
 ---
 
@@ -614,7 +690,13 @@ https://github.com/Atlas-Associates-Inc/atlas-longinus 실행해줘
 ```
 
 - **핵심 기능**: 오프라인/온라인 모두 100% 읽기 전용(`O_RDONLY | O_NOFOLLOW`), 임시 영역 `0o700 ACL` + `Fernet` 암호화, 미 국방부 `DoD 5220.22-M` 3-패스 덮어쓰기 영구 삭제 및 `ECDSA P-256` 서명 데이터 파기 증명서 자동 발급, GCP × Firebase 교차 경계 공격 경로 분석(CEL 함수 및 `let` 바인딩 AST 해석, 관리자 전용 공개 에셋 오탐 제로, 3중 감점 폐지), 4-Stack 코드 실드, 5대 영역 아키텍처 성숙도 스코어카드(0–100점), 30/60/90일 개선 로드맵, 읽기 전용 MCP Airlock 및 로컬 웹 UI(`http://127.0.0.1:4310`).
-- **기술 사양**: Apache-2.0 오픈소스(npm 의존성 0개, Node.js `>=22.18.0`, `--lang ko` 지원).
+- **기술 사양**: Apache-2.0 오픈소스(npm 의존성 0개, Node.js `>=22.18.0`, `--lang ko` 지원). 파일 0건인 미제출 영역은 `100/100`이나 SOC2 적합으로 오판하지 않고 `UNSCOPED / N/A`로 명시합니다.
+
+| 지원 구분 | 클라우드 / 언어 / 규제 표준 | 입력 형식 및 핵심 규칙 (`--emit-patch` / `LNG-*`) |
+| :--- | :--- | :--- |
+| **A. 지원 클라우드 (`L0`)** | **GCP** (Cloud Run/GKE/Cloud SQL/Vertex AI/BigQuery/WIF/KMS) · **Firebase** (Firestore/Storage/Functions/App Check) · **AWS** (S3/RDS/OIDC) · **Azure** (Blob/DB) · **Audit Logs & SCC** | `*.tf`, `*iam*.json`, `firestore.rules`, `storage.rules`, `*cloud-audit*.ndjson`, `*scc*.json` |
+| **B. 애플리케이션 언어 및 직교 아키타입 (`4-Stack + craftProfile`)** | **TS/Next.js/Node** · **Flutter/Dart/Firebase** · **Python/Go/Elixir/Docker** · **Secrets/CI** · **테스트 가능성 직교 진단** (`TS/JS/Dart/Py/Go/Rust/Elixir/Java/Kotlin/Swift`) | `LNG-TS-001..005`, `LNG-FB/FL-*`, `LNG-PY/GO/CLD-*`, `LNG-SEC-001..005` (1,529종 시크릿 마스킹), `LNG-CRAFT-001..003` (`ALGORITHMIC_MONOLITH_UNTESTABLE`) |
+| **C. 규제 및 컴플라이언스 매핑 (`--audience`)** | **`enterprise`** (SOC 2 Type II · ISO/IEC 27001:2022 · NIST CSF 2.0/AI RMF) · **`municipal`** (총무성 3층 대책 · GovCloud · ISMAP) · **`sme`** (경산성 공급망 · APPI §23/28 · IPA) | 제출 파일 기준 자동 매핑; 미제출 시 `UNSCOPED` 표시 |
 
 ---
 
@@ -628,7 +710,13 @@ Ejecuta https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
 - **Capacidades clave**: 100% solo lectura tanto offline como online (`O_RDONLY | O_NOFOLLOW`), bóveda temporal `0o700 ACL` + cifrado `Fernet`, borrado `DoD 5220.22-M` de 3 pasadas y Certificado de Destrucción de Datos firmado con `ECDSA P-256`; analizador de rutas de ataque GCP × Firebase (resolución AST de funciones CEL, cero falsos positivos en activos públicos restringidos a administradores y eliminación de penalización triple), 4-Stack Code Shield, tarjeta de puntuación de 5 pilares (0–100), hoja de ruta de 30/60/90 días, MCP Airlock de solo lectura y panel web local (`http://127.0.0.1:4310`).
-- **Especificaciones**: Apache-2.0, Node.js `>=22.18.0`, 0 dependencias npm, soporte `--lang es`.
+- **Especificaciones**: Apache-2.0, Node.js `>=22.18.0`, 0 dependencias npm, soporte `--lang es`. Reporte honesto `UNSCOPED / N/A` cuando no hay archivos (nunca otorga `100/100` ni cumplimiento SOC2 falso sin evidencia).
+
+| Cobertura | Nubes / Lenguajes / Normativas compatibles | Entradas y reglas clave (`--emit-patch` / `LNG-*`) |
+| :--- | :--- | :--- |
+| **A. Nubes e Infraestructura (`L0`)** | **GCP** (Cloud Run, GKE, Cloud SQL, Vertex AI, BigQuery, WIF, KMS) · **Firebase** (Firestore, Storage, Functions, App Check) · **AWS** (S3, RDS, OIDC) · **Azure** (Blob, PostgreSQL) · **Audit Logs y SCC** | `*.tf`, `*iam*.json`, `firestore.rules`, `storage.rules`, `*cloud-audit*.ndjson`, `*scc*.json` |
+| **B. Lenguajes y Perfil Ortogonal (`4-Stack + craftProfile`)** | **TS/Next.js/Node** · **Flutter/Dart/Firebase** · **Python/Go/Elixir/Docker** · **Secrets/CI** · **Arquetipos de testabilidad** (`TS/JS/Dart/Py/Go/Rust/Elixir/Java/Kotlin/Swift`) | `LNG-TS-001..005`, `LNG-FB/FL-*`, `LNG-PY/GO/CLD-*`, `LNG-SEC-001..005` (1,529 secretos), `LNG-CRAFT-001..003` (`ALGORITHMIC_MONOLITH_UNTESTABLE`) |
+| **C. Mapeo Regulatorio (`--audience`)** | **`enterprise`** (SOC 2 Type II · ISO/IEC 27001:2022 · NIST CSF 2.0/AI RMF) · **`municipal`** (MIC · GovCloud · ISMAP) · **`sme`** (METI Cadena de Suministro · APPI §23/28 · IPA) | Controles mapeados sobre archivos analizados; `UNSCOPED` si hay 0 entradas |
 
 ---
 
@@ -642,7 +730,13 @@ Execute https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
 - **Principais recursos**: 100% somente leitura offline e online (`O_RDONLY | O_NOFOLLOW`), diretório temporário `0o700 ACL` + criptografia `Fernet`, sanitização `DoD 5220.22-M` de 3 passagens e Certificado de Destruição de Dados assinado via `ECDSA P-256`; analisador de caminhos de ataque GCP × Firebase (resolução AST de funções CEL, zero falsos positivos em ativos públicos restritos a administradores e fim da penalidade tripla), 4-Stack Code Shield, scorecard de maturidade em 5 pilares (0–100), roteiro de 30/60/90 dias, MCP Airlock somente leitura e painel web local (`http://127.0.0.1:4310`).
-- **Especificações**: Apache-2.0, Node.js `>=22.18.0`, 0 dependências npm, suporte `--lang pt`.
+- **Especificações**: Apache-2.0, Node.js `>=22.18.0`, 0 dependências npm, suporte `--lang pt`. Emite `UNSCOPED / N/A` quando 0 arquivos são enviados (nunca atribui `100/100` ou conformidade SOC2 falsa).
+
+| Cobertura | Nuvens / Linguagens / Normas suportadas | Entradas e regras (`--emit-patch` / `LNG-*`) |
+| :--- | :--- | :--- |
+| **A. Nuvens e Infraestrutura (`L0`)** | **GCP** (Cloud Run, GKE, Cloud SQL, Vertex AI, BigQuery, WIF, KMS) · **Firebase** (Firestore, Storage, Functions, App Check) · **AWS** (S3, RDS, OIDC) · **Azure** (Blob, PostgreSQL) · **Audit Logs e SCC** | `*.tf`, `*iam*.json`, `firestore.rules`, `storage.rules`, `*cloud-audit*.ndjson`, `*scc*.json` |
+| **B. Linguagens e Perfil Ortogonal (`4-Stack + craftProfile`)** | **TS/Next.js/Node** · **Flutter/Dart/Firebase** · **Python/Go/Elixir/Docker** · **Secrets/CI** · **Arquétipos de testabilidade** (`TS/JS/Dart/Py/Go/Rust/Elixir/Java/Kotlin/Swift`) | `LNG-TS-001..005`, `LNG-FB/FL-*`, `LNG-PY/GO/CLD-*`, `LNG-SEC-001..005` (1.529 segredos), `LNG-CRAFT-001..003` (`ALGORITHMIC_MONOLITH_UNTESTABLE`) |
+| **C. Conformidade e Normas (`--audience`)** | **`enterprise`** (SOC 2 Type II · ISO/IEC 27001:2022 · NIST CSF 2.0/AI RMF) · **`municipal`** (MIC · GovCloud · ISMAP) · **`sme`** (METI Cadeia de Suprimentos · APPI §23/28 · IPA) | Mapeamento automático em arquivos analisados; `UNSCOPED` com 0 entradas |
 
 ---
 
@@ -656,7 +750,13 @@ Exécute https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
 - **Fonctionnalités clés**: 100 % lecture seule hors ligne et en ligne (`O_RDONLY | O_NOFOLLOW`), espace temporaire `0o700 ACL` + chiffrement `Fernet`, effacement `DoD 5220.22-M` en 3 passes et certificat de destruction de données signé `ECDSA P-256` ; analyseur de chemins d'attaque GCP × Firebase (résolution AST des fonctions CEL, zéro faux positif sur les ressources publiques gérées par les administrateurs, suppression de la triple pénalité), 4-Stack Code Shield, tableau de bord à 5 piliers (0–100), feuille de route 30/60/90 jours, MCP Airlock en lecture seule et interface web locale (`http://127.0.0.1:4310`).
-- **Spécifications**: Apache-2.0, Node.js `>=22.18.0`, 0 dépendance npm, support `--lang fr`.
+- **Spécifications**: Apache-2.0, Node.js `>=22.18.0`, 0 dépendance npm, support `--lang fr`. Affiche honnêtement `UNSCOPED / N/A` lorsqu'aucun fichier n'est soumis (jamais de faux `100/100` ni de fausse conformité SOC2).
+
+| Couverture | Clouds / Langages / Référentiels pris en charge | Formats et règles (`--emit-patch` / `LNG-*`) |
+| :--- | :--- | :--- |
+| **A. Clouds & Infrastructure (`L0`)** | **GCP** (Cloud Run, GKE, Cloud SQL, Vertex AI, BigQuery, WIF, KMS) · **Firebase** (Firestore, Storage, Functions, App Check) · **AWS** (S3, RDS, OIDC) · **Azure** (Blob, PostgreSQL) · **Audit Logs & SCC** | `*.tf`, `*iam*.json`, `firestore.rules`, `storage.rules`, `*cloud-audit*.ndjson`, `*scc*.json` |
+| **B. Langages & Profil Orthogonal (`4-Stack + craftProfile`)** | **TS/Next.js/Node** · **Flutter/Dart/Firebase** · **Python/Go/Elixir/Docker** · **Secrets/CI** · **Archétypes de testabilité** (`TS/JS/Dart/Py/Go/Rust/Elixir/Java/Kotlin/Swift`) | `LNG-TS-001..005`, `LNG-FB/FL-*`, `LNG-PY/GO/CLD-*`, `LNG-SEC-001..005` (1 529 motifs), `LNG-CRAFT-001..003` (`ALGORITHMIC_MONOLITH_UNTESTABLE`) |
+| **C. Conformité & Normes (`--audience`)** | **`enterprise`** (SOC 2 Type II · ISO/IEC 27001:2022 · NIST CSF 2.0/AI RMF) · **`municipal`** (MIC · GovCloud · ISMAP) · **`sme`** (METI Supply-Chain · APPI §23/28 · IPA) | Correspondance automatique sur les fichiers audités ; `UNSCOPED` si 0 fichier |
 
 ---
 
@@ -670,7 +770,13 @@ Führe https://github.com/Atlas-Associates-Inc/atlas-longinus aus
 ```
 
 - **Kernfunktionen**: Offline wie online 100 % schreibgeschützt (`O_RDONLY | O_NOFOLLOW`), temporärer Bereich mit `0o700 ACL` + `Fernet`-Verschlüsselung, 3-Pass-Löschung nach `DoD 5220.22-M` und `ECDSA P-256`-signiertes Datenvernichtungszertifikat; Angriffspfad-Analysator für GCP × Firebase (CEL-Funktions-AST-Auflösung, null Fehlalarme bei schreibgeschützten öffentlichen Assets, keine Dreifach-Abzüge), 4-Stack Code Shield, 5-Säulen-Scorecard (0–100), 30/60/90-Tage-Roadmap, schreibgeschützter MCP-Airlock und lokales Web-Dashboard (`http://127.0.0.1:4310`).
-- **Spezifikationen**: Apache-2.0, Node.js `>=22.18.0`, 0 npm-Abhängigkeiten, `--lang de`.
+- **Spezifikationen**: Apache-2.0, Node.js `>=22.18.0`, 0 npm-Abhängigkeiten, `--lang de`. Meldet `UNSCOPED / N/A` bei 0 Dateien (niemals falsche `100/100`-Bewertungen oder SOC2-Zusagen ohne Belege).
+
+| Abdeckung | Unterstützte Clouds / Sprachen / Standards | Eingaben & Regeln (`--emit-patch` / `LNG-*`) |
+| :--- | :--- | :--- |
+| **A. Clouds & Infrastruktur (`L0`)** | **GCP** (Cloud Run, GKE, Cloud SQL, Vertex AI, BigQuery, WIF, KMS) · **Firebase** (Firestore, Storage, Functions, App Check) · **AWS** (S3, RDS, OIDC) · **Azure** (Blob, PostgreSQL) · **Audit Logs & SCC** | `*.tf`, `*iam*.json`, `firestore.rules`, `storage.rules`, `*cloud-audit*.ndjson`, `*scc*.json` |
+| **B. Sprachen & Orthogonales Profil (`4-Stack + craftProfile`)** | **TS/Next.js/Node** · **Flutter/Dart/Firebase** · **Python/Go/Elixir/Docker** · **Secrets/CI** · **Testbarkeits-Archetypen** (`TS/JS/Dart/Py/Go/Rust/Elixir/Java/Kotlin/Swift`) | `LNG-TS-001..005`, `LNG-FB/FL-*`, `LNG-PY/GO/CLD-*`, `LNG-SEC-001..005` (1.529 Muster), `LNG-CRAFT-001..003` (`ALGORITHMIC_MONOLITH_UNTESTABLE`) |
+| **C. Compliance-Mapping (`--audience`)** | **`enterprise`** (SOC 2 Type II · ISO/IEC 27001:2022 · NIST CSF 2.0/AI RMF) · **`municipal`** (MIC · GovCloud · ISMAP) · **`sme`** (METI Lieferkette · APPI §23/28 · IPA) | Regelbasiertes Compliance-Mapping; bei 0 Eingaben `UNSCOPED` |
 
 ---
 
@@ -684,7 +790,13 @@ Esegui https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
 - **Funzionalità principali**: 100% sola lettura sia offline che online (`O_RDONLY | O_NOFOLLOW`), area temporanea `0o700 ACL` + crittografia `Fernet`, cancellazione `DoD 5220.22-M` a 3 passaggi e certificato di distruzione dati firmato `ECDSA P-256`; analizzatore dei percorsi di attacco GCP × Firebase (risoluzione AST delle funzioni CEL, zero falsi positivi sugli asset pubblici protetti in scrittura, eliminazione della tripla penalità), 4-Stack Code Shield, scorecard a 5 pilastri (0–100), roadmap a 30/60/90 giorni, MCP Airlock in sola lettura e interfaccia web locale (`http://127.0.0.1:4310`).
-- **Specifiche**: Apache-2.0, Node.js `>=22.18.0`, 0 dipendenze npm, supporto `--lang it`.
+- **Specifiche**: Apache-2.0, Node.js `>=22.18.0`, 0 dipendenze npm, supporto `--lang it`. Segnala `UNSCOPED / N/A` con 0 file (mai falsi `100/100` o dichiarazioni SOC2 prive di prove).
+
+| Copertura | Cloud / Linguaggi / Normative supportate | Input e regole chiave (`--emit-patch` / `LNG-*`) |
+| :--- | :--- | :--- |
+| **A. Cloud e Infrastruttura (`L0`)** | **GCP** (Cloud Run, GKE, Cloud SQL, Vertex AI, BigQuery, WIF, KMS) · **Firebase** (Firestore, Storage, Functions, App Check) · **AWS** (S3, RDS, OIDC) · **Azure** (Blob, PostgreSQL) · **Audit Logs & SCC** | `*.tf`, `*iam*.json`, `firestore.rules`, `storage.rules`, `*cloud-audit*.ndjson`, `*scc*.json` |
+| **B. Linguaggi e Profilo Ortogonale (`4-Stack + craftProfile`)** | **TS/Next.js/Node** · **Flutter/Dart/Firebase** · **Python/Go/Elixir/Docker** · **Secrets/CI** · **Archetipi di testabilità** (`TS/JS/Dart/Py/Go/Rust/Elixir/Java/Kotlin/Swift`) | `LNG-TS-001..005`, `LNG-FB/FL-*`, `LNG-PY/GO/CLD-*`, `LNG-SEC-001..005` (1.529 segreti), `LNG-CRAFT-001..003` (`ALGORITHMIC_MONOLITH_UNTESTABLE`) |
+| **C. Conformità Normativa (`--audience`)** | **`enterprise`** (SOC 2 Type II · ISO/IEC 27001:2022 · NIST CSF 2.0/AI RMF) · **`municipal`** (MIC · GovCloud · ISMAP) · **`sme`** (METI Supply-Chain · APPI §23/28 · IPA) | Mappatura automatica sui file analizzati; `UNSCOPED` con 0 file |
 
 ---
 
@@ -698,7 +810,13 @@ Esegui https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
 - **Ключевые возможности**: 100% режим «только чтение» офлайн и онлайн (`O_RDONLY | O_NOFOLLOW`), временная область `0o700 ACL` + шифрование `Fernet`, 3-проходное уничтожение по стандарту `DoD 5220.22-M` и сертификат уничтожения данных с подписью `ECDSA P-256`; анализатор путей атак GCP × Firebase (AST-анализ функций CEL, отсутствие ложных срабатываний на публичных ресурсах с защитой от записи, устранение тройного штрафа), 4-Stack Code Shield, оценка зрелости по 5 направлениям (0–100), план на 30/60/90 дней, MCP Airlock только для чтения и локальный веб-интерфейс (`http://127.0.0.1:4310`).
-- **Спецификации**: Apache-2.0, Node.js `>=22.18.0`, 0 зависимостей npm, поддержка `--lang ru`.
+- **Спецификации**: Apache-2.0, Node.js `>=22.18.0`, 0 зависимостей npm, поддержка `--lang ru`. Честная маркировка `UNSCOPED / N/A` при 0 файлах (исключает ложные `100/100` и фиктивное соответствие SOC2).
+
+| Охват | Поддерживаемые облака / языки / стандарты | Форматы и правила (`--emit-patch` / `LNG-*`) |
+| :--- | :--- | :--- |
+| **A. Облака и инфраструктура (`L0`)** | **GCP** (Cloud Run, GKE, Cloud SQL, Vertex AI, BigQuery, WIF, KMS) · **Firebase** (Firestore, Storage, Functions, App Check) · **AWS** (S3, RDS, OIDC) · **Azure** (Blob, PostgreSQL) · **Audit Logs и SCC** | `*.tf`, `*iam*.json`, `firestore.rules`, `storage.rules`, `*cloud-audit*.ndjson`, `*scc*.json` |
+| **B. Языки кода и ортогональный профиль (`4-Stack + craftProfile`)** | **TS/Next.js/Node** · **Flutter/Dart/Firebase** · **Python/Go/Elixir/Docker** · **Secrets/CI** · **Архетипы тестируемости** (`TS/JS/Dart/Py/Go/Rust/Elixir/Java/Kotlin/Swift`) | `LNG-TS-001..005`, `LNG-FB/FL-*`, `LNG-PY/GO/CLD-*`, `LNG-SEC-001..005` (1 529 шаблонов), `LNG-CRAFT-001..003` (`ALGORITHMIC_MONOLITH_UNTESTABLE`) |
+| **C. Соответствие стандартам (`--audience`)** | **`enterprise`** (SOC 2 Type II · ISO/IEC 27001:2022 · NIST CSF 2.0/AI RMF) · **`municipal`** (MIC · GovCloud · ISMAP) · **`sme`** (METI · APPI §23/28 · IPA) | Автопривязка к проверенным файлам; `UNSCOPED` при 0 входных данных |
 
 ---
 
@@ -712,7 +830,13 @@ Esegui https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
 - **Основні можливості**: 100% режим лише для читання офлайн та онлайн (`O_RDONLY | O_NOFOLLOW`), тимчасова область `0o700 ACL` + шифрування `Fernet`, 3-прохідне знищення `DoD 5220.22-M` і сертифікат знищення даних із підписом `ECDSA P-256`; аналізатор шляхів атак GCP × Firebase (AST-аналіз функцій CEL, нуль хибних спрацьовувань на публічних ресурсах із захистом запису, скасування потрійного штрафу), 4-Stack Code Shield, оцінка за 5 напрямами (0–100), план на 30/60/90 днів, MCP Airlock лише для читання та локальний вебінтерфейс (`http://127.0.0.1:4310`).
-- **Специфікації**: Apache-2.0, Node.js `>=22.18.0`, 0 залежностей npm, підтримка `--lang uk`.
+- **Специфікації**: Apache-2.0, Node.js `>=22.18.0`, 0 залежностей npm, підтримка `--lang uk`. Чесне маркування `UNSCOPED / N/A` за 0 файлів (без хибних `100/100` чи фіктивного SOC2).
+
+| Охоплення | Хмари / Мови / Стандарти | Формати та правила (`--emit-patch` / `LNG-*`) |
+| :--- | :--- | :--- |
+| **A. Хмари та інфраструктура (`L0`)** | **GCP** (Cloud Run, GKE, Cloud SQL, Vertex AI, BigQuery, WIF, KMS) · **Firebase** (Firestore, Storage, Functions, App Check) · **AWS** (S3, RDS, OIDC) · **Azure** (Blob, PostgreSQL) · **Audit Logs і SCC** | `*.tf`, `*iam*.json`, `firestore.rules`, `storage.rules`, `*cloud-audit*.ndjson`, `*scc*.json` |
+| **B. Мови коду та ортогональний профіль (`4-Stack + craftProfile`)** | **TS/Next.js/Node** · **Flutter/Dart/Firebase** · **Python/Go/Elixir/Docker** · **Secrets/CI** · **Архетипи тестованості** (`TS/JS/Dart/Py/Go/Rust/Elixir/Java/Kotlin/Swift`) | `LNG-TS-001..005`, `LNG-FB/FL-*`, `LNG-PY/GO/CLD-*`, `LNG-SEC-001..005` (1 529 секретів), `LNG-CRAFT-001..003` (`ALGORITHMIC_MONOLITH_UNTESTABLE`) |
+| **C. Відповідність стандартам (`--audience`)** | **`enterprise`** (SOC 2 Type II · ISO/IEC 27001:2022 · NIST CSF 2.0/AI RMF) · **`municipal`** (MIC · GovCloud · ISMAP) · **`sme`** (METI · APPI §23/28 · IPA) | Автоприв'язка до перевірених файлів; `UNSCOPED` за 0 входів |
 
 ---
 
@@ -726,7 +850,13 @@ Uruchom https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
 - **Główne funkcje**: 100% tylko do odczytu offline i online (`O_RDONLY | O_NOFOLLOW`), katalog tymczasowy `0o700 ACL` + szyfrowanie `Fernet`, 3-przebiegowe nadpisywanie `DoD 5220.22-M` oraz certyfikat zniszczenia danych podpisany `ECDSA P-256`; analizator ścieżek ataków GCP × Firebase (analiza AST funkcji CEL, zero fałszywych alarmów dla publicznych zasobów chronionych przed zapisem, brak potrójnej kary), 4-Stack Code Shield, karta wyników 5 filarów (0–100), plan 30/60/90 dni, MCP Airlock tylko do odczytu oraz lokalny panel WWW (`http://127.0.0.1:4310`).
-- **Specyfikacja**: Apache-2.0, Node.js `>=22.18.0`, 0 zależności npm, obsługa `--lang pl`.
+- **Specyfikacja**: Apache-2.0, Node.js `>=22.18.0`, 0 zależności npm, obsługa `--lang pl`. Uczciwe oznaczanie `UNSCOPED / N/A` przy 0 plikach (nigdy fałszywego `100/100` ani deklaracji SOC2 bez dowodów).
+
+| Zakres | Chmury / Języki / Normy | Formaty i reguły (`--emit-patch` / `LNG-*`) |
+| :--- | :--- | :--- |
+| **A. Chmury i Infrastruktura (`L0`)** | **GCP** (Cloud Run, GKE, Cloud SQL, Vertex AI, BigQuery, WIF, KMS) · **Firebase** (Firestore, Storage, Functions, App Check) · **AWS** (S3, RDS, OIDC) · **Azure** (Blob, PostgreSQL) · **Audit Logs i SCC** | `*.tf`, `*iam*.json`, `firestore.rules`, `storage.rules`, `*cloud-audit*.ndjson`, `*scc*.json` |
+| **B. Języki i Profil Ortogonalny (`4-Stack + craftProfile`)** | **TS/Next.js/Node** · **Flutter/Dart/Firebase** · **Python/Go/Elixir/Docker** · **Secrets/CI** · **Archetypy testowalności** (`TS/JS/Dart/Py/Go/Rust/Elixir/Java/Kotlin/Swift`) | `LNG-TS-001..005`, `LNG-FB/FL-*`, `LNG-PY/GO/CLD-*`, `LNG-SEC-001..005` (1 529 wzorców), `LNG-CRAFT-001..003` (`ALGORITHMIC_MONOLITH_UNTESTABLE`) |
+| **C. Zgodność z Normami (`--audience`)** | **`enterprise`** (SOC 2 Type II · ISO/IEC 27001:2022 · NIST CSF 2.0/AI RMF) · **`municipal`** (MIC · GovCloud · ISMAP) · **`sme`** (METI · APPI §23/28 · IPA) | Mapowanie dla sprawdzonych plików; `UNSCOPED` przy 0 wejściach |
 
 ---
 
@@ -740,7 +870,13 @@ Voer https://github.com/Atlas-Associates-Inc/atlas-longinus uit
 ```
 
 - **Belangrijkste functies**: Offline én online 100% alleen-lezen (`O_RDONLY | O_NOFOLLOW`), tijdelijke opslag met `0o700 ACL` + `Fernet`-versleuteling, `DoD 5220.22-M` 3-pass wissing en `ECDSA P-256`-ondertekend datavernietigingscertificaat; GCP × Firebase aanvalspad-analyser (CEL-functie AST-analyse, nul fout-positieven op schrijfbeveiligde publieke assets, geen drievoudige strafpunten), 4-Stack Code Shield, 5-pijlerscorecard (0–100), 30/60/90-dagen-routekaart, alleen-lezen MCP Airlock en lokaal webdashboard (`http://127.0.0.1:4310`).
-- **Specificaties**: Apache-2.0, Node.js `>=22.18.0`, 0 npm-afhankelijkheden, ondersteuning voor `--lang nl`.
+- **Specificaties**: Apache-2.0, Node.js `>=22.18.0`, 0 npm-afhankelijkheden, ondersteuning voor `--lang nl`. Eerlijke `UNSCOPED / N/A`-rapportage bij 0 bestanden (nooit ten onrechte `100/100` of SOC2-certificering).
+
+| Dekking | Clouds / Talen / Normen | Invoer & Regels (`--emit-patch` / `LNG-*`) |
+| :--- | :--- | :--- |
+| **A. Clouds & Infrastructuur (`L0`)** | **GCP** (Cloud Run, GKE, Cloud SQL, Vertex AI, BigQuery, WIF, KMS) · **Firebase** (Firestore, Storage, Functions, App Check) · **AWS** (S3, RDS, OIDC) · **Azure** (Blob, PostgreSQL) · **Audit Logs & SCC** | `*.tf`, `*iam*.json`, `firestore.rules`, `storage.rules`, `*cloud-audit*.ndjson`, `*scc*.json` |
+| **B. Talen & Orthogonaal Profiel (`4-Stack + craftProfile`)** | **TS/Next.js/Node** · **Flutter/Dart/Firebase** · **Python/Go/Elixir/Docker** · **Secrets/CI** · **Testbaarheids-archetypen** (`TS/JS/Dart/Py/Go/Rust/Elixir/Java/Kotlin/Swift`) | `LNG-TS-001..005`, `LNG-FB/FL-*`, `LNG-PY/GO/CLD-*`, `LNG-SEC-001..005` (1.529 patronen), `LNG-CRAFT-001..003` (`ALGORITHMIC_MONOLITH_UNTESTABLE`) |
+| **C. Regelgeving & Compliance (`--audience`)** | **`enterprise`** (SOC 2 Type II · ISO/IEC 27001:2022 · NIST CSF 2.0/AI RMF) · **`municipal`** (MIC · GovCloud · ISMAP) · **`sme`** (METI · APPI §23/28 · IPA) | Gekoppeld aan geanalyseerde bestanden; `UNSCOPED` bij 0 invoer |
 
 ---
 
@@ -754,7 +890,13 @@ https://github.com/Atlas-Associates-Inc/atlas-longinus çalıştır
 ```
 
 - **Temel Özellikler**: Çevrimdışı ve çevrimiçi %100 salt okunur (`O_RDONLY | O_NOFOLLOW`), `0o700 ACL` + `Fernet` şifreli geçici alan, `DoD 5220.22-M` 3 geçişli silme ve `ECDSA P-256` imzalı Veri İmha Sertifikası; GCP × Firebase saldırı yolu analizcisi (CEL fonksiyonu AST çözümlemesi, yazma korumalı genel varlıklarda sıfır yanlış pozitif, üçlü ceza kaldırıldı), 4-Stack Code Shield, 5 sütunlu puan kartı (0–100), 30/60/90 günlük yol haritası, salt okunur MCP Airlock ve yerel web arayüzü (`http://127.0.0.1:4310`).
-- **Teknik Özellikler**: Apache-2.0, Node.js `>=22.18.0`, 0 npm bağımlılığı, `--lang tr` desteği.
+- **Teknik Özellikler**: Apache-2.0, Node.js `>=22.18.0`, 0 npm bağımlılığı, `--lang tr` desteği. 0 dosya içeren alanları asla `100/100` veya SOC2 uyumlu göstermeyip `UNSCOPED / N/A` olarak raporlar.
+
+| Kapsam | Bulutlar / Diller / Standartlar | Girdiler & Kurallar (`--emit-patch` / `LNG-*`) |
+| :--- | :--- | :--- |
+| **A. Bulut & Altyapı (`L0`)** | **GCP** (Cloud Run, GKE, Cloud SQL, Vertex AI, BigQuery, WIF, KMS) · **Firebase** (Firestore, Storage, Functions, App Check) · **AWS** (S3, RDS, OIDC) · **Azure** (Blob, PostgreSQL) · **Audit Logs & SCC** | `*.tf`, `*iam*.json`, `firestore.rules`, `storage.rules`, `*cloud-audit*.ndjson`, `*scc*.json` |
+| **B. Diller & Ortogonal Profil (`4-Stack + craftProfile`)** | **TS/Next.js/Node** · **Flutter/Dart/Firebase** · **Python/Go/Elixir/Docker** · **Secrets/CI** · **Test Edilebilirlik Arketipleri** (`TS/JS/Dart/Py/Go/Rust/Elixir/Java/Kotlin/Swift`) | `LNG-TS-001..005`, `LNG-FB/FL-*`, `LNG-PY/GO/CLD-*`, `LNG-SEC-001..005` (1.529 sır), `LNG-CRAFT-001..003` (`ALGORITHMIC_MONOLITH_UNTESTABLE`) |
+| **C. Uyumluluk Eşlemesi (`--audience`)** | **`enterprise`** (SOC 2 Type II · ISO/IEC 27001:2022 · NIST CSF 2.0/AI RMF) · **`municipal`** (MIC · GovCloud · ISMAP) · **`sme`** (METI · APPI §23/28 · IPA) | İncelenen dosyalara göre otomatik eşleme; 0 dosyada `UNSCOPED` |
 
 ---
 
@@ -768,7 +910,13 @@ https://github.com/Atlas-Associates-Inc/atlas-longinus çalıştır
 ```
 
 - **القدرات الأساسية**: قراءة فقط بنسبة 100% دون اتصال وعبر الإنترنت (`O_RDONLY | O_NOFOLLOW`)، مساحة مؤقتة بمعيار `0o700 ACL` وتشفير `Fernet`، مسح ثلاثي المراحل وفق معيار وزارة الدفاع الأمريكية `DoD 5220.22-M`، وإصدار شهادة إتلاف بيانات موقعة رقمياً بـ `ECDSA P-256`؛ محلل مسارات الهجوم عبر حدود GCP × Firebase (تحليل AST لدوال CEL، صفر إنذارات كاذبة للأصول العامة المحمية ضد الكتابة، وإلغاء العقوبة الثلاثية)، ودرع الكود رباعي الطبقات (4-Stack Code Shield)، وبطاقة الأداء الخماسية (0–100)، وخارطة طريق 30/60/90 يوماً، وحاجز MCP Airlock للقراءة فقط، ولوحة تحكم محلية (`http://127.0.0.1:4310`).
-- **المواصفات**: ترخيص Apache-2.0، وNode.js `>=22.18.0`، و0 تبعيات npm، ودعم `--lang ar`.
+- **المواصفات**: ترخيص Apache-2.0، وNode.js `>=22.18.0`، و0 تبعيات npm، ودعم `--lang ar`. يصنّف النطاقات ذات 0 ملفات بصدق كـ `UNSCOPED / N/A` دون منح تقييم `100/100` أو اعتماد SOC2 زائف.
+
+| النطاق | السحب واللغات والمعايير المدعومة | المدخلات والقواعد (`--emit-patch` / `LNG-*`) |
+| :--- | :--- | :--- |
+| **A. السحب والبنية التحتية (`L0`)** | **GCP** (Cloud Run, GKE, Cloud SQL, Vertex AI, BigQuery, WIF, KMS) · **Firebase** (Firestore, Storage, Functions, App Check) · **AWS** (S3, RDS, OIDC) · **Azure** (Blob, PostgreSQL) · **Audit Logs & SCC** | `*.tf`, `*iam*.json`, `firestore.rules`, `storage.rules`, `*cloud-audit*.ndjson`, `*scc*.json` |
+| **B. لغات البرمجة والتشخيص المتعامد (`4-Stack + craftProfile`)** | **TS/Next.js/Node** · **Flutter/Dart/Firebase** · **Python/Go/Elixir/Docker** · **Secrets/CI** · **أنماط قابلية الاختبار** (`TS/JS/Dart/Py/Go/Rust/Elixir/Java/Kotlin/Swift`) | `LNG-TS-001..005`, `LNG-FB/FL-*`, `LNG-PY/GO/CLD-*`, `LNG-SEC-001..005` (1,529 نمطًا سريًا), `LNG-CRAFT-001..003` (`ALGORITHMIC_MONOLITH_UNTESTABLE`) |
+| **C. خريطة الامتثال التنظيمي (`--audience`)** | **`enterprise`** (SOC 2 Type II · ISO/IEC 27001:2022 · NIST CSF 2.0/AI RMF) · **`municipal`** (MIC · GovCloud · ISMAP) · **`sme`** (METI · APPI §23/28 · IPA) | ربط تلقائي للملفات المفحوصة؛ `UNSCOPED` عند غياب المدخلات |
 
 ---
 
@@ -782,7 +930,13 @@ https://github.com/Atlas-Associates-Inc/atlas-longinus चलाएँ
 ```
 
 - **मुख्य विशेषताएँ**: ऑफ़लाइन और ऑनलाइन दोनों में 100% रीड-ओनली (`O_RDONLY | O_NOFOLLOW`), `0o700 ACL` + `Fernet` एन्क्रिप्टेड अस्थायी क्षेत्र, `DoD 5220.22-M` 3-पास ओवरराइट विलोपन और `ECDSA P-256` हस्ताक्षरित डेटा नष्ट प्रमाणपत्र; GCP × Firebase अटैक-पाथ विश्लेषक (CEL फ़ंक्शन AST विश्लेषण, एडमिन-नियंत्रित पब्लिक एसेट्स पर शून्य फ़ॉल्स पॉज़िटिव, और तिहरे दंड की समाप्ति), 4-Stack Code Shield, 5-पिलर स्कोरकार्ड (0–100), 30/60/90-दिन का रोडमैप, रीड-ओनली MCP Airlock और लोकल वेब डैशबोर्ड (`http://127.0.0.1:4310`)।
-- **विनिर्देश**: Apache-2.0, Node.js `>=22.18.0`, 0 npm निर्भरताएँ, `--lang hi` समर्थन।
+- **विनिर्देश**: Apache-2.0, Node.js `>=22.18.0`, 0 npm निर्भरताएँ, `--lang hi` समर्थन। 0 फ़ाइलों वाले क्षेत्रों को झूठे `100/100` या SOC2 अनुपालन के बजाय ईमानदारी से `UNSCOPED / N/A` चिह्नित करता है।
+
+| कवरेज | समर्थित क्लाउड / भाषाएँ / मानक | इनपुट और प्रमुख नियम (`--emit-patch` / `LNG-*`) |
+| :--- | :--- | :--- |
+| **A. क्लाउड व इन्फ्रास्ट्रक्चर (`L0`)** | **GCP** (Cloud Run, GKE, Cloud SQL, Vertex AI, BigQuery, WIF, KMS) · **Firebase** (Firestore, Storage, Functions, App Check) · **AWS** (S3, RDS, OIDC) · **Azure** (Blob, PostgreSQL) · **Audit Logs व SCC** | `*.tf`, `*iam*.json`, `firestore.rules`, `storage.rules`, `*cloud-audit*.ndjson`, `*scc*.json` |
+| **B. भाषाएँ व ऑर्थोगोनल प्रोफ़ाइल (`4-Stack + craftProfile`)** | **TS/Next.js/Node** · **Flutter/Dart/Firebase** · **Python/Go/Elixir/Docker** · **Secrets/CI** · **टेस्टेबिलिटी आर्केटाइप** (`TS/JS/Dart/Py/Go/Rust/Elixir/Java/Kotlin/Swift`) | `LNG-TS-001..005`, `LNG-FB/FL-*`, `LNG-PY/GO/CLD-*`, `LNG-SEC-001..005` (1,529 पैटर्न), `LNG-CRAFT-001..003` (`ALGORITHMIC_MONOLITH_UNTESTABLE`) |
+| **C. अनुपालन मैपिंग (`--audience`)** | **`enterprise`** (SOC 2 Type II · ISO/IEC 27001:2022 · NIST CSF 2.0/AI RMF) · **`municipal`** (MIC · GovCloud · ISMAP) · **`sme`** (METI · APPI §23/28 · IPA) | जाँची गई फ़ाइलों पर स्वतः मैपिंग; 0 फ़ाइल पर `UNSCOPED` |
 
 ---
 
@@ -796,7 +950,13 @@ Jalankan https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
 - **Fitur Utama**: 100% hanya-baca baik offline maupun online (`O_RDONLY | O_NOFOLLOW`), ruang sementara `0o700 ACL` + enkripsi `Fernet`, penghapusan 3-pass `DoD 5220.22-M`, dan Sertifikat Pemusnahan Data bertanda tangan `ECDSA P-256`; penganalisis jalur serangan GCP × Firebase (resolusi AST fungsi CEL, nol positif palsu pada aset publik yang dibatasi tulis, dan penghapusan penalti ganda tiga), 4-Stack Code Shield, kartu skor 5 pilar (0–100), peta jalan 30/60/90 hari, MCP Airlock khusus-baca, dan dasbor web lokal (`http://127.0.0.1:4310`).
-- **Spesifikasi**: Apache-2.0, Node.js `>=22.18.0`, 0 dependensi npm, dukungan `--lang id`.
+- **Spesifikasi**: Apache-2.0, Node.js `>=22.18.0`, 0 dependensi npm, dukungan `--lang id`. Melaporkan domain dengan 0 berkas secara jujur sebagai `UNSCOPED / N/A` (tidak pernah memberi `100/100` atau klaim SOC2 palsu).
+
+| Cakupan | Cloud / Bahasa / Standar yang Didukung | Berkas & Aturan Utama (`--emit-patch` / `LNG-*`) |
+| :--- | :--- | :--- |
+| **A. Cloud & Infrastruktur (`L0`)** | **GCP** (Cloud Run, GKE, Cloud SQL, Vertex AI, BigQuery, WIF, KMS) · **Firebase** (Firestore, Storage, Functions, App Check) · **AWS** (S3, RDS, OIDC) · **Azure** (Blob, PostgreSQL) · **Audit Logs & SCC** | `*.tf`, `*iam*.json`, `firestore.rules`, `storage.rules`, `*cloud-audit*.ndjson`, `*scc*.json` |
+| **B. Bahasa Aplikasi & Profil Ortogonal (`4-Stack + craftProfile`)** | **TS/Next.js/Node** · **Flutter/Dart/Firebase** · **Python/Go/Elixir/Docker** · **Secrets/CI** · **Arketipe Testabilitas** (`TS/JS/Dart/Py/Go/Rust/Elixir/Java/Kotlin/Swift`) | `LNG-TS-001..005`, `LNG-FB/FL-*`, `LNG-PY/GO/CLD-*`, `LNG-SEC-001..005` (1.529 pola rahasia), `LNG-CRAFT-001..003` (`ALGORITHMIC_MONOLITH_UNTESTABLE`) |
+| **C. Pemetaan Kepatuhan (`--audience`)** | **`enterprise`** (SOC 2 Type II · ISO/IEC 27001:2022 · NIST CSF 2.0/AI RMF) · **`municipal`** (MIC · GovCloud · ISMAP) · **`sme`** (METI · APPI §23/28 · IPA) | Dipetakan dari berkas teraudit; `UNSCOPED` jika 0 berkas |
 
 ---
 
@@ -810,7 +970,13 @@ Chạy https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
 - **Tính năng cốt lõi**: 100% chỉ đọc cả ngoại tuyến lẫn trực tuyến (`O_RDONLY | O_NOFOLLOW`), vùng tạm `0o700 ACL` + mã hóa `Fernet`, xóa ghi đè 3 lượt chuẩn `DoD 5220.22-M` và Chứng chỉ Hủy Dữ liệu ký số `ECDSA P-256`; bộ phân tích đường dẫn tấn công GCP × Firebase (phân tích AST hàm CEL, không báo động giả trên tài sản công khai chỉ-admin-ghi, loại bỏ phạt 3 lần), 4-Stack Code Shield, bảng điểm 5 trụ cột (0–100), lộ trình 30/60/90 ngày, MCP Airlock chỉ đọc và bảng điều khiển web cục bộ (`http://127.0.0.1:4310`).
-- **Quy chuẩn**: Apache-2.0, Node.js `>=22.18.0`, 0 phụ thuộc npm, hỗ trợ `--lang vi`.
+- **Quy chuẩn**: Apache-2.0, Node.js `>=22.18.0`, 0 phụ thuộc npm, hỗ trợ `--lang vi`. Trung thực gắn nhãn `UNSCOPED / N/A` khi không có tệp nào (không bao giờ cấp `100/100` hay chứng nhận SOC2 giả).
+
+| Phạm vi | Đám mây / Ngôn ngữ / Tiêu chuẩn hỗ trợ | Đầu vào & Quy tắc (`--emit-patch` / `LNG-*`) |
+| :--- | :--- | :--- |
+| **A. Đám mây & Hạ tầng (`L0`)** | **GCP** (Cloud Run, GKE, Cloud SQL, Vertex AI, BigQuery, WIF, KMS) · **Firebase** (Firestore, Storage, Functions, App Check) · **AWS** (S3, RDS, OIDC) · **Azure** (Blob, PostgreSQL) · **Audit Logs & SCC** | `*.tf`, `*iam*.json`, `firestore.rules`, `storage.rules`, `*cloud-audit*.ndjson`, `*scc*.json` |
+| **B. Ngôn ngữ & Hồ sơ Trực giao (`4-Stack + craftProfile`)** | **TS/Next.js/Node** · **Flutter/Dart/Firebase** · **Python/Go/Elixir/Docker** · **Secrets/CI** · **Kiến trúc Khả năng Kiểm thử** (`TS/JS/Dart/Py/Go/Rust/Elixir/Java/Kotlin/Swift`) | `LNG-TS-001..005`, `LNG-FB/FL-*`, `LNG-PY/GO/CLD-*`, `LNG-SEC-001..005` (1.529 mẫu bí mật), `LNG-CRAFT-001..003` (`ALGORITHMIC_MONOLITH_UNTESTABLE`) |
+| **C. Ánh xạ Tuân thủ (`--audience`)** | **`enterprise`** (SOC 2 Type II · ISO/IEC 27001:2022 · NIST CSF 2.0/AI RMF) · **`municipal`** (MIC · GovCloud · ISMAP) · **`sme`** (METI · APPI §23/28 · IPA) | Tự động ánh xạ tệp đã quét; `UNSCOPED` nếu 0 tệp |
 
 ---
 
@@ -824,4 +990,10 @@ Chạy https://github.com/Atlas-Associates-Inc/atlas-longinus
 ```
 
 - **ความสามารถหลัก**: อ่านอย่างเดียว 100% ทั้งออฟไลน์และออนไลน์ (`O_RDONLY | O_NOFOLLOW`), พื้นที่ชั่วคราว `0o700 ACL` + การเข้ารหัส `Fernet`, การเขียนทับ 3 รอบตามมาตรฐาน `DoD 5220.22-M` และใบรับรองการทำลายข้อมูลที่ลงนามด้วย `ECDSA P-256`; ตัววิเคราะห์เส้นทางการโจมตี GCP × Firebase (การวิเคราะห์ AST ของฟังก์ชัน CEL, ลดการแจ้งเตือนผิดพลาดเป็นศูนย์สำหรับไฟล์สาธารณะที่จำกัดสิทธิ์เขียนเฉพาะแอดมิน, ยกเลิกการหักคะแนนซ้ำ 3 ต่อ), 4-Stack Code Shield, คะแนนความพร้อม 5 เสาหลัก (0–100), แผนงาน 30/60/90 วัน, MCP Airlock แบบอ่านอย่างเดียว และเว็บแดชบอร์ดในเครื่อง (`http://127.0.0.1:4310`)
-- **ข้อกำหนด**: Apache-2.0, Node.js `>=22.18.0`, 0 การพึ่งพา npm, รองรับ `--lang th`
+- **ข้อกำหนด**: Apache-2.0, Node.js `>=22.18.0`, 0 การพึ่งพา npm, รองรับ `--lang th` รายงาน `UNSCOPED / N/A` อย่างตรงไปตรงมาเมื่อไม่มีไฟล์ในขอบเขต (ไม่ให้ `100/100` หรือรับรอง SOC2 เท็จโดยไร้หลักฐาน)
+
+| ขอบเขตที่รองรับ | คลาวด์ / ภาษา / มาตรฐานที่รองรับ | ไฟล์อินพุต & กฎหลัก (`--emit-patch` / `LNG-*`) |
+| :--- | :--- | :--- |
+| **A. คลาวด์และโครงสร้างพื้นฐาน (`L0`)** | **GCP** (Cloud Run, GKE, Cloud SQL, Vertex AI, BigQuery, WIF, KMS) · **Firebase** (Firestore, Storage, Functions, App Check) · **AWS** (S3, RDS, OIDC) · **Azure** (Blob, PostgreSQL) · **Audit Logs & SCC** | `*.tf`, `*iam*.json`, `firestore.rules`, `storage.rules`, `*cloud-audit*.ndjson`, `*scc*.json` |
+| **B. ภาษาแอปพลิเคชัน & โปรไฟล์แนวตั้งฉาก (`4-Stack + craftProfile`)** | **TS/Next.js/Node** · **Flutter/Dart/Firebase** · **Python/Go/Elixir/Docker** · **Secrets/CI** · **การวินิจฉัยการทดสอบโค้ด** (`TS/JS/Dart/Py/Go/Rust/Elixir/Java/Kotlin/Swift`) | `LNG-TS-001..005`, `LNG-FB/FL-*`, `LNG-PY/GO/CLD-*`, `LNG-SEC-001..005` (มาสก์ความลับ 1,529 รูปแบบ), `LNG-CRAFT-001..003` (`ALGORITHMIC_MONOLITH_UNTESTABLE`) |
+| **C. การจับคู่มาตรฐานกำกับดูแล (`--audience`)** | **`enterprise`** (SOC 2 Type II · ISO/IEC 27001:2022 · NIST CSF 2.0/AI RMF) · **`municipal`** (MIC · GovCloud · ISMAP) · **`sme`** (METI · APPI §23/28 · IPA) | จับคู่ตามไฟล์ที่สแกนจริง; ขึ้น `UNSCOPED` เมื่อไม่มีไฟล์ |

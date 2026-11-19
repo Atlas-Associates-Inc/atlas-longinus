@@ -68,6 +68,13 @@ function formatUnifiedBlueprintAndShield(
   lang: ReportLanguage,
 ): string {
   const isJa = lang === 'ja';
+  const shieldUnscoped = shieldReport.scannedFiles === 0;
+  const overallScoreLabel = shieldUnscoped
+    ? isJa
+      ? '**N/A (UNSCOPED — 走査対象ファイル 0 件のため未評価)**'
+      : '**N/A (UNSCOPED — 0 files scanned)**'
+    : `**${shieldReport.overallDefenseScore}/100**`;
+
   const sectionLines: string[] = [
     blueprintMarkdown.trimEnd(),
     '',
@@ -77,8 +84,8 @@ function formatUnifiedBlueprintAndShield(
       ? `## 9. 4-Stack ソースコード＆1,529種シークレット防衛シールド統合監査 (${shieldReport.repoName})`
       : `## 9. 4-Stack Source Code & 1,529-Pattern Secret Shield Unified Audit (${shieldReport.repoName})`,
     isJa
-      ? `- **総合コード防御スコア**: **${shieldReport.overallDefenseScore}/100**`
-      : `- **Overall Code Defense Score**: **${shieldReport.overallDefenseScore}/100**`,
+      ? `- **総合コード防御スコア**: ${overallScoreLabel}`
+      : `- **Overall Code Defense Score**: ${overallScoreLabel}`,
     isJa
       ? `- **走査ファイル数**: ${shieldReport.scannedFiles} files (切り詰め: \`${shieldReport.scanTruncated}\` · 自動マスク保護機密: ${shieldReport.redactedSecretsCount} 箇所 · 所要 ${shieldReport.durationMs}ms)`
       : `- **Scanned Files**: ${shieldReport.scannedFiles} files (Truncated: \`${shieldReport.scanTruncated}\` · Redacted Secrets Protected: ${shieldReport.redactedSecretsCount} · Duration: ${shieldReport.durationMs}ms)`,
@@ -91,10 +98,15 @@ function formatUnifiedBlueprintAndShield(
       ? '| 技術スタック | 対象ファイル | 防御スコア | 指摘内訳 (Critical / High / Medium / Low) |'
       : '| Stack | Detected Files | Defense Score | Findings (Critical / High / Medium / Low) |',
     '| --- | ---: | ---: | --- |',
-    ...shieldReport.stackSummaries.map(
-      (s) =>
-        `| ${s.label} | ${s.detectedFiles} | **${s.defenseScore}/100** | C:${s.criticalCount} / H:${s.highCount} / M:${s.mediumCount} / L:${s.lowCount} |`,
-    ),
+    ...shieldReport.stackSummaries.map((s) => {
+      const hasAnyFinding = s.criticalCount + s.highCount + s.mediumCount + s.lowCount > 0;
+      if (s.detectedFiles === 0 && !hasAnyFinding) {
+        return isJa
+          ? `| ${s.label} | 0 | N/A (対象 0件) | - |`
+          : `| ${s.label} | 0 | N/A (0 files) | - |`;
+      }
+      return `| ${s.label} | ${s.detectedFiles} | **${s.defenseScore}/100** | C:${s.criticalCount} / H:${s.highCount} / M:${s.mediumCount} / L:${s.lowCount} |`;
+    }),
     '',
     isJa
       ? '### 直交エンジニアリング・クラフト＆テスタビリティ診断 (Orthogonal Skill & Testability Archetype)'

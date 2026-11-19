@@ -119,10 +119,12 @@
    */
   function renderReport(report) {
     latestReport = report;
+    const isUnscoped = report.scannedFiles === 0;
 
-    overallScoreEl.textContent = String(report.overallDefenseScore);
-    overallScoreEl.className =
-      report.overallDefenseScore >= 85
+    overallScoreEl.textContent = isUnscoped ? 'N/A' : String(report.overallDefenseScore);
+    overallScoreEl.className = isUnscoped
+      ? 'score-numeral score-warn'
+      : report.overallDefenseScore >= 85
         ? 'score-numeral'
         : report.overallDefenseScore >= 60
           ? 'score-numeral score-warn'
@@ -243,13 +245,19 @@
   function renderStackCards(summaries) {
     clearChildren(stackGrid);
     for (const s of summaries) {
+      const hasAnyFinding = s.criticalCount + s.highCount + s.mediumCount + s.lowCount > 0;
+      const isStackUnscoped = s.detectedFiles === 0 && !hasAnyFinding;
       const stateClass =
-        s.criticalCount + s.highCount > 0 ? 'status-exposed' : 'status-hardened';
+        s.criticalCount + s.highCount > 0
+          ? 'status-exposed'
+          : isStackUnscoped
+            ? 'status-attention'
+            : 'status-hardened';
       const card = el('article', `card stack-card ${stateClass}`);
 
       const top = el('div', 'stack-card-top');
       top.appendChild(el('h3', 'stack-title', s.label));
-      const scoreSpan = el('span', 'stack-score', `${s.defenseScore}`);
+      const scoreSpan = el('span', 'stack-score', isStackUnscoped ? 'N/A' : `${s.defenseScore}`);
       top.appendChild(scoreSpan);
       card.appendChild(top);
 
@@ -271,7 +279,11 @@
           el(
             'span',
             s.criticalCount + s.highCount > 0 ? 'pill pill-crimson' : 'telemetry-item',
-            s.criticalCount + s.highCount > 0 ? '⚠️ 防御パッチ要適用' : '待機 / 指摘なし',
+            s.criticalCount + s.highCount > 0
+              ? '⚠️ 防御パッチ要適用'
+              : isStackUnscoped
+                ? '対象外 (0 files)'
+                : '指摘なし (対象ファイル走査済)',
           ),
         );
       }

@@ -527,33 +527,49 @@ export function formatBlueprint(graph: GraphResult, prover?: DualProverVerdict, 
     pillarPenalties.set(domain, (pillarPenalties.get(domain) ?? 0) + penalty);
   }
   const incomplete = graph.findings.some(finding => finding.ruleId.startsWith('scan/'));
+  const unscoped = !incomplete && graph.nodes.length === 0 && graph.findings.length === 0;
   const pillarScores = PILLARS.map(pillar => ({
     pillar,
-    score: Math.max(0, 100 - (pillarPenalties.get(pillar) ?? 0)),
+    score: unscoped ? 0 : Math.max(0, 100 - (pillarPenalties.get(pillar) ?? 0)),
   }));
   const rawAverage = Math.round(pillarScores.reduce((sum, item) => sum + item.score, 0) / PILLARS.length);
-  const overallScore = incomplete ? 0 : rawAverage;
-  const grade = scoreGrade(overallScore, incomplete);
-  const estimatedHoursSaved = Math.max(40, graph.nodes.length * 4 + graph.findings.length * 6 + graph.paths.length * 8);
+  const overallScore = incomplete || unscoped ? 0 : rawAverage;
+  const grade = unscoped ? 'UNSCOPED' : scoreGrade(overallScore, incomplete);
+  const estimatedHoursSaved = unscoped
+    ? 0
+    : Math.max(40, graph.nodes.length * 4 + graph.findings.length * 6 + graph.paths.length * 8);
   const estimatedJpySaved = estimatedHoursSaved * 35_000;
   const estimatedUsdSaved = Math.round(estimatedJpySaved / 150);
-  const intakeSummary = `audience=${audience} grade=${grade} score=${overallScore}/100 blocker=${counts.blocker} high=${counts.high} medium=${counts.medium} low=${counts.low} paths=${graph.paths.length} patches=${remediations.filter(item => item.diff).length}`;
+  const intakeSummary = `audience=${audience} grade=${grade} score=${unscoped ? 'N/A' : `${overallScore}/100`} blocker=${counts.blocker} high=${counts.high} medium=${counts.medium} low=${counts.low} nodes=${graph.nodes.length} paths=${graph.paths.length} patches=${remediations.filter(item => item.diff).length}`;
   const destructionCert = executeEphemeralFernetDoDCycle(intakeSummary);
 
   if (lang === 'ja') {
     const audienceLabelJa = audience === 'municipal' ? '地方自治体・ガバメントクラウド向け（総務省三層の対策・デジタル庁基準・ISMAP対応）'
       : audience === 'sme' ? '中堅・中小企業・ひとり情シス向け（経産省サプライチェーン評価・IPA 5か条・個人情報保護法・FinOps対応）'
       : 'エンタープライズ・上場企業向け（SOC2・ISO27001・NIST CSF 2.0・全領域統合）';
+    const scanStatusJa = incomplete
+      ? '未完了（先に scan/* の入力診断エラーを解消してください）'
+      : unscoped
+        ? '⚠️ 未評価 — 対象クラウドIaC・構成ファイル未検出 (UNSCOPED: *.tf / *.rules / IAM JSON / 監査ログが 0 件のため適合証明不可)'
+        : '完了 (COMPLETE)';
+    const scoreLineJa = unscoped
+      ? `- アーキテクチャ成熟度スコア: N/A (Grade: UNSCOPED — 構成ファイル未提出)`
+      : `- アーキテクチャ成熟度スコア: ${overallScore}/100 (Grade: ${grade})`;
+    const roiLineJa = unscoped
+      ? `- 外部コンサル削減効果の試算: ¥0（解析対象のクラウドリソース・構成ファイル 0 件）`
+      : `- 外部コンサル削減効果の試算: 約 ¥${estimatedJpySaved.toLocaleString('en-US')} 相当（約 ${estimatedHoursSaved} 時間分の外部コンサル工数を ¥0 で代替）`;
     const lines = [
       '# Atlas Sovereign — 自律型クラウド・DX・AI コンサルティング＆セキュリティ設計書',
       '',
       '## 1. エグゼクティブリスク要約（社内専属コンサルAI — 外部コンサル不要）',
       `- 対象コンサルプロファイル: ${audienceLabelJa}`,
-      `- 走査ステータス: ${incomplete ? '未完了（先に scan/* の入力診断エラーを解消してください）' : '完了 (COMPLETE)'}`,
-      `- アーキテクチャ成熟度スコア: ${overallScore}/100 (Grade: ${grade})`,
+      `- 走査ステータス: ${scanStatusJa}`,
+      scoreLineJa,
       `- 検出件数: 合計 ${graph.findings.length} 件 (BLOCKER: ${counts.blocker}, HIGH: ${counts.high}, MEDIUM: ${counts.medium}, LOW: ${counts.low})`,
       `- 到達可能なクロス境界攻撃経路: ${graph.paths.length} 本`,
-      `- 外部コンサル削減効果の試算: 約 ¥${estimatedJpySaved.toLocaleString('en-US')} 相当（約 ${estimatedHoursSaved} 時間分の外部コンサル工数を ¥0 で代替）`,
+      `- 解析対象クラウド証跡 (L0 Graph): リソース/IDノード ${graph.nodes.length} 件 · 権限エッジ ${graph.edges.length} 本`,
+      `- ⚠️ 静的監査の境界と免責: 本レポートは提出された静的ファイル（IaC・IAM JSON・Rules・監査ログ・ソースコード）のみの評価です。未提出の実クラウド環境設定、APIクォータ枯渇（HTTP 429）、共有トークン運用、URI長超過（HTTP 414）等のランタイム障害やSOC2実運用証跡を保証するものではありません。`,
+      roiLineJa,
     ];
     if (prover) {
       lines.push(`- Sovereign Prover (${prover.mode}): ${prover.status}`);
@@ -566,7 +582,10 @@ export function formatBlueprint(graph: GraphResult, prover?: DualProverVerdict, 
       '### 5領域アーキテクチャ成熟度スコアカード',
       '| コンサル評価領域 | スコア | グレード |',
       '| --- | --- | --- |',
-      ...pillarScores.map(item => `| ${PILLAR_JA[item.pillar] ?? item.pillar} | ${item.score}/100 | ${scoreGrade(item.score, incomplete)} |`),
+      ...pillarScores.map(item =>
+        unscoped
+          ? `| ${PILLAR_JA[item.pillar] ?? item.pillar} | N/A | UNSCOPED (未提出) |`
+          : `| ${PILLAR_JA[item.pillar] ?? item.pillar} | ${item.score}/100 | ${scoreGrade(item.score, incomplete)} |`),
       '',
       '### 法規制・ガイドライン自動マッピング表（総務省・デジタル庁・ISMAP ／ 経産省・IPA・個情法 ／ SOC2・ISO27001）',
       '| ルールID | 地方自治体・公共（総務省・デジタル庁・ISMAP） | 中小企業・取引先提出（経産省・IPA・個人情報保護法） | グローバル・上場企業（SOC2 / ISO27001 / NIST） |',
@@ -576,7 +595,9 @@ export function formatBlueprint(graph: GraphResult, prover?: DualProverVerdict, 
           const c = getCompliance(ruleId);
           return `| \`${ruleId}\` | ${c.municipalJa} | ${c.smeJa} | ${c.enterprise} |`;
         })
-        : ['| `なし (全項目適合)` | 総務省三層の対策・ガバメントクラウド基準 適合 | 経産省サプライチェーン・個人情報保護法第23条 適合 | SOC2 / ISO27001 / NIST CSF 2.0 適合 |']),
+        : unscoped
+          ? ['| `未評価 (UNSCOPED)` | ⚠️ 構成ファイル0件（総務省・ISMAP適合証明不可） | ⚠️ 構成ファイル0件（経産省・個情法適合証明不可） | ⚠️ 構成ファイル0件（SOC2 / ISO27001 適合保証外） |']
+          : ['| `静的違反なし (提出範囲内)` | 提出構成ファイル内で既知の静的違反なし（※実環境・ISMAP運用監査の代替ではありません） | 提出構成ファイル内で既知の静的違反なし（※実運用統制は別途要確認） | 提出構成ファイル内で既知の静的違反なし（※SOC2 / ISO27001 運用証跡の代替ではありません） |']),
       '',
       '## 2. 30 / 60 / 90日 自律改修ロードマップ',
       '- **フェーズ 1（1〜30日目 — 即時封じ込め＆AI Airlock 接続）**: BLOCKER および確定公開露出（Firebase Rules、0.0.0.0/0 の Cloud SQL、公開 BigQuery データセット、公開 Cloud Run invoker、ログ改ざん）を遮断し、`atlas-sovereign mcp-config --client gemini` で社内 AI の MCP サーバーを読み取り専用化する。',
@@ -640,16 +661,29 @@ export function formatBlueprint(graph: GraphResult, prover?: DualProverVerdict, 
   const audienceLabelEn = audience === 'municipal' ? 'Municipal & Public Sector (GovCloud Data Residency, Disaster BCP & ISMAP)'
     : audience === 'sme' ? 'Small & Medium Enterprise / Lean IT (Supply-Chain Security, FinOps Cost Protection & Plain-Language Playbook)'
     : 'Enterprise & Public Company (SOC2, ISO/IEC 27001, NIST CSF 2.0 & Full-Spectrum Governance)';
+  const scanStatusEn = incomplete
+    ? 'INCOMPLETE (resolve scan/* diagnostics first)'
+    : unscoped
+      ? 'UNSCOPED (0 cloud/IaC/IAM/Firebase inputs detected — cannot certify cloud posture)'
+      : 'COMPLETE';
+  const scoreLineEn = unscoped
+    ? `- Architecture Maturity Score: N/A (Grade: UNSCOPED — 0 infrastructure inputs analyzed)`
+    : `- Architecture Maturity Score: ${overallScore}/100 (Grade: ${grade})`;
+  const roiLineEn = unscoped
+    ? `- Estimated External Consulting Equivalent Saved: $0 (0 cloud/IaC inputs analyzed)`
+    : `- Estimated External Consulting Equivalent Saved: ~$${estimatedUsdSaved.toLocaleString('en-US')} (~${estimatedHoursSaved} consulting hours displaced for $0)`;
   const lines = [
     '# Atlas Sovereign — Autonomous Cloud/DX/AI Consulting & Security Blueprint',
     '',
     '## 1. Executive Risk Summary (In-House Consulting AI — Zero External Consultants Needed)',
     `- Consulting Profile: ${audienceLabelEn}`,
-    `- Scan Status: ${incomplete ? 'INCOMPLETE (resolve scan/* diagnostics first)' : 'COMPLETE'}`,
-    `- Architecture Maturity Score: ${overallScore}/100 (Grade: ${grade})`,
+    `- Scan Status: ${scanStatusEn}`,
+    scoreLineEn,
     `- Findings: ${graph.findings.length} total (BLOCKER: ${counts.blocker}, HIGH: ${counts.high}, MEDIUM: ${counts.medium}, LOW: ${counts.low})`,
     `- Reachable Cross-Boundary Attack Paths: ${graph.paths.length}`,
-    `- Estimated External Consulting Equivalent Saved: ~$${estimatedUsdSaved.toLocaleString('en-US')} (~${estimatedHoursSaved} consulting hours displaced for $0)`,
+    `- Analyzed Cloud/IaC Evidence (L0 Graph): ${graph.nodes.length} resource/identity nodes · ${graph.edges.length} permission edges`,
+    `- Scope & Runtime Disclaimer: Reflects static analysis of submitted files only; does NOT certify unsubmitted live cloud state, API quota exhaustion (HTTP 429), shared runtime tokens, or runtime protocol errors (HTTP 414).`,
+    roiLineEn,
   ];
   if (prover) {
     lines.push(`- Sovereign Prover (${prover.mode}): ${prover.status}`);
@@ -662,7 +696,10 @@ export function formatBlueprint(graph: GraphResult, prover?: DualProverVerdict, 
     '### 5-Pillar Architecture Maturity Scorecard',
     '| Consulting Pillar | Score | Grade |',
     '| --- | --- | --- |',
-    ...pillarScores.map(item => `| ${item.pillar} | ${item.score}/100 | ${scoreGrade(item.score, incomplete)} |`),
+    ...pillarScores.map(item =>
+      unscoped
+        ? `| ${item.pillar} | N/A | UNSCOPED |`
+        : `| ${item.pillar} | ${item.score}/100 | ${scoreGrade(item.score, incomplete)} |`),
     '',
     '### Regulatory & Framework Compliance Mapping (Enterprise SOC2/ISO27001, Municipal GovCloud/ISMAP & SME Supply-Chain)',
     '| Rule ID | Enterprise (SOC2 / ISO27001 / NIST CSF 2.0) | Municipal & Public Sector (GovCloud / ISMAP) | SME & Supply-Chain Partner Readiness |',
@@ -672,7 +709,9 @@ export function formatBlueprint(graph: GraphResult, prover?: DualProverVerdict, 
         const c = getCompliance(ruleId);
         return `| \`${ruleId}\` | ${c.enterprise} | ${c.municipalEn} | ${c.smeEn} |`;
       })
-      : ['| `None (All Controls Passing)` | SOC2 / ISO27001 / NIST CSF 2.0 Aligned | GovCloud & ISMAP Aligned | SME Supply-Chain & Data Privacy Aligned |']),
+      : unscoped
+        ? ['| `UNSCOPED (0 Inputs)` | Not Evaluated — 0 inputs submitted (cannot claim SOC2/ISO27001 alignment) | Not Evaluated — 0 GovCloud/ISMAP inputs submitted | Not Evaluated — 0 supply-chain IaC inputs submitted |']
+        : ['| `No Static Violations (In-Scope)` | No static misconfigurations in analyzed files (not a live SOC2/ISO27001 operational certification) | No static misconfigurations in analyzed files (verify live GovCloud/ISMAP controls) | No static misconfigurations in analyzed files (verify runtime operational controls) |']),
     '',
     '## 2. Autonomous 30 / 60 / 90-Day Remediation Roadmap',
     '- **Phase 1 (Day 1-30 — Immediate Containment & AI Airlock)**: Eliminate BLOCKER and confirmed public exposures (Firebase rules, 0.0.0.0/0 Cloud SQL, public BigQuery datasets, public invokers, logging tampering) and wrap internal AI MCP servers with `atlas-sovereign mcp-config --client gemini`.',

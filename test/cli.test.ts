@@ -428,3 +428,39 @@ test('0o700 ACL + Fernet encryption + DoD 5220.22-M 3-pass wipe issues a verifia
   assert.match(unified.stdout, /## 8\. 米国国防総省規格 DoD 5220\.22-M 消去＆ECDSA P-256 暗号署名入りデータ破棄証明書/);
   assert.match(unified.stdout, /## 9\. 4-Stack ソースコード＆1,529種シークレット防衛シールド統合監査/);
 });
+
+test('empty/unscoped repositories never falsely emit 100/100 Grade A or full SOC2/ISMAP compliance endorsement', () => {
+  const emptyDir = mkdtempSync(join(tmpdir(), 'atlas-unscoped-empty-'));
+  try {
+    const enBp = cli(['audit', emptyDir, '--format', 'blueprint']);
+    assert.equal(enBp.status, 0, enBp.stderr);
+    assert.match(enBp.stdout, /Scan Status: UNSCOPED/);
+    assert.match(enBp.stdout, /Architecture Maturity Score: N\/A \(Grade: UNSCOPED/);
+    assert.match(enBp.stdout, /Estimated External Consulting Equivalent Saved: \$0/);
+    assert.match(enBp.stdout, /UNSCOPED \(0 Inputs\)/);
+    assert.equal(enBp.stdout.includes('100/100 (Grade: A)'), false);
+    assert.equal(enBp.stdout.includes('SOC2 / ISO27001 / NIST CSF 2.0 Aligned'), false);
+
+    const jaBp = cli(['audit', emptyDir, '--format', 'blueprint', '--lang', 'ja']);
+    assert.equal(jaBp.status, 0, jaBp.stderr);
+    assert.match(jaBp.stdout, /走査ステータス: ⚠️ 未評価/);
+    assert.match(jaBp.stdout, /アーキテクチャ成熟度スコア: N\/A \(Grade: UNSCOPED/);
+    assert.match(jaBp.stdout, /外部コンサル削減効果の試算: ¥0/);
+    assert.match(jaBp.stdout, /`未評価 \(UNSCOPED\)`/);
+    assert.equal(jaBp.stdout.includes('100/100 (Grade: A)'), false);
+    assert.equal(jaBp.stdout.includes('全項目適合'), false);
+
+    const unifiedEmpty = spawnSync(process.execPath, [join(root, 'bin/longinus.mjs'), emptyDir, '--blueprint', '--lang', 'ja'], {
+      cwd: root, encoding: 'utf8', timeout: 10_000, maxBuffer: 1024 * 1024,
+      env: { PATH: process.env.PATH, LANG: 'C' },
+    });
+    assert.ifError(unifiedEmpty.error);
+    assert.equal(unifiedEmpty.status, 0, unifiedEmpty.stderr);
+    assert.match(unifiedEmpty.stdout, /\*\*N\/A \(UNSCOPED — 走査対象ファイル 0 件のため未評価\)\*\*/);
+    assert.match(unifiedEmpty.stdout, /\| TypeScript \/ Next\.js \/ Node \| 0 \| N\/A \(対象 0件\) \| - \|/);
+    assert.match(unifiedEmpty.stdout, /\| Flutter \/ Dart \+ Firebase \| 0 \| N\/A \(対象 0件\) \| - \|/);
+    assert.match(unifiedEmpty.stdout, /`UNSCOPED_NO_SOURCE_CODE`/);
+  } finally {
+    rmSync(emptyDir, { recursive: true, force: true });
+  }
+});

@@ -1049,4 +1049,26 @@ describe('Longinus Defensive Security Invariants', () => {
       await fs.rm(tmpCraft, { recursive: true, force: true });
     }
   });
+
+  it('returns unscoped 0 scores and UNSCOPED_NO_SOURCE_CODE for empty directories instead of vacuous 100/100', async () => {
+    const emptyDir = await fs.mkdtemp(path.join(os.tmpdir(), 'longinus-empty-unscoped-'));
+    try {
+      const scan = await runStaticRepositoryScan(emptyDir);
+      assert.equal(scan.scannedFiles, 0);
+      assert.equal(scan.craftProfile.archetypeId, 'UNSCOPED_NO_SOURCE_CODE');
+      assert.equal(scan.craftProfile.dimensions.algorithmicDepthScore, 0);
+      assert.equal(scan.craftProfile.dimensions.testabilityScore, 0);
+
+      const report = await executeDefensiveAudit({
+        targetPath: emptyDir,
+        mode: 'deterministic',
+      });
+      assert.equal(report.overallDefenseScore, 0);
+      assert.match(report.executiveSummary, /未評価 \/ UNSCOPED/);
+      assert.ok(report.stackSummaries.every((s) => s.evaluated === false && s.defenseScore === 0));
+      assert.ok(report.strideMatrix.every((s) => s.exposureScore === 0 && s.readinessScore === 0));
+    } finally {
+      await fs.rm(emptyDir, { recursive: true, force: true });
+    }
+  });
 });

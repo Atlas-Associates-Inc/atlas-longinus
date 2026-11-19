@@ -67,6 +67,7 @@ export interface StackPostureSummary {
   stack: StackDomain;
   label: string;
   detectedFiles: number;
+  evaluated: boolean;
   defenseScore: number;
   criticalCount: number;
   highCount: number;
@@ -88,7 +89,8 @@ export type EngineeringArchetypeId =
   | 'ALGORITHMIC_MONOLITH_UNTESTABLE'
   | 'WELL_TESTED_SURFACE_SHALLOW_CORE'
   | 'FAST_PROTOTYPE_COUPLED'
-  | 'BALANCED_PRODUCTION_ENGINEER';
+  | 'BALANCED_PRODUCTION_ENGINEER'
+  | 'UNSCOPED_NO_SOURCE_CODE';
 
 export interface UntestableCodeHotspot {
   ruleId: 'LNG-CRAFT-001' | 'LNG-CRAFT-002' | 'LNG-CRAFT-003';

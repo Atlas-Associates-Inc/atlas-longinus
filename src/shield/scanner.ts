@@ -1256,20 +1256,25 @@ export function buildStackSummaries(scan: StaticScanResult): StackPostureSummary
   ];
 
   return definitions.map(({ stack, label }) => {
+    const detectedFiles = scan.stackFileCounts[stack];
     const stackFindings = scan.findings.filter((f) => f.stack === stack);
     const criticalCount = stackFindings.filter((f) => f.severity === 'critical').length;
     const highCount = stackFindings.filter((f) => f.severity === 'high').length;
     const mediumCount = stackFindings.filter((f) => f.severity === 'medium').length;
     const lowCount = stackFindings.filter((f) => f.severity === 'low').length;
+    const evaluated = detectedFiles > 0 || stackFindings.length > 0;
 
     const penalty = criticalCount * 28 + highCount * 16 + mediumCount * 8 + lowCount * 3;
     const bonus = Math.min(8, (scan.verifiedControlsByStack[stack]?.length ?? 0) * 2);
-    const defenseScore = Math.max(0, Math.min(100, 100 - penalty + (penalty > 0 ? bonus : 0)));
+    const defenseScore = evaluated
+      ? Math.max(0, Math.min(100, 100 - penalty + (penalty > 0 ? bonus : 0)))
+      : 0;
 
     return {
       stack,
       label,
-      detectedFiles: scan.stackFileCounts[stack],
+      detectedFiles,
+      evaluated,
       defenseScore,
       criticalCount,
       highCount,
@@ -1409,6 +1414,31 @@ function buildEngineeringCraftProfile(params: {
   verifiedControlsByStack: Record<StackDomain, string[]>;
   stackFileCounts: Record<StackDomain, number>;
 }): EngineeringCraftProfile {
+  if (params.productionCodeFiles === 0) {
+    return {
+      archetypeId: 'UNSCOPED_NO_SOURCE_CODE',
+      archetypeLabel: 'Unscoped — No Production Source Code Submitted (評価対象コード 0件)',
+      diagnosisSummary:
+        'No production source code files were detected in the target directory; algorithmic depth and unit testability cannot be evaluated.',
+      dimensions: {
+        algorithmicDepthScore: 0,
+        testabilityScore: 0,
+        determinismScore: 0,
+        securityBoundaryScore: 0,
+      },
+      metrics: {
+        productionCodeFiles: 0,
+        testFiles: params.testFiles,
+        testToCodeRatio: 0,
+        algorithmicSignalCount: 0,
+        coupledIoInAlgorithmicFiles: 0,
+        uninjectedNonDeterminismFiles: 0,
+        oversizedGodModules: 0,
+      },
+      untestableHotspots: [],
+    };
+  }
+
   const prodCount = Math.max(1, params.productionCodeFiles);
   const ratio = Number((params.testFiles / prodCount).toFixed(2));
 

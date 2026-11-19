@@ -767,6 +767,15 @@ export function buildDeterministicThreatSynthesis(scan: StaticScanResult): {
   };
 
   const strideMatrix: StrideScoreItem[] = STRIDE_CATEGORIES.map((category) => {
+    if (scan.scannedFiles === 0) {
+      return {
+        category,
+        exposureScore: 0,
+        readinessScore: 0,
+        topRiskSummary: strideDefaults[category].summary,
+        primaryDefense: strideDefaults[category].defense,
+      };
+    }
     const matching = scan.findings.filter((f) => f.stride === category);
     const rawExposure = matching.reduce((acc, item) => {
       if (item.severity === 'critical') return acc + 36;
@@ -800,9 +809,11 @@ export function buildDeterministicThreatSynthesis(scan: StaticScanResult): {
   const safeRepoName = sanitizeDisplayLabel(scan.repoName);
 
   const executiveSummary =
-    scan.findings.length === 0
-      ? `${truncPrefix}${safeRepoName}（走査ファイル ${scan.scannedFiles} 件）では重大な静的露出は検出されず、CSP・境界隔離・依存ロック等の主要な予防制御が確認されました。継続的な CI ゲート監視を維持してください。`
-      : `${truncPrefix}${safeRepoName}（走査ファイル ${scan.scannedFiles} 件）にて合計 ${scan.findings.length} 件（Critical ${criticals} 件 / High ${highs} 件）の構造的リスク箇所を検出しました。攻撃を受ける前に信頼境界のデフォルト拒否化・機密分離・CSP/TLS 強制パッチを優先適用してください。`;
+    scan.scannedFiles === 0
+      ? `${truncPrefix}⚠️ 【未評価 / UNSCOPED】${safeRepoName}（走査対象ファイル 0 件）: リポジトリ内に評価可能なソースコード・IaC・構成ファイルが提出されていないため、セキュリティ制御および実クラウド環境の適合性は一切証明されません。`
+      : scan.findings.length === 0
+        ? `${truncPrefix}${safeRepoName}（走査ファイル ${scan.scannedFiles} 件）では重大な静的露出は検出されず、CSP・境界隔離・依存ロック等の主要な予防制御が確認されました。継続的な CI ゲート監視を維持してください。`
+        : `${truncPrefix}${safeRepoName}（走査ファイル ${scan.scannedFiles} 件）にて合計 ${scan.findings.length} 件（Critical ${criticals} 件 / High ${highs} 件）の構造的リスク箇所を検出しました。攻撃を受ける前に信頼境界のデフォルト拒否化・機密分離・CSP/TLS 強制パッチを優先適用してください。`;
 
   const priorityRoadmap: RoadmapStep[] = [
     {
@@ -941,10 +952,13 @@ export async function executeDefensiveAudit(params: {
   const stackAvg =
     activeStacks.length > 0
       ? activeStacks.reduce((sum, s) => sum + s.defenseScore, 0) / activeStacks.length
-      : 100;
+      : 0;
   const strideAvg =
     strideMatrix.reduce((sum, item) => sum + item.readinessScore, 0) / strideMatrix.length;
-  const overallDefenseScore = Math.round(stackAvg * 0.65 + strideAvg * 0.35);
+  const overallDefenseScore =
+    scan.scannedFiles === 0 || activeStacks.length === 0
+      ? 0
+      : Math.round(stackAvg * 0.65 + strideAvg * 0.35);
 
   const destructionCertificate = executeEphemeralFernetDoDCycle(scan.architectureDigest);
   const durationMs = Math.max(1, Math.round(performance.now() - startedAt));
@@ -1160,7 +1174,7 @@ export async function scanPortfolioDirectory(params: {
   const averageDefenseScore =
     totalRepos > 0
       ? Math.round(repos.reduce((sum, r) => sum + r.overallDefenseScore, 0) / totalRepos)
-      : 100;
+      : 0;
   const criticalReposCount = repos.filter((r) => r.criticalCount > 0).length;
   const totalRedactedSecrets = repos.reduce((sum, r) => sum + r.redactedSecretsCount, 0);
 
