@@ -3,13 +3,13 @@ import type { AirlockProfile, AirlockProfileId, McpConfigClient } from '../types
 const profiles: Record<AirlockProfileId, AirlockProfile> = {
   scc: {
     id: 'scc', description: 'Security Command Center findings and posture reads.',
-    upstreamCommand: 'uvx', upstreamArgs: ['mcp-security-scc'],
+    upstreamCommand: 'uvx', upstreamArgs: ['--from', 'scc-mcp', 'scc_mcp'],
     allowedTokens: ['scc', 'securitycenter', 'finding', 'findings', 'asset', 'assets', 'posture', 'mute',
       'source', 'sources', 'resource', 'resources'],
   },
   secops: {
     id: 'secops', description: 'Security Operations telemetry and detection reads.',
-    upstreamCommand: 'uvx', upstreamArgs: ['google-secops-mcp'],
+    upstreamCommand: 'uvx', upstreamArgs: ['--from', 'google-secops-mcp', 'secops_mcp'],
     allowedTokens: ['secops', 'chronicle', 'udm', 'ioc', 'iocs', 'alert', 'alerts', 'case', 'cases', 'event',
       'events', 'rule', 'rules', 'detection', 'detections', 'entity', 'entities', 'threat'],
   },
@@ -22,7 +22,7 @@ const profiles: Record<AirlockProfileId, AirlockProfile> = {
   },
   cloudrun: {
     id: 'cloudrun', description: 'Cloud Run services, revisions, jobs and log reads.',
-    upstreamCommand: 'npx', upstreamArgs: ['--no-install', '@google-cloud/cloud-run-mcp'],
+    upstreamCommand: 'npx', upstreamArgs: ['-y', '@google-cloud/cloud-run-mcp'],
     allowedTokens: ['cloudrun', 'service', 'services', 'revision', 'revisions', 'job', 'jobs', 'execution',
       'executions', 'log', 'logs'],
   },

@@ -72,12 +72,31 @@ function safeArguments(value: unknown, sql = false): boolean {
   return true;
 }
 
-function childEnvironment(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+const BASE_ENV_VARS = ['PATH', 'SYSTEMROOT', 'WINDIR', 'TMPDIR', 'TMP', 'TEMP', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ'] as const;
+const SAFE_DIR_ENV_VARS = ['HOME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'CLOUDSDK_CONFIG'] as const;
+
+export function childEnvironment(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const result: NodeJS.ProcessEnv = {};
-  // No credential, proxy, package-manager or interpreter/loader variables are inherited.
-  for (const name of ['PATH', 'SYSTEMROOT', 'WINDIR', 'TMPDIR', 'TMP', 'TEMP', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ']) {
+  // Closed-world allowlist: loader/hijack (NODE_OPTIONS, PYTHONPATH, LD_PRELOAD, DYLD_*), proxy, and raw token variables are never inherited.
+  for (const name of BASE_ENV_VARS) {
     const value = source[name];
-    if (typeof value === 'string' && value.length <= 16_384 && !value.includes('\0')) result[name] = value;
+    if (typeof value === 'string' && value.length > 0 && value.length <= 16_384 && !/[\u0000-\u001f\u007f]/.test(value)) {
+      result[name] = value;
+    }
+  }
+  for (const name of SAFE_DIR_ENV_VARS) {
+    const value = source[name];
+    if (typeof value === 'string' && value.length > 0 && value.length <= 4_096
+      && !/[\u0000-\u001f\u007f]/.test(value)
+      && /^(?:\/(?!\/)|[A-Za-z]:[\\/])/.test(value)
+      && !/(?:^|[\\/])\.\.(?:[\\/]|$)/.test(value)) {
+      result[name] = value;
+    }
+  }
+  const project = source.GOOGLE_CLOUD_PROJECT;
+  if (typeof project === 'string' && project.length <= 128
+    && /^(?:[a-z0-9.-]+:)?[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/i.test(project)) {
+    result.GOOGLE_CLOUD_PROJECT = project;
   }
   return result;
 }

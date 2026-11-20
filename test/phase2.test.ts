@@ -777,6 +777,8 @@ test('all seven Airlock profiles require both a global read-only verb and the se
     assert.equal(evaluateTool(tool, profile).allowed, true, `${profile}: shared domain token`);
   }
   assert.equal(evaluateTool('scc_list_findings').allowed, true, 'Existing global policy remains available without a profile');
+  assert.equal(evaluateTool('top_vulnerability_findings', 'scc').allowed, true);
+  assert.equal(evaluateTool('top_vulnerability_findings', 'firebase').allowed, false);
 });
 
 test('unknown and prototype-shaped profile identifiers fail closed in lookup, config API and CLI', () => {
@@ -823,9 +825,13 @@ test('mcp-config emits deterministic agy/gemini wrappers in selected order with 
   }
   const all = buildMcpConfig();
   assert.deepEqual(Object.keys(all.mcpServers), Object.keys(profileTools).map(profile => `atlas-sovereign-${profile}`));
-  for (const server of Object.values(all.mcpServers)) {
-    if (server.args[4] === 'npx') assert.ok(server.args.includes('--upstream-arg=--no-install'));
-  }
+  assert.ok(all.mcpServers['atlas-sovereign-firebase'].args.includes('--upstream-arg=--no-install'));
+  assert.deepEqual(all.mcpServers['atlas-sovereign-cloudrun'].args.slice(4),
+    ['npx', '--upstream-arg=-y', '--upstream-arg=@google-cloud/cloud-run-mcp']);
+  assert.deepEqual(all.mcpServers['atlas-sovereign-scc'].args.slice(4),
+    ['uvx', '--upstream-arg=--from', '--upstream-arg=scc-mcp', '--upstream-arg=scc_mcp']);
+  assert.deepEqual(all.mcpServers['atlas-sovereign-secops'].args.slice(4),
+    ['uvx', '--upstream-arg=--from', '--upstream-arg=google-secops-mcp', '--upstream-arg=secops_mcp']);
   all.mcpServers['atlas-sovereign-scc'].args.push('client-mutation');
   assert.equal(buildMcpConfig().mcpServers['atlas-sovereign-scc'].args.includes('client-mutation'), false);
 });

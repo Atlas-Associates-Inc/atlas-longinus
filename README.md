@@ -264,16 +264,16 @@ node bin/atlas-sovereign.mjs mcp-config --client agy
 
 Repeat `--upstream-arg` for each argument; use `--upstream-arg=<value>` for flags, for example `--upstream-arg=--flag`. Installed CLI forms are `atlas-sovereign airlock [--profile <name>] --upstream-cmd <cmd> [--upstream-arg <arg>...]` and `atlas-sovereign mcp-config [--profile <name>...] [--client agy|gemini]`.
 
-`mcp-config` defaults to `gemini` and all seven profiles. Both clients receive `mcpServers` JSON on `stdout` only. This generator never runs or verifies upstream binaries, writes configuration files, or touches home directories. Generated wrappers expect `atlas-sovereign` on the client’s executable path. The `npx` templates use `--no-install` and preserve upstream flags as `--upstream-arg=<value>`.
+`mcp-config` defaults to `gemini` and all seven profiles. Both clients receive `mcpServers` JSON on `stdout` only. This generator never runs or verifies upstream binaries, writes configuration files, or touches home directories. Generated wrappers expect `atlas-sovereign` on the client’s executable path. Upstream flags are preserved as `--upstream-arg=<value>` (`firebase` uses `--no-install`, while `cloudrun` passes `-y` and `scc`/`secops` select `--from <pkg> <bin>`).
 
 **Airlock profiles** — commands are templates from `src/airlock/profiles.ts` for caller-installed upstreams, not verified live integrations.
 
 | Profile ID | Read scope | Upstream template command | Upstream reference |
 | --- | --- | --- | --- |
-| `scc` | Security Command Center findings and posture | `uvx mcp-security-scc` | [google/mcp-security](https://github.com/google/mcp-security) |
-| `secops` | Security Operations telemetry and detections | `uvx google-secops-mcp` | [google/mcp-security](https://github.com/google/mcp-security) |
+| `scc` | Security Command Center findings and posture | `uvx --from scc-mcp scc_mcp` | [google/mcp-security](https://github.com/google/mcp-security) |
+| `secops` | Security Operations telemetry and detections | `uvx --from google-secops-mcp secops_mcp` | [google/mcp-security](https://github.com/google/mcp-security) |
 | `firebase` | Firebase projects, applications, and data | `npx --no-install firebase-tools experimental:mcp` | [Firebase MCP documentation](https://firebase.google.com/docs/ai-assistance/mcp-server) |
-| `cloudrun` | Cloud Run services, revisions, jobs, and logs | `npx --no-install @google-cloud/cloud-run-mcp` | Caller-installed `@google-cloud/cloud-run-mcp` package |
+| `cloudrun` | Cloud Run services, revisions, jobs, and logs | `npx -y @google-cloud/cloud-run-mcp` | Caller-installed `@google-cloud/cloud-run-mcp` package |
 | `developer-knowledge` | Developer documentation and references | `uvx google-developer-knowledge-mcp` | [Google Developer Knowledge MCP](https://developers.google.com/knowledge/mcp) |
 | `prowler` | Prowler findings, checks, and compliance | `uvx prowler-mcp` | [Prowler MCP announcement](https://prowler.com/blog/prowler-launches-lighthouse-ai-and-mcp-server-bringing-autonomous-security-to-devsecops-teams) |
 | `semgrep` | Semgrep rules, findings, and configuration | `uvx semgrep-mcp` | [Semgrep MCP repository](https://github.com/semgrep/mcp) |
@@ -557,16 +557,16 @@ node bin/atlas-sovereign.mjs mcp-config --client agy
 
 引数ごとに `--upstream-arg` を繰り返します。フラグには `--upstream-arg=<value>` 形式を使い、例えば `--upstream-arg=--flag` と記述します。インストール済み CLI の形式は `atlas-sovereign airlock [--profile <name>] --upstream-cmd <cmd> [--upstream-arg <arg>...]` と `atlas-sovereign mcp-config [--profile <name>...] [--client agy|gemini]` です。
 
-`mcp-config` の既定クライアントは `gemini`、既定の対象は全 7 プロファイルです。どちらのクライアントにも `mcpServers` JSON を `stdout` のみに出力します。この生成処理は上流バイナリーの実行・検証、設定ファイルへの書き込み、ホームディレクトリへの変更を行いません。生成したラッパーは、クライアントの実行可能ファイル検索パスに `atlas-sovereign` があることを前提とします。`npx` テンプレートは `--no-install` を使い、上流のフラグを `--upstream-arg=<value>` として保持します。
+`mcp-config` の既定クライアントは `gemini`、既定の対象は全 7 プロファイルです。どちらのクライアントにも `mcpServers` JSON を `stdout` のみに出力します。この生成処理は上流バイナリーの実行・検証、設定ファイルへの書き込み、ホームディレクトリへの変更を行いません。生成したラッパーは、クライアントの実行可能ファイル検索パスに `atlas-sovereign` があることを前提とします。上流のフラグは `--upstream-arg=<value>` として保持します（`firebase` は `--no-install`、`cloudrun` は `-y`、`scc` / `secops` は `--from <pkg> <bin>` を使用）。
 
 **Airlock プロファイル** — コマンドは `src/airlock/profiles.ts` にある利用者導入済み上流用のテンプレートであり、実接続を検証済みという意味ではありません。
 
 | プロファイル ID | 読み取り範囲 | 上流コマンドのテンプレート | 上流の参照先 |
 | --- | --- | --- | --- |
-| `scc` | Security Command Center の findings・セキュリティ状態 | `uvx mcp-security-scc` | [google/mcp-security](https://github.com/google/mcp-security) |
-| `secops` | Security Operations のテレメトリー・検出結果 | `uvx google-secops-mcp` | [google/mcp-security](https://github.com/google/mcp-security) |
+| `scc` | Security Command Center の findings・セキュリティ状態 | `uvx --from scc-mcp scc_mcp` | [google/mcp-security](https://github.com/google/mcp-security) |
+| `secops` | Security Operations のテレメトリー・検出結果 | `uvx --from google-secops-mcp secops_mcp` | [google/mcp-security](https://github.com/google/mcp-security) |
 | `firebase` | Firebase のプロジェクト・アプリケーション・データ | `npx --no-install firebase-tools experimental:mcp` | [Firebase MCP ドキュメント](https://firebase.google.com/docs/ai-assistance/mcp-server) |
-| `cloudrun` | Cloud Run のサービス・リビジョン・ジョブ・ログ | `npx --no-install @google-cloud/cloud-run-mcp` | 利用者が導入する `@google-cloud/cloud-run-mcp` パッケージ |
+| `cloudrun` | Cloud Run のサービス・リビジョン・ジョブ・ログ | `npx -y @google-cloud/cloud-run-mcp` | 利用者が導入する `@google-cloud/cloud-run-mcp` パッケージ |
 | `developer-knowledge` | 開発者向けドキュメント・リファレンス | `uvx google-developer-knowledge-mcp` | [Google Developer Knowledge MCP](https://developers.google.com/knowledge/mcp) |
 | `prowler` | Prowler の findings・チェック・コンプライアンス | `uvx prowler-mcp` | [Prowler MCP 発表](https://prowler.com/blog/prowler-launches-lighthouse-ai-and-mcp-server-bringing-autonomous-security-to-devsecops-teams) |
 | `semgrep` | Semgrep のルール・findings・設定 | `uvx semgrep-mcp` | [Semgrep MCP リポジトリ](https://github.com/semgrep/mcp) |

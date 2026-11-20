@@ -1,7 +1,7 @@
 import type { AirlockDecision } from '../types.ts';
 import { getAirlockProfile } from './profiles.ts';
 
-const readVerbs = new Set(['get', 'list', 'query', 'read', 'describe', 'search', 'validate', 'status', 'inspect']);
+const readVerbs = new Set(['get', 'list', 'query', 'read', 'describe', 'search', 'validate', 'status', 'inspect', 'top']);
 const mutatingVerb = /^(?:(?:deploy|add|destroy|patch|exec|send|grant|publish|upload|insert|start|restart|kill|provision)(?:s|ed|ing)?|(?:creat|updat|delet|remov|execut|evaluat|invok|enabl|disabl|revok|replac|initializ)(?:e|es|ed|ing)|set(?:s|ting)?|reset(?:s|ting)?|init(?:s|ted|ting)?|appl(?:y|ies|ied|ying)|writ(?:e|es|ing|ten)|wrote|sent|run(?:s|ning)?|ran|stop(?:s|ped|ping)?|cancel(?:s|led|ling|ed|ing)?)$/;
 
 export function evaluateTool(name: unknown, profileId?: string): AirlockDecision {

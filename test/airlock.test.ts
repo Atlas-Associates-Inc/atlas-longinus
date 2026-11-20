@@ -8,7 +8,7 @@ import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import { evaluateTool } from '../src/airlock/mcp-guard.ts';
 import { redactSecrets, sanitizeTelemetry } from '../src/airlock/sanitizer.ts';
-import { runStdioProxy } from '../src/airlock/stdio-proxy.ts';
+import { childEnvironment, runStdioProxy } from '../src/airlock/stdio-proxy.ts';
 
 const readTools = ['scc_list_findings', 'firestore_get_document',
   'developerknowledge_search_documents', 'developerknowledge_get_document'];
@@ -510,4 +510,132 @@ test('stdio proxy fails closed on malformed client and upstream JSON', { timeout
   assert.equal(server.code, 2);
   assert.equal(server.messages.some(message => message.id === 'pending' && message.error?.code === -32000), true);
   assert.equal(server.messages.some(message => Object.hasOwn(message, 'result')), false);
+});
+
+test('tool policy permits read-only top verb (top_vulnerability_findings) under scc while rejecting mutations and other profiles', () => {
+  assert.equal(evaluateTool('top_vulnerability_findings').allowed, true);
+  assert.equal(evaluateTool('top_vulnerability_findings', 'scc').allowed, true);
+  assert.equal(evaluateTool('scc_top_findings', 'scc').allowed, true);
+  assert.equal(evaluateTool('top_vulnerability_findings', 'firebase').allowed, false);
+  assert.equal(evaluateTool('top_vulnerability_findings', 'cloudrun').allowed, false);
+  for (const denied of ['stop_service', 'top_delete_findings', 'top_vulnerability_findings_update', 'top_create_finding']) {
+    assert.equal(evaluateTool(denied).allowed, false, denied);
+    assert.equal(evaluateTool(denied, 'scc').allowed, false, denied);
+  }
+});
+
+test('childEnvironment forwards safe npx/uvx/ADC paths and GOOGLE_CLOUD_PROJECT while stripping loaders, tokens and unsafe paths', async () => {
+  const safeEnv = childEnvironment({
+    PATH: '/usr/local/bin:/usr/bin',
+    HOME: '/Users/alice',
+    USERPROFILE: 'C:\\Users\\alice',
+    APPDATA: 'C:\\Users\\alice\\AppData\\Roaming',
+    LOCALAPPDATA: 'C:/Users/alice/AppData/Local',
+    XDG_CONFIG_HOME: '/Users/alice/.config',
+    XDG_CACHE_HOME: '/Users/alice/.cache',
+    CLOUDSDK_CONFIG: '/Users/alice/.config/gcloud',
+    GOOGLE_CLOUD_PROJECT: 'example.com:about-atlas-associates',
+    NODE_OPTIONS: '--require=/tmp/hijack.cjs',
+    NODE_PATH: '/tmp/hijack',
+    PYTHONPATH: '/tmp/pyhijack',
+    PYTHONHOME: '/tmp/pyhome',
+    PYTHONSTARTUP: '/tmp/pystart.py',
+    LD_PRELOAD: '/tmp/libevil.so',
+    LD_LIBRARY_PATH: '/tmp/lib',
+    DYLD_INSERT_LIBRARIES: '/tmp/libevil.dylib',
+    DYLD_LIBRARY_PATH: '/tmp/lib',
+    HTTP_PROXY: 'http://127.0.0.1:8888',
+    HTTPS_PROXY: 'http://127.0.0.1:8888',
+    GEMINI_API_KEY: 'AIza' + 'z'.repeat(35),
+    ATLAS_TEST_CREDENTIAL: 'synthetic-environment-secret',
+  });
+  assert.deepEqual(safeEnv, {
+    PATH: '/usr/local/bin:/usr/bin',
+    HOME: '/Users/alice',
+    USERPROFILE: 'C:\\Users\\alice',
+    APPDATA: 'C:\\Users\\alice\\AppData\\Roaming',
+    LOCALAPPDATA: 'C:/Users/alice/AppData/Local',
+    XDG_CONFIG_HOME: '/Users/alice/.config',
+    XDG_CACHE_HOME: '/Users/alice/.cache',
+    CLOUDSDK_CONFIG: '/Users/alice/.config/gcloud',
+    GOOGLE_CLOUD_PROJECT: 'example.com:about-atlas-associates',
+  });
+
+  const rejectedValues = childEnvironment({
+    HOME: 'relative/path',
+    USERPROFILE: '\\\\attacker\\share',
+    APPDATA: '//attacker/share',
+    LOCALAPPDATA: '/tmp/../etc',
+    XDG_CONFIG_HOME: '/Users/alice/.config\nINJECT=1',
+    XDG_CACHE_HOME: '',
+    CLOUDSDK_CONFIG: 'C:\\Users\\..\\Windows',
+    GOOGLE_CLOUD_PROJECT: '--project=evil',
+  });
+  assert.deepEqual(rejectedValues, {});
+
+  const envEchoUpstream = `
+    import { createInterface } from 'node:readline';
+    const keys = [
+      'HOME', 'XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'CLOUDSDK_CONFIG', 'GOOGLE_CLOUD_PROJECT',
+      'NODE_OPTIONS', 'PYTHONPATH', 'LD_PRELOAD', 'DYLD_INSERT_LIBRARIES', 'GEMINI_API_KEY',
+    ];
+    createInterface({ input: process.stdin }).on('line', line => {
+      const message = JSON.parse(line);
+      const snapshot = Object.fromEntries(keys.map(k => [k, process.env[k] ?? null]));
+      process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: message.id, result: snapshot }) + '\\n');
+    });
+  `;
+  const script = join(tmpdir(), `atlas-sovereign-env-${randomUUID()}.mjs`);
+  const input = new PassThrough();
+  const output = new PassThrough();
+  let received = '';
+  output.setEncoding('utf8');
+  output.on('data', chunk => { received += chunk; });
+  await writeFile(script, envEchoUpstream, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+  try {
+    const completion = runStdioProxy({
+      command: process.execPath,
+      args: [script],
+      profile: 'scc',
+      input,
+      output,
+      env: {
+        PATH: process.env.PATH,
+        HOME: '/Users/alice',
+        XDG_CONFIG_HOME: '/Users/alice/.config',
+        XDG_CACHE_HOME: '/Users/alice/.cache',
+        CLOUDSDK_CONFIG: '/Users/alice/.config/gcloud',
+        GOOGLE_CLOUD_PROJECT: 'atlas-prod-123',
+        NODE_OPTIONS: '--require=/tmp/hijack.cjs',
+        PYTHONPATH: '/tmp/pyhijack',
+        LD_PRELOAD: '/tmp/libevil.so',
+        DYLD_INSERT_LIBRARIES: '/tmp/libevil.dylib',
+        GEMINI_API_KEY: 'AIza' + 'q'.repeat(35),
+      },
+    });
+    input.end(JSON.stringify({
+      jsonrpc: '2.0',
+      id: 'env',
+      method: 'tools/call',
+      params: { name: 'top_vulnerability_findings', arguments: {} },
+    }) + '\n');
+    assert.equal(await completion, 0);
+    const response = JSON.parse(received.trim());
+    assert.deepEqual(response.result, {
+      HOME: '/Users/alice',
+      XDG_CONFIG_HOME: '/Users/alice/.config',
+      XDG_CACHE_HOME: '/Users/alice/.cache',
+      CLOUDSDK_CONFIG: '/Users/alice/.config/gcloud',
+      GOOGLE_CLOUD_PROJECT: 'atlas-prod-123',
+      NODE_OPTIONS: null,
+      PYTHONPATH: null,
+      LD_PRELOAD: null,
+      DYLD_INSERT_LIBRARIES: null,
+      GEMINI_API_KEY: null,
+    });
+  } finally {
+    input.destroy();
+    output.destroy();
+    await unlink(script);
+  }
 });
