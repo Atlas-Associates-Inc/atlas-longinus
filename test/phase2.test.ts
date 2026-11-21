@@ -64,11 +64,16 @@ test('OSS governance documents are bilingual, safe UTF-8 files and preserve repo
   const periodicTableModels = [
     'gemini-pro-orchestrator-argon',
     'gemini-pro-orchestrator',
+    'gemini-pro-orchestrator-neon',
     'Orchestrator (Argon)',
     'Orchestrator (Carbon)',
+    'Orchestrator (Neon)',
     'gemini-4-argon-high',
     'gemini-4-carbon-high',
     'gemini-4-carbon-medium',
+    'gemini-4-neon-xhigh',
+    'gemini-4-neon-high',
+    'gemini-4-neon-medium',
     'gemini-4-hydrogen-xhigh',
     'gemini-4-hydrogen-high',
     'gemini-4-hydrogen-medium',
@@ -82,12 +87,15 @@ test('OSS governance documents are bilingual, safe UTF-8 files and preserve repo
       /(?<!-)\bgemini(?:-3\.8-flash-(?:high|medium|low)|\s+3\.8\s+flash(?:\s+(?:high|medium|low))?)\b(?!-)/gi,
       '',
     );
-    return /\b(?:claude|anthropic|fable|opus|sonnet|haiku|nano|mini|lite|flash|argon-(?:low|medium)|carbon-low)\b/i.test(stripped);
+    return /\b(?:claude|anthropic|fable|opus|sonnet|haiku|nano|mini|lite|flash|argon-(?:low|medium)|carbon-low|neon-low)\b/i.test(stripped);
   };
   const atlasSource = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(readFileSync(join(root, 'ATLAS.md')));
   assert.equal(hasUnsupportedModelToken(atlasSource), false, 'ATLAS.md must not reference unsupported vendors or tiers');
-  assert.ok(atlasSource.includes('gemini-pro-orchestrator-argon'), 'ATLAS.md must include Stage 1 Orchestrator (Argon)');
-  assert.ok(atlasSource.includes('gemini-pro-orchestrator'), 'ATLAS.md must include Stage 2 Orchestrator (Carbon)');
+  assert.ok(atlasSource.includes('gemini-pro-orchestrator'), 'ATLAS.md must include Flagship Orchestrator (Carbon)');
+  assert.ok(atlasSource.includes('gemini-4-carbon-high'), 'ATLAS.md must include Gemini 4 Carbon High');
+  assert.ok(atlasSource.includes('gemini-pro-orchestrator-neon'), 'ATLAS.md must include Balanced Orchestrator (Neon)');
+  assert.ok(atlasSource.includes('gemini-4-neon-xhigh'), 'ATLAS.md must include Gemini 4 Neon XHigh');
+  assert.ok(atlasSource.includes('gemini-pro-orchestrator-argon'), 'ATLAS.md must retain Orchestrator (Argon) compatibility');
   for (const file of ['SECURITY.md', 'CONTRIBUTING.md', 'README.md']) {
     const path = join(root, file);
     assert.ok(lstatSync(path).isFile(), `${file} must be a regular file, not a symlink`);
@@ -117,8 +125,8 @@ test('OSS governance documents are bilingual, safe UTF-8 files and preserve repo
   for (const model of periodicTableModels) {
     assert.equal(hasUnsupportedModelToken(model), false, `Periodic table model must pass: ${model}`);
   }
-  assert.equal(hasUnsupportedModelToken('Approved: Gemini 3.8 Flash High, gemini-3.8-flash-high, gemini-pro-orchestrator-argon, gemini-pro-orchestrator, gemini-4-argon-high, gemini-4-carbon-high, gemini-4-hydrogen-xhigh, gpt-6-astra.'), false);
-  for (const token of ['flash', 'gemini-3.8-flash', 'flash-lite', 'flash-low', 'flash-medium', 'gemini-3.8-flash-high-lite', 'claude-gemini-3.8-flash-high', 'lite', 'mini', 'nano', 'argon-low', 'argon-medium', 'carbon-low', 'claude', 'anthropic', 'fable', 'opus', 'sonnet', 'haiku']) {
+  assert.equal(hasUnsupportedModelToken('Approved: Gemini 3.8 Flash High, gemini-3.8-flash-high, gemini-pro-orchestrator-argon, gemini-pro-orchestrator, gemini-pro-orchestrator-neon, gemini-4-argon-high, gemini-4-carbon-high, gemini-4-neon-xhigh, gemini-4-hydrogen-xhigh, gpt-6-astra.'), false);
+  for (const token of ['flash', 'gemini-3.8-flash', 'flash-lite', 'flash-low', 'flash-medium', 'gemini-3.8-flash-high-lite', 'claude-gemini-3.8-flash-high', 'lite', 'mini', 'nano', 'argon-low', 'argon-medium', 'carbon-low', 'neon-low', 'claude', 'anthropic', 'fable', 'opus', 'sonnet', 'haiku']) {
     assert.equal(hasUnsupportedModelToken(token), true, token);
   }
   const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
