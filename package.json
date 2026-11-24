@@ -1,6 +1,6 @@
 {
   "name": "@atlas-sec/sovereign",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Atlas Sovereign: Instant in-house Cloud, DX & AI Security Consulting AI for Enterprises, Local Governments & SMEs (offline GCP and Firebase attack-path analyzer, 5-pillar scorecard, compliance mapper, 30/60/90-day blueprints, and read-only MCP airlock)",
   "license": "Apache-2.0",
   "type": "module",
