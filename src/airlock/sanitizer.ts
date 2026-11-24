@@ -9,7 +9,7 @@ const privateKeyPattern = new RegExp(
   '[\\s\\S]*?(?:' + ['-----END', '(?:[A-Z0-9]+ )*PRIVATE KEY-----'].join(' ') + '|$)',
   'g',
 );
-const instructionPattern = /(?:<\/?(?:system|developer|assistant|user|untrusted_telemetry)\b|<\|[^<>|\r\n]{1,128}\|>|\[\/?(?:INST|SYSTEM|DEVELOPER|ASSISTANT)\]|(?:^|[\s"{,])(?:system|developer|assistant)\s*:\s+|\b(?:ignore|disregard|override|forget)\b[\s\S]{0,100}\b(?:instructions?|prompts?|rules?|previous|above)\b|\byou are now\b|\b(?:reveal|print|exfiltrate)\b[\s\S]{0,100}\b(?:secrets?|credentials?|tokens?|system\s+prompts?)\b)/i;
+const instructionPattern = /(?:<\/?(?:system|developer|assistant|user|untrusted_telemetry)\b|<\|[^<>|\r\n]{1,128}\|>|\[\/?(?:INST|SYSTEM|DEVELOPER|ASSISTANT)\]|(?:^|[\s"{,])(?:system|developer|assistant)\s*:\s+|\b(?:ignore|disregard|override|forget)\b[\s\S]{0,100}\b(?:instructions?|prompts?|rules?|previous|above)\b|\byou are now\b|\b(?:reveal|print|exfiltrate)\b[\s\S]{0,100}\b(?:secrets?|credentials?|tokens?|system\s+prompts?)\b|\]\(\s*command:[A-Za-z0-9_.-]+|\bcommand:(?:workbench|vscode|editor|terminal|extension)\.[A-Za-z0-9_.-]+|\b(?:vscode(?:-insiders)?|cursor|windsurf|antigravity|jetbrains):\/\/[^\s"'<>)]+)/i;
 const QUARANTINED = '[QUARANTINED: instruction-like telemetry]';
 
 function* quotedInstructions(value: string): Generator<RegExpMatchArray> {

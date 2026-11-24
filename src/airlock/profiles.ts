@@ -15,7 +15,7 @@ const profiles: Record<AirlockProfileId, AirlockProfile> = {
   },
   firebase: {
     id: 'firebase', description: 'Firebase project, application and data reads.',
-    upstreamCommand: 'npx', upstreamArgs: ['--no-install', 'firebase-tools', 'experimental:mcp'],
+    upstreamCommand: 'npx', upstreamArgs: ['--no-install', 'firebase-tools', 'mcp'],
     allowedTokens: ['firebase', 'firestore', 'storage', 'auth', 'crashlytics', 'remoteconfig', 'dataconnect',
       'apphosting', 'hosting', 'rules', 'project', 'projects', 'app', 'apps', 'collection', 'collections',
       'document', 'documents'],

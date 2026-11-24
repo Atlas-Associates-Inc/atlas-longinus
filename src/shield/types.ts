@@ -16,9 +16,15 @@ export type StrideCategory =
   | 'Denial of Service'
   | 'Elevation of Privilege';
 
-export type AnalysisMode = 'gemini-3.8-flash' | 'gemini-4-argon' | 'deterministic';
+export type AnalysisMode =
+  | 'gemini-4-carbon'
+  | 'gemini-4-neon'
+  | 'gemini-4-hydrogen'
+  | 'gemini-4-argon'
+  | 'gemini-3.8-flash'
+  | 'deterministic';
 
-export type ReasoningLevel = 'low' | 'medium' | 'high' | 'none';
+export type ReasoningLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'none';
 
 export interface SecurityFinding {
   id: string;

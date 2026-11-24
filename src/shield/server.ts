@@ -37,8 +37,11 @@ interface ParsedAuditRequest {
 }
 
 const VALID_AUDIT_MODES = new Set<AnalysisMode>([
-  'gemini-3.8-flash',
+  'gemini-4-carbon',
+  'gemini-4-neon',
+  'gemini-4-hydrogen',
   'gemini-4-argon',
+  'gemini-3.8-flash',
   'deterministic',
 ]);
 const ALLOWED_AUDIT_KEYS = new Set(['targetPath', 'mode', 'apiKey', 'excludeFixtures']);
@@ -324,6 +327,9 @@ function renderIndexHtml(nonce: string, csrfToken: string): string {
         <div class="field-group">
           <label for="analysis-mode-select">脅威分析エンジン</label>
           <select id="analysis-mode-select" name="mode">
+            <option value="gemini-4-carbon">Gemini 4 Carbon（最高峰脅威アーキテクチャ監査 / thinking: high）</option>
+            <option value="gemini-4-neon">Gemini 4 Neon（2026-11 GA 高速バランス分析 / thinking: medium〜xhigh 自動）</option>
+            <option value="gemini-4-hydrogen">Gemini 4 Hydrogen（超高速エージェント防御分析 / thinking: low〜xhigh 自動）</option>
             <option value="gemini-3.8-flash">Gemini 3.8 Flash（防御パッチ実装・最適 Reasoning 自動選択）</option>
             <option value="gemini-4-argon">Argon High（深層脅威分析・調査・根本解決計画 / thinking: high）</option>
             <option value="deterministic">0トークン決定論的 STRIDE + 静的ルールのみ</option>

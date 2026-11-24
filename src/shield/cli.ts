@@ -265,6 +265,18 @@ function parseCliArgs(args: readonly string[]): ParsedCliOptions {
       explicitMode = 'deterministic';
       continue;
     }
+    if (arg === '--carbon') {
+      explicitMode = 'gemini-4-carbon';
+      continue;
+    }
+    if (arg === '--neon') {
+      explicitMode = 'gemini-4-neon';
+      continue;
+    }
+    if (arg === '--hydrogen') {
+      explicitMode = 'gemini-4-hydrogen';
+      continue;
+    }
     if (arg === '--argon') {
       explicitMode = 'gemini-4-argon';
       continue;

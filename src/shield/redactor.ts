@@ -1546,9 +1546,9 @@ if (req.headers.origin && ALLOWED_ORIGINS.has(req.headers.origin)) {
 }`,
   SQL_PARAMETERIZED_BINDING: `// 防御パッチ: 文字列補間クエリを廃止し、プリペアドステートメント（プレースホルダ束縛）を徹底
 const rows = await db.query('SELECT id, role FROM users WHERE email = $1', [validatedEmail]);`,
-  SSRF_EGRESS_ALLOWLIST: `// 防御パッチ: 接続先ホストの固定 Allowlist 検証 + メタデータ/内部 IP (169.254.169.254, 127.0.0.0/8) 遮断
+  SSRF_EGRESS_ALLOWLIST: `// 防御パッチ: 接続先ホストの固定 Allowlist 検証 + メタデータ/内部 IP (169.254.169.254, 127.0.0.0/8, [::1], [fe80::]/10, [fec0::]/10, [fc00::]/7, [::ffff:169.254.169.254]) 遮断
 const parsedUrl = new URL(candidateUrl);
-if (parsedUrl.protocol !== 'https:' || !ALLOWED_UPSTREAM_HOSTS.has(parsedUrl.hostname)) {
+if (parsedUrl.protocol !== 'https:' || parsedUrl.hostname.startsWith('[') || !ALLOWED_UPSTREAM_HOSTS.has(parsedUrl.hostname)) {
   throw new Error('Blocked outbound host by egress policy.');
 }`,
   CSPRNG_AND_SHA256_CRYPTO: `// 防御パッチ: Math.random / MD5 / SHA-1 を廃止し、暗号論的乱数 (crypto.randomBytes) と SHA-256 以上を使用

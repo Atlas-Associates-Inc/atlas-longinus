@@ -29,6 +29,11 @@ export interface ProverOptions {
 const ARGON_MODEL = 'gemini-4-argon-high';
 const HYDROGEN_RED_TEAM_MODEL = 'gemini-4-hydrogen-xhigh';
 const ASTRA_MODEL = 'gpt-6-astra';
+const ALLOWED_ARCHITECT_MODELS = new Set([
+  'gemini-4-argon-high',
+  'gemini-4-carbon-high',
+  'gemini-4-neon-xhigh',
+]);
 const MAX_INPUT_BYTES = 256 * 1024;
 const MAX_RESPONSE_BYTES = 128 * 1024;
 const DEFAULT_TIMEOUT_MS = 120_000;
@@ -50,14 +55,22 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function googleModelForLane(lane: ProverLane): string {
-  return lane === 'geminiRedTeam' ? HYDROGEN_RED_TEAM_MODEL : ARGON_MODEL;
+function resolveArchitectModel(strict: boolean): string {
+  const configured = process.env.ATLAS_PROVER_ARCHITECT_MODEL?.trim();
+  if (!configured) return ARGON_MODEL;
+  if (ALLOWED_ARCHITECT_MODELS.has(configured)) return configured;
+  if (strict) throw new Error('Unsupported ATLAS_PROVER_ARCHITECT_MODEL.');
+  return ARGON_MODEL;
+}
+
+function googleModelForLane(lane: ProverLane, strict = true): string {
+  return lane === 'geminiRedTeam' ? HYDROGEN_RED_TEAM_MODEL : resolveArchitectModel(strict);
 }
 
 function laneMetadata(lane: ProverLane): Pick<LaneVerdict, 'family' | 'model'> {
   return lane === 'astraUltra'
     ? { family: 'openai', model: ASTRA_MODEL }
-    : { family: 'google', model: googleModelForLane(lane) };
+    : { family: 'google', model: googleModelForLane(lane, false) };
 }
 
 function errorVerdict(lane: ProverLane, rationale: string): LaneVerdict {

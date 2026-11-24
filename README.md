@@ -64,7 +64,7 @@ Run https://github.com/Atlas-Associates-Inc/atlas-longinus
 Load this OSS repository (**LONGINUS**) into your company's AI agent to **instantly build an in-house Cloud, DX, and AI Security Consulting AI**—making external consulting firms completely unnecessary—powered by offline GCP × Firebase attack-path analysis, a 4-Stack Code & Secret Shield, a 5-pillar architecture maturity scorecard & consulting ROI estimator, autonomous 30/60/90-day remediation blueprints (`--format blueprint`), a read-only MCP Airlock, and optional Sovereign AI evidence review.
 
 - **Apache-2.0** — open source, instant in-house consulting AI for free (`$0`)
-- **Last Updated**: `2026-11-19`
+- **Last Updated**: `2026-11-24`
 - **Node.js >=22.18.0** — native erasable TypeScript
 - **0 npm dependencies** — runtime and development
 - **100% Read-Only (Offline & Online) + `0o700` ACL + Fernet Encryption + DoD 5220.22-M 3-Pass Wipe + ECDSA P-256 Certificate of Data Destruction** — target repositories are strictly opened with `O_RDONLY | O_DIRECTORY | O_NOFOLLOW`; ephemeral workspaces are isolated under `0o700` ACL and Fernet (`AES-128-CBC + HMAC-SHA256`) encryption, overwritten upon completion via US Department of Defense `DoD 5220.22-M` 3-pass sanitization (`0x00` → `0xFF` → `CSPRNG` + `fsync`), and an **ECDSA P-256 cryptographically signed Certificate of Data Destruction** is automatically issued at the end of every Blueprint & PDF report
@@ -272,7 +272,7 @@ Repeat `--upstream-arg` for each argument; use `--upstream-arg=<value>` for flag
 | --- | --- | --- | --- |
 | `scc` | Security Command Center findings and posture | `uvx --from scc-mcp scc_mcp` | [google/mcp-security](https://github.com/google/mcp-security) |
 | `secops` | Security Operations telemetry and detections | `uvx --from google-secops-mcp secops_mcp` | [google/mcp-security](https://github.com/google/mcp-security) |
-| `firebase` | Firebase projects, applications, and data | `npx --no-install firebase-tools experimental:mcp` | [Firebase MCP documentation](https://firebase.google.com/docs/ai-assistance/mcp-server) |
+| `firebase` | Firebase projects, applications, and data | `npx --no-install firebase-tools mcp` | [Firebase MCP documentation](https://firebase.google.com/docs/ai-assistance/mcp-server) |
 | `cloudrun` | Cloud Run services, revisions, jobs, and logs | `npx -y @google-cloud/cloud-run-mcp` | Caller-installed `@google-cloud/cloud-run-mcp` package |
 | `developer-knowledge` | Developer documentation and references | `uvx google-developer-knowledge-mcp` | [Google Developer Knowledge MCP](https://developers.google.com/knowledge/mcp) |
 | `prowler` | Prowler findings, checks, and compliance | `uvx prowler-mcp` | [Prowler MCP announcement](https://prowler.com/blog/prowler-launches-lighthouse-ai-and-mcp-server-bringing-autonomous-security-to-devsecops-teams) |
@@ -355,7 +355,7 @@ Test files run sequentially so deterministic wall-clock parser budgets do not co
 各企業の担当者が本リポジトリ（**LONGINUS**）を自社 AI エージェントに読み込ませるだけで、**高額な外部コンサルティングファームと同等以上の「自社専用 DX・クラウド・AI セキュリティコンサル AI」を一瞬で構築し、外部コンサルを一切不要にします**。オフラインの GCP × Firebase 攻撃経路解析、4-Stack Code Shield、5領域アーキテクチャ成熟度スコアカード＆外部コンサル削減額試算、30/60/90日の自律改修設計書（`--format blueprint --lang ja`）、読み取り専用 MCP Airlock、および任意の Sovereign AI 証拠検証を備えています。
 
 - **Apache-2.0** — オープンソース・完全無料で自社専用コンサル AI を即時構築（`¥0`）
-- **最終更新日**: `2026-11-19`
+- **最終更新日**: `2026-11-24`
 - **Node.js >=22.18.0** — ネイティブ実行可能な erasable TypeScript
 - **npm 依存パッケージ 0** — 実行時・開発時ともに外部依存ゼロ（`npm install` 不要）
 - **オフライン／オンラインともに 100% 読み取り専用（Read-Only）＋ `0o700 ACL` ＋ `Fernet` 暗号化 ＋ `DoD 5220.22-M` 3パス消去 ＋ `ECDSA P-256` データ破棄証明書自動発行** — 対象リポジトリは `O_RDONLY | O_DIRECTORY | O_NOFOLLOW` で厳格保護。一時領域は `0o700 ACL`＋`Fernet (AES-128-CBC + HMAC-SHA256)` で暗号化し、監査終了時には米国国防総省規格 `DoD 5220.22-M` 3パス上書き消去（`0x00` → `0xFF` → `CSPRNG` + `fsync`）を実行のうえ、**`ECDSA P-256` 暗号署名入りのデータ破棄証明書** を設計書・PDF巻末に自動発行
@@ -565,7 +565,7 @@ node bin/atlas-sovereign.mjs mcp-config --client agy
 | --- | --- | --- | --- |
 | `scc` | Security Command Center の findings・セキュリティ状態 | `uvx --from scc-mcp scc_mcp` | [google/mcp-security](https://github.com/google/mcp-security) |
 | `secops` | Security Operations のテレメトリー・検出結果 | `uvx --from google-secops-mcp secops_mcp` | [google/mcp-security](https://github.com/google/mcp-security) |
-| `firebase` | Firebase のプロジェクト・アプリケーション・データ | `npx --no-install firebase-tools experimental:mcp` | [Firebase MCP ドキュメント](https://firebase.google.com/docs/ai-assistance/mcp-server) |
+| `firebase` | Firebase のプロジェクト・アプリケーション・データ | `npx --no-install firebase-tools mcp` | [Firebase MCP ドキュメント](https://firebase.google.com/docs/ai-assistance/mcp-server) |
 | `cloudrun` | Cloud Run のサービス・リビジョン・ジョブ・ログ | `npx -y @google-cloud/cloud-run-mcp` | 利用者が導入する `@google-cloud/cloud-run-mcp` パッケージ |
 | `developer-knowledge` | 開発者向けドキュメント・リファレンス | `uvx google-developer-knowledge-mcp` | [Google Developer Knowledge MCP](https://developers.google.com/knowledge/mcp) |
 | `prowler` | Prowler の findings・チェック・コンプライアンス | `uvx prowler-mcp` | [Prowler MCP 発表](https://prowler.com/blog/prowler-launches-lighthouse-ai-and-mcp-server-bringing-autonomous-security-to-devsecops-teams) |

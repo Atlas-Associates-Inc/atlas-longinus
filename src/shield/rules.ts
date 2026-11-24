@@ -329,15 +329,15 @@ const digest = crypto.createHash('sha256').update(payload).digest('hex');`,
           ),
       ),
     rootCause:
-      'クライアント制御パラメータをそのまま `fetch` や `redirect` に渡すと、クラウドメタデータ（`169.254.169.254`）読取や内部ネットワーク走査・フィッシング転送に悪用されます。',
-    defensivePatch: `// 防御パッチ: HTTPS スキーム強制 + 許可ホスト Allowlist + 内部/メタデータ IP 拒否
+      'クライアント制御パラメータをそのまま `fetch` や `redirect` に渡すと、クラウドメタデータ（`169.254.169.254` / `[::ffff:169.254.169.254]`）や IPv6 Site-Local（`fec0::/10`）・ULA（`fc00::/7`）を含む内部ネットワーク走査・フィッシング転送に悪用されます。',
+    defensivePatch: `// 防御パッチ: HTTPS スキーム強制 + 許可ホスト Allowlist + IPv6 リテラル/Site-Local(fec0::/10)/メタデータ IP 拒否
 const ALLOWED_HOSTS = new Set(['api.trusted-partner.example']);
 const parsed = new URL(rawTargetUrl);
-if (parsed.protocol !== 'https:' || !ALLOWED_HOSTS.has(parsed.hostname)) {
+if (parsed.protocol !== 'https:' || parsed.hostname.startsWith('[') || !ALLOWED_HOSTS.has(parsed.hostname)) {
   throw new Error('Blocked outbound URL by SSRF allowlist policy.');
 }`,
     verificationHint:
-      '169.254.169.254・127.0.0.1・未登録外部ドメインを渡した際にリクエスト送信前に拒否されることをテストで確認。',
+      '169.254.169.254・127.0.0.1・[fec0::1]・[::ffff:169.254.169.254]・未登録外部ドメインを渡した際にリクエスト送信前に拒否されることをテストで確認。',
   },
 
   // =========================================================================

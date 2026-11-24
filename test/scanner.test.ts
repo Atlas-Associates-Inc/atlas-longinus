@@ -270,6 +270,49 @@ describe('Longinus Defensive Security Invariants', () => {
       ),
       'high',
     );
+    assert.equal(selectOptimalReasoningLevel({ findings: [] }, 'gemini-4-carbon'), 'high');
+    assert.equal(selectOptimalReasoningLevel({ findings: [] }, 'gemini-4-neon'), 'medium');
+    assert.equal(
+      selectOptimalReasoningLevel(
+        { findings: [{ severity: 'high', stack: 'ts-web-api' } as never] },
+        'gemini-4-neon',
+      ),
+      'high',
+    );
+    assert.equal(
+      selectOptimalReasoningLevel(
+        { findings: [{ severity: 'critical', stack: 'supply-chain-secrets' } as never] },
+        'gemini-4-neon',
+      ),
+      'xhigh',
+    );
+    assert.equal(selectOptimalReasoningLevel({ findings: [] }, 'gemini-4-hydrogen'), 'low');
+    assert.equal(
+      selectOptimalReasoningLevel(
+        { findings: [{ severity: 'high', stack: 'ts-web-api' } as never] },
+        'gemini-4-hydrogen',
+      ),
+      'medium',
+    );
+    assert.equal(
+      selectOptimalReasoningLevel(
+        {
+          findings: [
+            { severity: 'high', stack: 'ts-web-api' } as never,
+            { severity: 'high', stack: 'python-go-cloud' } as never,
+          ],
+        },
+        'gemini-4-hydrogen',
+      ),
+      'high',
+    );
+    assert.equal(
+      selectOptimalReasoningLevel(
+        { findings: [{ severity: 'critical', stack: 'supply-chain-secrets' } as never] },
+        'gemini-4-hydrogen',
+      ),
+      'xhigh',
+    );
   });
 
   it('enforces AT_FDCWD symlink rejection, streaming opendir budget, and skipped-file byte accounting', async () => {

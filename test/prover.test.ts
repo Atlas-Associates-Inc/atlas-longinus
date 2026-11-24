@@ -169,6 +169,50 @@ test('Gemini REST ignores thinking parts but requires verdict text and rejects t
       'https://us-central1-aiplatform.googleapis.com/v1/projects/atlas-sec-prod/locations/us-central1/publishers/google/models/gemini-4-hydrogen-xhigh:generateContent',
     ]);
   });
+  await t.test('ATLAS_PROVER_ARCHITECT_MODEL routes gemini-4-carbon-high and gemini-4-neon-xhigh and fails closed on unapproved models', async (t) => {
+    for (const architectModel of ['gemini-4-carbon-high', 'gemini-4-neon-xhigh']) {
+      await t.test(architectModel, async (t) => {
+        environment(t, {
+          ATLAS_GEMINI_BACKEND: 'gemini',
+          GEMINI_API_KEY: 'synthetic-fixture-key',
+          ATLAS_PROVER_ARCHITECT_MODEL: architectModel,
+        });
+        const requestedUrls: string[] = [];
+        t.mock.method(globalThis, 'fetch', async (input: unknown) => {
+          requestedUrls.push(String(input));
+          return new Response(JSON.stringify({ candidates: [
+            { finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(pass) }] } },
+          ] }), { headers: { 'content-type': 'application/json' } });
+        });
+        const result = await runProver(evidence, { mode: 'gemini' });
+        assert.equal(result.status, 'PASS');
+        assert.equal(result.lanes.argonArchitect.model, architectModel);
+        assert.equal(result.lanes.geminiRedTeam.model, 'gemini-4-hydrogen-xhigh');
+        assert.deepEqual(requestedUrls.sort(), [
+          `https://generativelanguage.googleapis.com/v1beta/models/${architectModel}:generateContent`,
+          'https://generativelanguage.googleapis.com/v1beta/models/gemini-4-hydrogen-xhigh:generateContent',
+        ].sort());
+      });
+    }
+    await t.test('unapproved model fails closed', async (t) => {
+      environment(t, {
+        ATLAS_GEMINI_BACKEND: 'gemini',
+        GEMINI_API_KEY: 'synthetic-fixture-key',
+        ATLAS_PROVER_ARCHITECT_MODEL: 'claude-opus-5-5-high',
+      });
+      const requestedUrls: string[] = [];
+      t.mock.method(globalThis, 'fetch', async (input: unknown) => {
+        requestedUrls.push(String(input));
+        return new Response(JSON.stringify({ candidates: [
+          { finishReason: 'STOP', content: { parts: [{ text: JSON.stringify(pass) }] } },
+        ] }), { headers: { 'content-type': 'application/json' } });
+      });
+      const result = await runProver(evidence, { mode: 'gemini' });
+      assert.equal(result.status, 'ERROR');
+      assert.equal(result.lanes.argonArchitect.status, 'ERROR');
+      assert.equal(requestedUrls.some(url => url.includes('claude')), false);
+    });
+  });
 });
 
 for (const { mode, lanes: [first, second] } of modes) {

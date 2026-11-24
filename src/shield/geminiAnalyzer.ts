@@ -38,7 +38,13 @@ export class ClosedSchemaValidationError extends Error {
   }
 }
 
-const ALLOWED_GEMINI_MODELS = new Set(['gemini-3.8-flash', 'gemini-4-argon']);
+const ALLOWED_GEMINI_MODELS = new Set<AnalysisMode>([
+  'gemini-4-carbon',
+  'gemini-4-neon',
+  'gemini-4-hydrogen',
+  'gemini-4-argon',
+  'gemini-3.8-flash',
+]);
 
 const PATCH_TEMPLATE_IDS = Object.keys(DEFENSIVE_PATCH_TEMPLATES) as [
   DefensivePatchTemplateId,
@@ -587,10 +593,11 @@ function sanitizeDisplayLabel(raw: string): string {
 }
 
 /**
- * Selects the optimal Gemini reasoning (`thinking_level`) per role and static finding telemetry:
- * - `gemini-4-argon` (Argon High): dedicated to deep threat analysis, investigation & root-cause planning -> always `'high'`.
- * - `gemini-3.8-flash`: dedicated to fast defensive patch mapping -> dynamically scales `'low' | 'medium' | 'high'`
- *   (`'minimal'` is intentionally excluded because `gemini-3.8-flash` supports only `low` / `medium` / `high`).
+ * Selects the optimal Gemini reasoning (`thinking_level`) per model and static finding telemetry:
+ * - `gemini-4-carbon` / `gemini-4-argon`: deep threat analysis, investigation & root-cause planning -> always `'high'` (max supported).
+ * - `gemini-4-neon`: 2026-11 GA balanced frontier model -> scales `'medium' | 'high' | 'xhigh'`.
+ * - `gemini-4-hydrogen`: fast agentic execution model -> scales `'low' | 'medium' | 'high' | 'xhigh'`.
+ * - `gemini-3.8-flash`: previous-gen Flash -> scales `'low' | 'medium' | 'high'`.
  * - `deterministic`: 0-token offline mode -> `'none'`.
  */
 export function selectOptimalReasoningLevel(
@@ -600,13 +607,35 @@ export function selectOptimalReasoningLevel(
   if (mode === 'deterministic') {
     return 'none';
   }
-  if (mode === 'gemini-4-argon') {
+  if (mode === 'gemini-4-carbon' || mode === 'gemini-4-argon') {
     return 'high';
   }
   const criticalCount = scan.findings.filter((f) => f.severity === 'critical').length;
   const highCount = scan.findings.filter((f) => f.severity === 'high').length;
   const mediumCount = scan.findings.filter((f) => f.severity === 'medium').length;
   const activeStacks = new Set(scan.findings.map((f) => f.stack)).size;
+
+  if (mode === 'gemini-4-neon') {
+    if (criticalCount >= 1 || highCount >= 3 || activeStacks >= 3) {
+      return 'xhigh';
+    }
+    if (highCount >= 1 || mediumCount >= 2) {
+      return 'high';
+    }
+    return 'medium';
+  }
+  if (mode === 'gemini-4-hydrogen') {
+    if (criticalCount >= 1) {
+      return 'xhigh';
+    }
+    if (highCount >= 2 || activeStacks >= 3) {
+      return 'high';
+    }
+    if (highCount >= 1 || mediumCount >= 2) {
+      return 'medium';
+    }
+    return 'low';
+  }
 
   if (criticalCount >= 1 || highCount >= 3 || activeStacks >= 3) {
     return 'high';
@@ -898,6 +927,7 @@ export async function executeDefensiveAudit(params: {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Api-Revision': '2026-05-20',
             'x-goog-api-key': resolvedApiKey,
           },
           body: JSON.stringify({
