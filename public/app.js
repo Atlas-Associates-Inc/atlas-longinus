@@ -644,8 +644,12 @@
     portfolioSection.hidden = false;
 
     clearChildren(portfolioKpis);
+    const repoCountLabel =
+      typeof portfolio.evaluatedRepos === 'number' && portfolio.evaluatedRepos < portfolio.totalRepos
+        ? `対象プロダクト: ${portfolio.totalRepos} 件（評価済 ${portfolio.evaluatedRepos} 件）`
+        : `対象プロダクト: ${portfolio.totalRepos} 件`;
     const fleetMetrics = [
-      `対象プロダクト: ${portfolio.totalRepos} 件`,
+      repoCountLabel,
       `平均防御スコア: ${portfolio.averageDefenseScore} / 100`,
       `Critical 要対処: ${portfolio.criticalReposCount} リポジトリ`,
       `ローカル保護機密: ${portfolio.totalRedactedSecrets} 箇所`,
@@ -663,13 +667,16 @@
       tr.appendChild(th);
 
       const tdScore = el('td');
-      const scoreBadgeClass =
-        repo.overallDefenseScore >= 85
+      const isEvaluated = repo.evaluated !== false;
+      const scoreBadgeClass = !isEvaluated
+        ? 'pill pill-blue'
+        : repo.overallDefenseScore >= 85
           ? 'pill pill-emerald'
           : repo.overallDefenseScore >= 60
             ? 'pill pill-amber'
             : 'pill pill-crimson';
-      tdScore.appendChild(el('span', scoreBadgeClass, `${repo.overallDefenseScore} / 100`));
+      const scoreText = isEvaluated ? `${repo.overallDefenseScore} / 100` : 'N/A (UNSCOPED)';
+      tdScore.appendChild(el('span', scoreBadgeClass, scoreText));
       tr.appendChild(tdScore);
 
       const truncTag = repo.scanTruncated ? ' (部分走査)' : '';
@@ -678,9 +685,11 @@
       const tdCounts = el(
         'td',
         '',
-        repo.criticalCount + repo.highCount > 0
-          ? `⚠️ C:${repo.criticalCount} / H:${repo.highCount} / M:${repo.mediumCount}`
-          : `✓ C:0 / H:0 / M:${repo.mediumCount}`,
+        !isEvaluated
+          ? '— 未評価 (0 code files)'
+          : repo.criticalCount + repo.highCount > 0
+            ? `⚠️ C:${repo.criticalCount} / H:${repo.highCount} / M:${repo.mediumCount}`
+            : `✓ C:0 / H:0 / M:${repo.mediumCount}`,
       );
       tr.appendChild(tdCounts);
 

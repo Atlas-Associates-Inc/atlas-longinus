@@ -1114,4 +1114,29 @@ describe('Longinus Defensive Security Invariants', () => {
       await fs.rm(emptyDir, { recursive: true, force: true });
     }
   });
+
+  it('marks docs-only repos as evaluated: false (UNSCOPED) and excludes them from fleet averageDefenseScore', async () => {
+    const tmpFleet = await fs.mkdtemp(path.join(os.tmpdir(), 'longinus-portfolio-unscoped-'));
+    try {
+      const codeRepo = path.join(tmpFleet, 'zeta-app');
+      const docsRepo = path.join(tmpFleet, 'alpha-docs-only');
+      await fs.mkdir(codeRepo, { recursive: true });
+      await fs.mkdir(docsRepo, { recursive: true });
+      await fs.writeFile(path.join(codeRepo, 'index.ts'), 'export const ping = () => "ok";\n', 'utf8');
+      await fs.writeFile(path.join(docsRepo, 'README.md'), '# Documentation Only\nNo code files here.\n', 'utf8');
+
+      const portfolio = await scanPortfolioDirectory({ portfolioRoot: tmpFleet });
+      assert.equal(portfolio.totalRepos, 2);
+      assert.equal(portfolio.evaluatedRepos, 1);
+      assert.equal(portfolio.averageDefenseScore, 98);
+      assert.equal(portfolio.repos[0]?.dirName, 'zeta-app');
+      assert.equal(portfolio.repos[0]?.evaluated, true);
+      assert.equal(portfolio.repos[1]?.dirName, 'alpha-docs-only');
+      assert.equal(portfolio.repos[1]?.evaluated, false);
+      assert.equal(portfolio.repos[1]?.overallDefenseScore, 0);
+      assert.match(portfolio.repos[1]?.topAction ?? '', /UNSCOPED/);
+    } finally {
+      await fs.rm(tmpFleet, { recursive: true, force: true });
+    }
+  });
 });

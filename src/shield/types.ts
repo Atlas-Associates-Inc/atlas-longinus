@@ -165,6 +165,7 @@ export interface PortfolioRepoSummary {
   dirName: string;
   repoName: string;
   targetPath: string;
+  evaluated: boolean;
   overallDefenseScore: number;
   scannedFiles: number;
   scanTruncated: boolean;
@@ -183,6 +184,7 @@ export interface PortfolioReport {
   scannedAt: string;
   durationMs: number;
   totalRepos: number;
+  evaluatedRepos: number;
   averageDefenseScore: number;
   criticalReposCount: number;
   totalRedactedSecrets: number;

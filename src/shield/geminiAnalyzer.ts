@@ -1155,6 +1155,8 @@ export async function scanPortfolioDirectory(params: {
           continue;
         }
 
+        const evaluated =
+          report.findings.length > 0 || report.stackSummaries.some((s) => s.evaluated);
         const criticalCount = report.findings.filter((f) => f.severity === 'critical').length;
         const highCount = report.findings.filter((f) => f.severity === 'high').length;
         const mediumCount = report.findings.filter((f) => f.severity === 'medium').length;
@@ -1172,12 +1174,15 @@ export async function scanPortfolioDirectory(params: {
 
         const topAction = report.findings[0]
           ? `${report.findings[0].ruleId}: ${report.findings[0].title}`
-          : '✓ 重大な静的露出なし（CI ゲート継続監視）';
+          : evaluated
+            ? '✓ 重大な静的露出なし（CI ゲート継続監視）'
+            : '— 評価対象のコード・構成ファイル 0 件（UNSCOPED）';
 
         repos.push({
           dirName: sanitizePortfolioDirName(name),
           repoName: report.repoName,
           targetPath: report.targetPath,
+          evaluated,
           overallDefenseScore: report.overallDefenseScore,
           scannedFiles: report.scannedFiles,
           scanTruncated: report.scanTruncated,
@@ -1202,15 +1207,20 @@ export async function scanPortfolioDirectory(params: {
 
   repos.sort(
     (a, b) =>
+      Number(b.evaluated) - Number(a.evaluated) ||
       a.overallDefenseScore - b.overallDefenseScore ||
       b.criticalCount - a.criticalCount ||
       a.dirName.localeCompare(b.dirName),
   );
 
   const totalRepos = repos.length;
+  const evaluatedRepoList = repos.filter((r) => r.evaluated);
+  const evaluatedRepos = evaluatedRepoList.length;
   const averageDefenseScore =
-    totalRepos > 0
-      ? Math.round(repos.reduce((sum, r) => sum + r.overallDefenseScore, 0) / totalRepos)
+    evaluatedRepos > 0
+      ? Math.round(
+          evaluatedRepoList.reduce((sum, r) => sum + r.overallDefenseScore, 0) / evaluatedRepos,
+        )
       : 0;
   const criticalReposCount = repos.filter((r) => r.criticalCount > 0).length;
   const totalRedactedSecrets = repos.reduce((sum, r) => sum + r.redactedSecretsCount, 0);
@@ -1220,6 +1230,7 @@ export async function scanPortfolioDirectory(params: {
     scannedAt: new Date().toISOString(),
     durationMs: Math.max(1, Math.round(performance.now() - startedAt)),
     totalRepos,
+    evaluatedRepos,
     averageDefenseScore,
     criticalReposCount,
     totalRedactedSecrets,
