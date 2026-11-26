@@ -42,6 +42,7 @@ export interface SecurityFinding {
   defensivePatch: string;
   verificationHint: string;
   source: 'static-rule' | 'gemini-architecture';
+  orphanAsset?: boolean;
 }
 
 export interface TrustBoundaryNode {
@@ -149,6 +150,7 @@ export interface AuditReport {
   tokenEstimate: number;
   overallDefenseScore: number;
   executiveSummary: string;
+  remediationPrompt: string;
   priorityRoadmap: RoadmapStep[];
   strideMatrix: StrideScoreItem[];
   stackSummaries: StackPostureSummary[];

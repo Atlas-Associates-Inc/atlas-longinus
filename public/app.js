@@ -42,6 +42,7 @@
   const dialogPatch = /** @type {HTMLElement} */ (document.getElementById('dialog-patch'));
   const dialogVerify = /** @type {HTMLElement} */ (document.getElementById('dialog-verify'));
   const copyPatchBtn = /** @type {HTMLButtonElement} */ (document.getElementById('copy-patch-btn'));
+  const copyPromptBtn = /** @type {HTMLButtonElement | null} */ (document.getElementById('copy-prompt-btn'));
 
   // Mandatory fallback for browsers without native <dialog closedby="any"> support (e.g. Safari)
   if (dialog && !('closedBy' in HTMLDialogElement.prototype)) {
@@ -547,6 +548,23 @@
       copyPatchBtn.textContent = '選択してコピーしてください';
     }
   });
+
+  if (copyPromptBtn) {
+    copyPromptBtn.addEventListener('click', async () => {
+      const promptText = latestReport?.remediationPrompt || '';
+      if (!promptText) {
+        setStatus('まず監査を実行して修正プロンプトを生成してください。', true);
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(promptText);
+        copyPromptBtn.textContent = '✓ プロンプトをコピー済';
+        setStatus('第一原理ガード付き修正プロンプトをクリップボードにコピーしました。', false);
+      } catch {
+        setStatus('クリップボードへのコピーがブロックされました。CLI (--emit-prompt) をご利用ください。', true);
+      }
+    });
+  }
 
   /**
    * @param {{ targetPath: string, mode: string, apiKey?: string, excludeFixtures?: boolean }} reqData

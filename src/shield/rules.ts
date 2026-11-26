@@ -3,6 +3,25 @@ import { parseFirebaseRules } from '../graph/firebase-rules-parser.ts';
 import { PUBLIC_ENV_SECRET_RE, redactSecrets } from './redactor.ts';
 import type { SecurityFinding, SeverityLevel, StackDomain, StrideCategory } from './types.ts';
 
+export interface JsLocalImportEdge {
+  importedIdentifiers: readonly string[];
+  rawSpecifier: string;
+  targetRelativePath?: string;
+}
+
+export interface JsModuleRecord {
+  relativePath: string;
+  redactedContent: string;
+  redactedLines: readonly string[];
+  localImports: JsLocalImportEdge[];
+}
+
+export interface RepoScanContext {
+  jsModules: ReadonlyMap<string, JsModuleRecord>;
+  publicHostingRewriteFunctions: ReadonlySet<string>;
+  orphanDirectories: ReadonlySet<string>;
+}
+
 export interface FileContext {
   relativePath: string;
   baseName: string;
@@ -11,6 +30,16 @@ export interface FileContext {
   redactedLines: readonly string[];
   redactedLineNumbers: readonly number[];
   skipSelfPatternDefinitions?: boolean;
+  repoContext?: RepoScanContext;
+}
+
+export interface StaticRuleMatch {
+  line: number;
+  snippet: string;
+  severityOverride?: SeverityLevel;
+  rootCauseOverride?: string;
+  defensivePatchOverride?: string;
+  orphanAsset?: boolean;
 }
 
 export interface StaticRule {
@@ -22,7 +51,7 @@ export interface StaticRule {
   cwe: string;
   owaspAsvs: string;
   appliesTo: (ctx: FileContext) => boolean;
-  evaluate: (ctx: FileContext) => Array<{ line: number; snippet: string }>;
+  evaluate: (ctx: FileContext) => StaticRuleMatch[];
   rootCause: string;
   defensivePatch: string;
   verificationHint: string;
@@ -87,25 +116,669 @@ function sliceRedactedWindow(lines: readonly string[], zeroBasedIndex: number): 
   return lines.slice(start, end).join('\n');
 }
 
+type LinePredicateResult = boolean | Omit<StaticRuleMatch, 'line' | 'snippet'>;
+
 function findMatchingLines(
   ctx: FileContext,
-  matcher: (line: string, lineIndex: number, allLines: readonly string[]) => boolean,
+  matcher: (line: string, lineIndex: number, allLines: readonly string[]) => LinePredicateResult,
   maxPerFile = 3,
-): Array<{ line: number; snippet: string }> {
-  const hits: Array<{ line: number; snippet: string }> = [];
+): StaticRuleMatch[] {
+  const hits: StaticRuleMatch[] = [];
   for (let i = 0; i < ctx.redactedLines.length; i++) {
     const line = ctx.redactedLines[i] ?? '';
     const trimmed = line.trim();
     if (!trimmed || isCommentOrRegexDef(trimmed)) continue;
-    if (matcher(line, i, ctx.redactedLines)) {
-      hits.push({
-        line: i + 1,
-        snippet: sliceRedactedWindow(ctx.redactedLines, i),
-      });
-      if (hits.length >= maxPerFile) break;
-    }
+    const outcome = matcher(line, i, ctx.redactedLines);
+    if (!outcome) continue;
+    hits.push({
+      line: i + 1,
+      snippet: sliceRedactedWindow(ctx.redactedLines, i),
+      ...(typeof outcome === 'object' ? outcome : {}),
+    });
+    if (hits.length >= maxPerFile) break;
   }
   return hits;
+}
+
+const REGEX_ESCAPE_RE = /[.*+?^${}()|[\]\\]/g;
+function escapeRegExp(literal: string): string {
+  return literal.replace(REGEX_ESCAPE_RE, '\\$&');
+}
+
+function extractIdentifiersFromBinding(binding: string): string[] {
+  const out = new Set<string>();
+  const cleaned = binding.replace(/\/\*[\s\S]*?\*\//g, ' ');
+  for (const part of cleaned.split(',')) {
+    const parts = part.split(/\s*(?:\bas\b|:)\s*/);
+    for (const piece of parts) {
+      const matches = piece.match(/[A-Za-z_$][A-Za-z0-9_$]*/g);
+      if (!matches) continue;
+      for (const tok of matches) {
+        if (tok !== 'type' && tok !== 'default') {
+          out.add(tok);
+        }
+      }
+    }
+  }
+  return Array.from(out);
+}
+
+/**
+ * Extracts relative CommonJS (`require('./...')`) and ESM (`import ... from './...'`)
+ * edges from a single JS/TS file for 1-to-2 hop verification without loading external packages.
+ */
+export function parseLocalJsImports(redactedContent: string): JsLocalImportEdge[] {
+  const stripped = redactedContent
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/^[ \t]*\/\/.*$/gm, '');
+  const edges: JsLocalImportEdge[] = [];
+  const seenKey = new Set<string>();
+
+  const pushEdge = (rawSpecifier: string, ids: string[]): void => {
+    if (!rawSpecifier.startsWith('./') && !rawSpecifier.startsWith('../')) return;
+    const key = `${rawSpecifier}:${ids.join(',')}`;
+    if (seenKey.has(key)) return;
+    seenKey.add(key);
+    edges.push({ importedIdentifiers: ids, rawSpecifier });
+  };
+
+  const cjsRe =
+    /(?:(?:const|let|var)\s+(\{[^}]{1,600}\}|[A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*)?require\s*\(\s*['"](\.\.?\/[^'"]+)['"]\s*\)/g;
+  for (const m of stripped.matchAll(cjsRe)) {
+    pushEdge(m[2] ?? '', m[1] ? extractIdentifiersFromBinding(m[1]) : []);
+  }
+
+  const esmRe =
+    /\bimport\s+(?:(\{[^}]{1,600}\}|[A-Za-z0-9_$*,\s{}]{1,240}?)\s+from\s+)?['"](\.\.?\/[^'"]+)['"]/g;
+  for (const m of stripped.matchAll(esmRe)) {
+    pushEdge(m[2] ?? '', m[1] ? extractIdentifiersFromBinding(m[1]) : []);
+  }
+
+  const reExportRe = /\bexport\s+(?:\*|\{[^}]{1,600}\})\s+from\s+['"](\.\.?\/[^'"]+)['"]/g;
+  for (const m of stripped.matchAll(reExportRe)) {
+    pushEdge(m[1] ?? '', []);
+  }
+
+  const dynImportRe = /\bimport\s*\(\s*['"](\.\.?\/[^'"]+)['"]\s*\)/g;
+  for (const m of stripped.matchAll(dynImportRe)) {
+    pushEdge(m[1] ?? '', []);
+  }
+
+  return edges;
+}
+
+const JS_TS_RESOLVE_EXTS = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'];
+
+export function resolveRelativeModulePath(
+  fromFilePath: string,
+  specifier: string,
+  knownPaths: ReadonlySet<string>,
+): string | undefined {
+  if (!specifier.startsWith('./') && !specifier.startsWith('../')) return undefined;
+  const fromDir = path.posix.dirname(fromFilePath);
+  const rawJoined = fromDir === '.' ? specifier : `${fromDir}/${specifier}`;
+  const normalized = path.posix.normalize(rawJoined);
+  if (normalized.startsWith('../') || normalized === '..') return undefined;
+
+  if (knownPaths.has(normalized)) return normalized;
+  const extMatch = normalized.match(/(\.(?:m|c)?js)$/i);
+  if (extMatch) {
+    const stem = normalized.slice(0, -extMatch[1].length);
+    for (const tsExt of ['.ts', '.tsx', '.mts', '.cts']) {
+      if (knownPaths.has(`${stem}${tsExt}`)) return `${stem}${tsExt}`;
+    }
+  }
+  for (const ext of JS_TS_RESOLVE_EXTS) {
+    if (knownPaths.has(`${normalized}${ext}`)) return `${normalized}${ext}`;
+  }
+  for (const ext of JS_TS_RESOLVE_EXTS) {
+    if (knownPaths.has(`${normalized}/index${ext}`)) return `${normalized}/index${ext}`;
+  }
+  return undefined;
+}
+
+function hasWholeIdentifier(haystack: string, identifier: string): boolean {
+  if (!identifier) return false;
+  return new RegExp(`(?<![A-Za-z0-9_$])${escapeRegExp(identifier)}(?![A-Za-z0-9_$])`).test(haystack);
+}
+
+function stripJsCommentsSimple(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^[ \t]*\/\/.*$/gm, '');
+}
+
+function extractBalancedSlice(
+  lines: readonly string[],
+  startLineIdx: number,
+  startCol: number,
+  openChar: '(' | '{',
+  closeChar: ')' | '}',
+  maxLines = 180,
+): string {
+  let depth = 0;
+  let started = false;
+  let quote: string | null = null;
+  const out: string[] = [];
+  const limit = Math.min(lines.length, startLineIdx + maxLines);
+  for (let i = startLineIdx; i < limit; i++) {
+    const line = lines[i] ?? '';
+    const colStart = i === startLineIdx ? startCol : 0;
+    out.push(i === startLineIdx ? line.slice(colStart) : line);
+    for (let j = colStart; j < line.length; j++) {
+      const ch = line[j] ?? '';
+      if (quote) {
+        if (ch === '\\') {
+          j += 1;
+          continue;
+        }
+        if (ch === quote) quote = null;
+        continue;
+      }
+      if (ch === '/' && line[j + 1] === '/') break;
+      if (ch === '"' || ch === "'" || ch === '`') {
+        quote = ch;
+        continue;
+      }
+      if (ch === openChar) {
+        depth += 1;
+        started = true;
+      } else if (ch === closeChar && started) {
+        depth -= 1;
+        if (depth <= 0) return out.join('\n');
+      }
+    }
+  }
+  return out.join('\n');
+}
+
+function extractLocalSymbolBody(lines: readonly string[], symbolName: string): string {
+  const esc = escapeRegExp(symbolName);
+  const fnRe = new RegExp(`(?:^|[;\\s])(?:async\\s+)?function\\s+${esc}\\s*\\(`);
+  const varRe = new RegExp(`(?:(?:const|let|var)\\s+|exports\\.)${esc}\\s*=\\s*(?!onRequest\\b)`);
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? '';
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('*')) continue;
+    if (fnRe.test(line)) {
+      for (let k = i; k < Math.min(lines.length, i + 8); k++) {
+        const braceCol = (lines[k] ?? '').indexOf('{');
+        if (braceCol >= 0) {
+          return extractBalancedSlice(lines, k, braceCol, '{', '}', 200);
+        }
+      }
+    } else if (varRe.test(line)) {
+      const eqCol = line.indexOf('=');
+      if (eqCol < 0) continue;
+      const afterEq = line.slice(eqCol + 1);
+      const arrowIdx = afterEq.indexOf('=>');
+      if (arrowIdx >= 0) {
+        const restCol = eqCol + 1 + arrowIdx + 2;
+        for (let k = i; k < Math.min(lines.length, i + 6); k++) {
+          const braceCol = (lines[k] ?? '').indexOf('{', k === i ? restCol : 0);
+          if (braceCol >= 0) {
+            return extractBalancedSlice(lines, k, braceCol, '{', '}', 200);
+          }
+          if ((lines[k] ?? '').includes(';')) break;
+        }
+      }
+      const parenCol = line.indexOf('(', eqCol + 1);
+      if (parenCol >= 0) {
+        return line.slice(eqCol + 1) + '\n' + extractBalancedSlice(lines, i, parenCol, '(', ')', 40);
+      }
+      return lines.slice(i, Math.min(lines.length, i + 10)).join('\n');
+    }
+  }
+  return '';
+}
+
+const AUTH_OR_APPCHECK_PROOF_RE =
+  /\b(?:verifyIdToken|verifySessionCookie|enforceAppCheck\s*:\s*true|appCheck\s*\(\s*\)\s*\.\s*verifyToken|verifyAppCheck|X-Firebase-AppCheck|timingSafeEqual|createHmac|createVerify|crypto\.verify(?=\s*\()|constructEvent|verifyWebhook|verifyAndDecodeAppleJws|stripe-signature|svix-signature|wellKnown|apple-app-site-association|assetlinks)\b/i;
+
+const DB_OR_STORAGE_MUTATION_RE =
+  /\b(?:collection|collectionGroup)\s*\([^)]*\)\s*\.\s*add\s*\(|\bdoc\s*\([^)]*\)\s*\.\s*(?:set|update|delete|create)\s*\(|\b(?:db|database|firestore)\s*\.\s*(?:runTransaction|batch)\s*\(|\b(?:tx|transaction|batch)\s*\.\s*(?:set|update|delete|create|commit)\s*\(|\b(?:bucket|storage)\b[\s\S]{0,80}?\.\s*(?:save|upload|delete|createWriteStream)\s*\(/i;
+
+function extractImportedScopedText(
+  mod: JsModuleRecord,
+  importedIdentifiers: readonly string[],
+): string {
+  if (importedIdentifiers.length === 0) return mod.redactedContent;
+  const parts: string[] = [];
+  const seen = new Set<string>();
+  const skip = new Set([
+    'req', 'res', 'request', 'response', 'error', 'async', 'await', 'return',
+    'const', 'let', 'var', 'function', 'if', 'else', 'try', 'catch', 'throw', 'new', 'true', 'false', 'null',
+  ]);
+  for (const id of importedIdentifiers) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const body = extractLocalSymbolBody(mod.redactedLines, id);
+    if (body) parts.push(body);
+  }
+  if (parts.length === 0) return mod.redactedContent;
+  const tokens = parts.join('\n').match(/\b[A-Za-z_$][A-Za-z0-9_$]{1,64}\b/g) ?? [];
+  for (const tok of tokens) {
+    if (skip.has(tok) || seen.has(tok)) continue;
+    seen.add(tok);
+    const body = extractLocalSymbolBody(mod.redactedLines, tok);
+    if (body) parts.push(body);
+  }
+  return parts.join('\n');
+}
+
+function shouldPassOnRequest(
+  ctx: FileContext,
+  lineIdx: number,
+  allLines: readonly string[],
+): boolean {
+  const headerSlice = allLines.slice(Math.max(0, lineIdx - 2), lineIdx + 1).join('\n');
+  const exportMatch = headerSlice.match(
+    /(?:exports\.|module\.exports\.|export\s+(?:const|let|var)\s+)([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*(?:[^;{]*\s)?onRequest\s*\(/,
+  );
+  const constMatch =
+    exportMatch ??
+    headerSlice.match(/(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*onRequest\s*\(/);
+  const exportedName = constMatch?.[1];
+
+  const col = (allLines[lineIdx] ?? '').indexOf('onRequest');
+  const callSlice = extractBalancedSlice(allLines, lineIdx, Math.max(0, col), '(', ')', 160);
+
+  // Hop 0: follow local helper functions/factories referenced in this onRequest call (2 sub-hops)
+  const localBodyParts: string[] = [callSlice];
+  const resolvedLocalSymbols = new Set<string>();
+  const skipTokens = new Set([
+    'onRequest', 'req', 'res', 'request', 'response', 'error', 'async', 'await', 'return',
+    'const', 'let', 'var', 'function', 'if', 'else', 'try', 'catch', 'throw', 'new', 'true', 'false', 'null',
+    exportedName ?? '',
+  ]);
+  for (let hop0 = 0; hop0 < 2; hop0++) {
+    const combined = localBodyParts.join('\n');
+    const tokens = combined.match(/\b[A-Za-z_$][A-Za-z0-9_$]{1,64}\b/g) ?? [];
+    for (const tok of tokens) {
+      if (skipTokens.has(tok) || resolvedLocalSymbols.has(tok)) continue;
+      resolvedLocalSymbols.add(tok);
+      const body = extractLocalSymbolBody(allLines, tok);
+      if (body) localBodyParts.push(body);
+    }
+  }
+  const localReachableText = localBodyParts.join('\n');
+
+  // Hop 1 & Hop 2: follow local relative imports from jsModules strictly up to 2 hops
+  const importedContents: string[] = [];
+  const scopedImportedContents: string[] = [];
+  const jsModules = ctx.repoContext?.jsModules;
+  const selfRecord = jsModules?.get(ctx.relativePath);
+  const onRequestCountInFile = (ctx.redactedContent.match(/\bonRequest\s*\(/g) ?? []).length;
+
+  if (jsModules && selfRecord) {
+    const visited = new Set<string>([ctx.relativePath]);
+    const hop1Entries: Array<{ mod: JsModuleRecord; scopedText: string }> = [];
+    for (const edge of selfRecord.localImports) {
+      if (!edge.targetRelativePath || visited.has(edge.targetRelativePath)) continue;
+      const usedDirectly = edge.importedIdentifiers.some((id) =>
+        hasWholeIdentifier(localReachableText, id),
+      );
+      if (edge.importedIdentifiers.length > 0 && !usedDirectly) {
+        continue;
+      }
+      if (edge.importedIdentifiers.length === 0 && !(onRequestCountInFile === 1 && selfRecord.localImports.length <= 6)) {
+        continue;
+      }
+      const mod = jsModules.get(edge.targetRelativePath);
+      if (mod) {
+        visited.add(mod.relativePath);
+        const scopedText = extractImportedScopedText(mod, edge.importedIdentifiers);
+        hop1Entries.push({ mod, scopedText });
+        importedContents.push(mod.redactedContent);
+        scopedImportedContents.push(scopedText);
+      }
+    }
+    for (const h1 of hop1Entries) {
+      for (const edge2 of h1.mod.localImports) {
+        if (!edge2.targetRelativePath || visited.has(edge2.targetRelativePath)) continue;
+        if (
+          edge2.importedIdentifiers.length > 0 &&
+          !edge2.importedIdentifiers.some((id) => hasWholeIdentifier(h1.scopedText, id))
+        ) {
+          continue;
+        }
+        const mod2 = jsModules.get(edge2.targetRelativePath);
+        if (mod2) {
+          visited.add(mod2.relativePath);
+          importedContents.push(mod2.redactedContent);
+          scopedImportedContents.push(extractImportedScopedText(mod2, edge2.importedIdentifiers));
+        }
+      }
+    }
+  }
+
+  const reachableText = stripJsCommentsSimple(
+    [localReachableText, ...importedContents].join('\n'),
+  );
+  const mutationReachableText = stripJsCommentsSimple(
+    [localReachableText, ...scopedImportedContents].join('\n'),
+  );
+
+  // 1. Auth, App Check, HMAC / timingSafeEqual / ECDSA crypto.verify, or .well-known
+  if (AUTH_OR_APPCHECK_PROOF_RE.test(reachableText)) {
+    return true;
+  }
+
+  // 2. Public GET/HEAD-only Firebase Hosting rewrite target or public CDN-cached catalog API
+  const enforcesGetHeadOnly =
+    /(?:req\.method|method)\s*!==\s*['"]GET['"]|\b405\b|methodNotAllowed|method-not-allowed/i.test(
+      reachableText,
+    );
+  const hasDbOrStorageMutation = DB_OR_STORAGE_MUTATION_RE.test(mutationReachableText);
+  if (enforcesGetHeadOnly && !hasDbOrStorageMutation) {
+    const isPublicHostingTarget = Boolean(
+      exportedName && ctx.repoContext?.publicHostingRewriteFunctions.has(exportedName),
+    );
+    const hasPublicCacheHeaders =
+      /\b(?:s-maxage\s*=|stale-while-revalidate)\b/i.test(reachableText) ||
+      (/\bCache-Control\b/i.test(reachableText) && /\bpublic\b/i.test(reachableText));
+    const readsAuthCookies =
+      /\b(?:req\.cookies|req\.headers\.cookie|req\.headers\.authorization|req\.get\s*\(\s*['"](?:cookie|authorization)['"]\s*\))/i.test(
+        reachableText,
+      );
+    const touchesSensitiveUserCollections =
+      /\bcollection\s*\(\s*['"](?:users|accounts|orders|payments|sessions|tokens|secrets|admin)['"]/i.test(
+        reachableText,
+      );
+    if (
+      isPublicHostingTarget ||
+      (hasPublicCacheHeaders && !readsAuthCookies && !touchesSensitiveUserCollections)
+    ) {
+      return true;
+    }
+  }
+
+  // 3. Retired / no-op stub endpoint: zero DB/Storage, zero Secrets, zero external HTTP/AI/exec calls
+  const touchesDbOrStorage =
+    /\b(?:firestore|getFirestore|collection|collectionGroup|doc|runTransaction|batch|getDatabase|getStorage|bucket)\s*\(|\bdb\./i.test(
+      reachableText,
+    );
+  const touchesSecrets = /\bsecrets\s*:|defineSecret\s*\(|process\.env\.|secretmanager/i.test(
+    reachableText,
+  );
+  const touchesExternalApi =
+    /\b(?:fetch|axios|https?\.request|https?\.get|https?\.post|generativeModel|GoogleGenAI|vertex|openai|exec|execFile|spawn)\s*\(/i.test(
+      reachableText,
+    );
+  if (!touchesDbOrStorage && !touchesSecrets && !touchesExternalApi) {
+    return true;
+  }
+
+  return false;
+}
+
+const ESCAPER_FN_RE =
+  /^(?:[A-Za-z_$][A-Za-z0-9_$]*\.)?(?:escapeHtml|escapeHTML|escHtml|htmlEscape|encodeHtml|sanitizeHtml|DOMPurify\.sanitize|sanitize)\s*\(/;
+const STATIC_QUOTED_LITERAL_RE = /^(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')$/;
+const SAFE_NUMBER_COERCION_RE = /^(?:Number|parseInt|parseFloat|Math\.(?:round|floor|ceil|max|min))\s*\(/;
+const SAFE_DATE_FORMAT_RE =
+  /^new\s+Date\s*\([^)]*\)\s*\.\s*(?:toLocale(?:Date|Time)?String|toISOString)\s*\(/;
+
+function isSingleOuterCallMatching(expr: string, prefixRe: RegExp): boolean {
+  const trimmed = expr.trim();
+  const match = trimmed.match(prefixRe);
+  if (!match) return false;
+  const openIdx = trimmed.indexOf('(', Math.max(0, match[0].length - 1));
+  if (openIdx < 0) return false;
+  let depth = 0;
+  let quote: string | null = null;
+  for (let i = openIdx; i < trimmed.length; i++) {
+    const ch = trimmed[i] ?? '';
+    if (quote) {
+      if (ch === '\\') {
+        i += 1;
+        continue;
+      }
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      quote = ch;
+      continue;
+    }
+    if (ch === '(') depth += 1;
+    else if (ch === ')') {
+      depth -= 1;
+      if (depth === 0) return i === trimmed.length - 1;
+    }
+  }
+  return false;
+}
+
+function stripStatementSemicolonAndComment(text: string): string {
+  let quote: string | null = null;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i] ?? '';
+    if (quote) {
+      if (ch === '\\') {
+        i += 1;
+        continue;
+      }
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      quote = ch;
+      continue;
+    }
+    if (ch === '/' && text[i + 1] === '/') {
+      return text.slice(0, i).trim().replace(/;+\s*$/, '').trim();
+    }
+    if (ch === ';') {
+      return text.slice(0, i).trim();
+    }
+  }
+  return text.trim().replace(/;+\s*$/, '').trim();
+}
+
+function extractTemplateLiteralInfo(
+  rawRhs: string,
+): { interpolations: string[]; trailingCode: string } | null {
+  const trimmed = rawRhs.trimStart();
+  if (!trimmed.startsWith('`')) return null;
+  const interpolations: string[] = [];
+  let i = 1;
+  while (i < trimmed.length) {
+    const ch = trimmed[i] ?? '';
+    if (ch === '\\') {
+      i += 2;
+      continue;
+    }
+    if (ch === '`') {
+      const trailingCode = stripStatementSemicolonAndComment(trimmed.slice(i + 1));
+      return { interpolations, trailingCode };
+    }
+    if (ch === '$' && trimmed[i + 1] === '{') {
+      i += 2;
+      const exprStart = i;
+      let braceDepth = 1;
+      let innerQuote: string | null = null;
+      while (i < trimmed.length && braceDepth > 0) {
+        const inner = trimmed[i] ?? '';
+        if (innerQuote) {
+          if (inner === '\\') {
+            i += 2;
+            continue;
+          }
+          if (inner === innerQuote) innerQuote = null;
+          i += 1;
+          continue;
+        }
+        if (inner === '"' || inner === "'" || inner === '`') {
+          innerQuote = inner;
+          i += 1;
+          continue;
+        }
+        if (inner === '{') braceDepth += 1;
+        else if (inner === '}') {
+          braceDepth -= 1;
+          if (braceDepth === 0) break;
+        }
+        i += 1;
+      }
+      if (braceDepth !== 0) return null;
+      interpolations.push(trimmed.slice(exprStart, i).trim());
+      i += 1;
+      continue;
+    }
+    i += 1;
+  }
+  return null;
+}
+
+function isSimpleSafeLiteralRhs(rhs: string): boolean {
+  const clean = stripStatementSemicolonAndComment(rhs);
+  if (STATIC_QUOTED_LITERAL_RE.test(clean)) return true;
+  if (/^\d+(?:\.\d+)?$/.test(clean) || /^(?:true|false)$/.test(clean)) return true;
+  if (isSingleOuterCallMatching(clean, SAFE_NUMBER_COERCION_RE)) return true;
+  if (isSingleOuterCallMatching(clean, SAFE_DATE_FORMAT_RE)) return true;
+  return false;
+}
+
+function isSafeLocalConstant(
+  expr: string,
+  allLines: readonly string[],
+  sinkLineIdx: number,
+): boolean {
+  const clean = expr.trim();
+  if (!clean) return true;
+  if (isSimpleSafeLiteralRhs(clean)) return true;
+  if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(clean)) return false;
+
+  const esc = escapeRegExp(clean);
+  const start = Math.max(0, sinkLineIdx - 70);
+  const declRe = new RegExp(`(?:const|let)\\s+${esc}\\s*=\\s*(.+)$`);
+  const paramRe = new RegExp(`(?:function[^)]*\\b${esc}\\b|=>|\\{[^}]*\\b${esc}\\b[^}]*\\}\\s*=)`);
+  const assignRe = new RegExp(`(?:^|[^.\\w$])${esc}\\s*([+\\-*/&|^]?=)(?!=)\\s*(.*)$`);
+
+  let declIdx = -1;
+  for (let i = sinkLineIdx - 1; i >= start; i--) {
+    const l = allLines[i] ?? '';
+    if (declRe.test(l)) {
+      declIdx = i;
+      break;
+    }
+  }
+  if (declIdx < 0) return false;
+
+  // Reject if a closer enclosing function parameter shadows or supplies this identifier
+  for (let i = declIdx - 1; i >= Math.max(0, declIdx - 4); i--) {
+    const l = allLines[i] ?? '';
+    if (/\bfunction\b/.test(l) && new RegExp(`\\([^)]*\\b${esc}\\b[^)]*\\)`).test(l)) {
+      return false;
+    }
+  }
+  if (paramRe.test(allLines[declIdx] ?? '') && !declRe.test(allLines[declIdx] ?? '')) {
+    return false;
+  }
+
+  for (let i = declIdx; i < sinkLineIdx; i++) {
+    const l = (allLines[i] ?? '').trim();
+    if (!l || l.startsWith('//')) continue;
+    const am = l.match(assignRe);
+    if (!am) continue;
+    if (am[1] !== '=') return false;
+    if (!isSimpleSafeLiteralRhs(am[2] ?? '')) return false;
+  }
+  return true;
+}
+
+function extractDomSinkRhs(allLines: readonly string[], lineIdx: number, afterEquals: string): string {
+  const collected = [afterEquals];
+  const initialTrimmed = afterEquals.trimStart();
+  const limit = Math.min(allLines.length, lineIdx + 35);
+  if (initialTrimmed.startsWith('`') && !extractTemplateLiteralInfo(afterEquals)) {
+    for (let i = lineIdx + 1; i < limit; i++) {
+      collected.push(allLines[i] ?? '');
+      if (extractTemplateLiteralInfo(collected.join('\n'))) break;
+    }
+  } else if (initialTrimmed === '' || /\($/.test(initialTrimmed)) {
+    for (let i = lineIdx + 1; i < limit; i++) {
+      collected.push(allLines[i] ?? '');
+      const joined = collected.join('\n');
+      if (joined.trimStart().startsWith('`')) {
+        if (extractTemplateLiteralInfo(joined)) break;
+      } else if (joined.includes(';')) {
+        break;
+      }
+    }
+  }
+  return collected.join('\n');
+}
+
+function classifyDomSinkLine(
+  line: string,
+  idx: number,
+  allLines: readonly string[],
+): LinePredicateResult {
+  if (/\bdangerouslySetInnerHTML\s*=\s*\{/.test(line)) {
+    const win = allLines.slice(Math.max(0, idx - 6), Math.min(allLines.length, idx + 6)).join('\n');
+    if (/\b(?:application\/ld\+json|jsonLdString|JSON\.stringify)\b/.test(win)) {
+      return false;
+    }
+    if (/\b(?:DOMPurify\.sanitize|sanitizeHtml|escapeHtml|sanitize)\s*\(/.test(line)) {
+      return {
+        severityOverride: 'low',
+        rootCauseOverride:
+          'サニタイズ関数を経由していますが、dangerouslySetInnerHTML の利用箇所として継続監視対象（Low）に分類しました。',
+      };
+    }
+    return true;
+  }
+
+  if (/\bdocument\.write\s*\(/.test(line)) {
+    return true;
+  }
+
+  const assignMatch = line.match(/\.(?:innerHTML|outerHTML)\s*\+?=\s*(.*)$/);
+  if (!assignMatch) return false;
+
+  const rhs = extractDomSinkRhs(allLines, idx, assignMatch[1] ?? '');
+  if (/\[REDACTED_|<script\b|\bon[a-z]+\s*=|javascript:/i.test(rhs)) {
+    return true;
+  }
+
+  const expr = stripStatementSemicolonAndComment(rhs);
+  if (!expr) return true;
+  if (STATIC_QUOTED_LITERAL_RE.test(expr)) {
+    return false;
+  }
+
+  const tpl = extractTemplateLiteralInfo(rhs);
+  if (tpl) {
+    if (tpl.trailingCode !== '') return true;
+    if (tpl.interpolations.length === 0) return false;
+    let sawEscaper = false;
+    for (const interp of tpl.interpolations) {
+      if (isSingleOuterCallMatching(interp, ESCAPER_FN_RE)) {
+        sawEscaper = true;
+        continue;
+      }
+      if (isSafeLocalConstant(interp, allLines, idx)) {
+        continue;
+      }
+      return true;
+    }
+    if (!sawEscaper) return false;
+    return {
+      severityOverride: 'low',
+      rootCauseOverride:
+        'すべての動的補間式が escapeHtml / sanitize 系関数またはローカル定数を通過しているため危険度は Low です（より堅牢にするには textContent / createElement 構築を推奨）。',
+    };
+  }
+
+  if (isSingleOuterCallMatching(expr, ESCAPER_FN_RE)) {
+    return {
+      severityOverride: 'low',
+      rootCauseOverride:
+        '出力は escapeHtml / sanitize 系関数を経由しているため High ではなく Low に分離しました（Trusted Types 準拠には textContent / createElement を推奨）。',
+    };
+  }
+
+  return true;
 }
 
 export const STATIC_RULES: readonly StaticRule[] = [
@@ -125,26 +798,7 @@ export const STATIC_RULES: readonly StaticRule[] = [
       !/(?:^|\/)(?:pitch_deck\.html|pitch-figma\.html|public\/pitch\/|public\/(?:[a-z]{2}\/)?arc\/aegis\/map\/)/i.test(
         ctx.relativePath,
       ),
-    evaluate: (ctx) =>
-      findMatchingLines(
-        ctx,
-        (line, idx, all) => {
-          if (/\b(?:escapeHtml|sanitizeHtml|DOMPurify\.sanitize|sanitize)\s*\(/.test(line)) {
-            return false;
-          }
-          if (/\bdangerouslySetInnerHTML\s*=\s*\{/.test(line)) {
-            const win = all.slice(Math.max(0, idx - 6), Math.min(all.length, idx + 6)).join('\n');
-            if (/\b(?:application\/ld\+json|jsonLdString|JSON\.stringify)\b/.test(win)) {
-              return false;
-            }
-            return true;
-          }
-          return (
-            /\.(?:innerHTML|outerHTML)\s*\+?=\s*/.test(line) ||
-            /\bdocument\.write\s*\(/.test(line)
-          );
-        },
-      ),
+    evaluate: (ctx) => findMatchingLines(ctx, classifyDomSinkLine),
     rootCause:
       '信頼境界外の文字列が HTML パーサシンク（innerHTML / dangerouslySetInnerHTML / document.write）へ直接渡されると、任意の Script 実行（DOM-based XSS）が成立する構造になっています。',
     defensivePatch: `// 防御パッチ: textContent または Sanitizer API + CSP Trusted Types を強制
@@ -197,21 +851,71 @@ await execFileAsync('/usr/bin/git', ['status', '--', safeArg], { shell: false, t
     cwe: 'CWE-942',
     owaspAsvs: 'V14.5.3 Cross-Origin Resource Sharing',
     appliesTo: (ctx) => JS_TS_EXTS.has(ctx.ext) || ctx.baseName.startsWith('next.config'),
-    evaluate: (ctx) =>
-      findMatchingLines(
-        ctx,
-        (line) =>
-          /['"]Access-Control-Allow-Origin['"]\s*,\s*['"]\*['"]/.test(line) ||
-          /\borigin\s*:\s*(?:['"]\*['"]|true)\b/.test(line),
-      ),
+    evaluate: (ctx) => {
+      const fullNonComment = stripJsCommentsSimple(ctx.redactedContent);
+      const isFileGetMethodGuarded = /req\.method\s*!==\s*['"]GET['"]/.test(fullNonComment);
+      const hasSignedQueryStreamHelpers = /\b(?:extractQueryTicket|timingSafeEqual|createHmac|createVerify)\b/.test(
+        fullNonComment,
+      );
+      return findMatchingLines(ctx, (line, idx, all) => {
+        const isStarAcao = /['"]Access-Control-Allow-Origin['"]\s*,\s*['"]\*['"]/.test(line);
+        const isOriginConfig = /\borigin\s*:\s*(?:['"]\*['"]|true)\b/.test(line);
+        if (!isStarAcao && !isOriginConfig) return false;
+
+        const isOriginReflectTrue = /\borigin\s*:\s*true\b/.test(line);
+        const localWindow = stripJsCommentsSimple(
+          all.slice(Math.max(0, idx - 20), Math.min(all.length, idx + 25)).join('\n'),
+        );
+        const wideWindow = stripJsCommentsSimple(
+          all.slice(Math.max(0, idx - 80), Math.min(all.length, idx + 80)).join('\n'),
+        );
+
+        const hasCredentials =
+          /['"]Access-Control-Allow-Credentials['"]\s*,\s*['"]?true\b/i.test(wideWindow) ||
+          /\bcredentials\s*:\s*true\b/.test(wideWindow);
+        const readsCookieOrAuth =
+          /\b(?:req\.(?:cookies|signedCookies|session)\b|req\.headers(?:\.(?:cookie|authorization)|\[['"](?:cookie|authorization)['"]\])|req\.get\s*\(\s*['"](?:cookie|authorization)['"]\s*\)|cookies\s*\(\s*\)|headers\s*\(\s*\)\s*\.\s*get\s*\(\s*['"](?:cookie|authorization)['"]\s*\))/i.test(
+            wideWindow,
+          );
+
+        if (isOriginReflectTrue || hasCredentials || readsCookieOrAuth) {
+          return true;
+        }
+
+        const isGetHeadOnlyCors =
+          /['"]Access-Control-Allow-Methods['"]\s*,\s*['"]\s*(?:GET|HEAD|OPTIONS)(?:\s*,\s*(?:GET|HEAD|OPTIONS))*\s*['"]/i.test(
+            localWindow,
+          ) || isFileGetMethodGuarded;
+        const isPublicCacheOrSignedStream =
+          /\b(?:s-maxage|stale-while-revalidate)\b/i.test(wideWindow) ||
+          (/\bCache-Control\b/i.test(localWindow) && /\bpublic\b/i.test(wideWindow)) ||
+          /['"]Cross-Origin-Resource-Policy['"]\s*,\s*['"]cross-origin['"]/i.test(localWindow) ||
+          (hasSignedQueryStreamHelpers && /\bRange\b/.test(localWindow));
+
+        if (isGetHeadOnlyCors && isPublicCacheOrSignedStream) {
+          return false;
+        }
+
+        return {
+          severityOverride: 'low',
+          rootCauseOverride:
+            '状態なし・非認証（Cookie / Authorization / Allow-Credentials 未使用）エンドポイントでの Access-Control-Allow-Origin: "*" 検出です。資格情報付きでない限り重大露出（High）には当たりません（公開 CDN キャッシュ API へ安易に Vary: Origin を入れるとキャッシュ分割を招きます）。',
+          defensivePatchOverride: `// 資格情報や Authorization を扱わない公開 GET/HEAD API・クエリ署名ストリームでは "*" が正当設計です。
+// ※ 公開 CDN キャッシュ（s-maxage 等）へ安易に Vary: Origin を追加しないでください（キャッシュ分割の原因）。
+// ※ 逆に Cookie / Authorization / Credentials: true を併用する場合のみ明示 Allowlist を適用してください：
+// const ALLOWED_ORIGINS = new Set(['https://app.example.com']);`,
+        };
+      });
+    },
     rootCause:
-      'Access-Control-Allow-Origin に * や無条件反射（origin: true）を設定すると、悪意ある外部サイトから API 応答を読み取られる恐れがあります。',
-    defensivePatch: `// 防御パッチ: 明示的な許可オリジン Allowlist と Vary: Origin、Sec-Fetch-Site 検証を併用
+      'Cookie / Authorization 参照または Access-Control-Allow-Credentials: true と併用して Access-Control-Allow-Origin: * / origin: true を設定すると、クロスオリジンでの資格情報・非公開応答の読取が成立します。',
+    defensivePatch: `// 防御パッチ（Cookie / Authorization / Credentials 併用エンドポイントのみ適用）:
+// ※ 公開 CDN キャッシュ GET API（s-maxage 等）へ安易に Vary: Origin を付与するとキャッシュ効率が毀損するため適用対象を限定すること。
 const ALLOWED_ORIGINS = new Set(['https://app.example.com']);
 const origin = req.headers.origin;
-res.setHeader('Vary', 'Origin, Sec-Fetch-Site');
 if (origin && ALLOWED_ORIGINS.has(origin)) {
   res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Vary', 'Origin, Sec-Fetch-Site');
 }`,
     verificationHint: '未許可 Origin ヘッダを付与した OPTIONS/GET リクエストに対し Access-Control-Allow-Origin が返らないことを単体テストで確認。',
   },
@@ -291,14 +995,46 @@ const result = await db.query('SELECT id, email FROM users WHERE id = $1', [vali
     cwe: 'CWE-338',
     owaspAsvs: 'V6.2.1 & V6.3.1 Cryptographic Randomness & Approved Digests',
     appliesTo: (ctx) => JS_TS_EXTS.has(ctx.ext),
-    evaluate: (ctx) =>
-      findMatchingLines(
-        ctx,
-        (line) =>
-          /\bcreateHash\s*\(\s*['"](?:md5|sha1)['"]\s*\)/i.test(line) ||
-          (/\bMath\.random\s*\(\s*\)/.test(line) &&
-            /\b(?:token|nonce|csrf|secret|session|otp|apiKey|password|salt)\b/i.test(line)),
-      ),
+    evaluate: (ctx) => {
+      const isOperationalScript = /(?:^|\/)scripts\//i.test(ctx.relativePath);
+      return findMatchingLines(ctx, (line, idx, all) => {
+        const isMd5 = /\bcreateHash\s*\(\s*['"]md5['"]\s*\)/i.test(line);
+        const isSha1 = /\bcreateHash\s*\(\s*['"]sha1['"]\s*\)/i.test(line);
+        const isWeakMathRandom =
+          /\bMath\.random\s*\(\s*\)/.test(line) &&
+          /\b(?:token|nonce|csrf|secret|session|otp|apiKey|password|salt)\b/i.test(line);
+
+        if (!isMd5 && !isSha1 && !isWeakMathRandom) return false;
+
+        if (isMd5 && !isWeakMathRandom) {
+          const isAuthDigestLine =
+            /\b(?:password|passwd|pwd|token|session|jwt|auth|secret|sign|signature|otp|apiKey|csrf|nonce)\b/i.test(
+              line,
+            );
+          if (!isAuthDigestLine) {
+            const win = all
+              .slice(Math.max(0, idx - 15), Math.min(all.length, idx + 30))
+              .join('\n');
+            const isStorageChecksum =
+              /\b(?:md5Hash|Content-MD5|contentMd5|ContentMD5|gcsMd5|objectMd5)\b/.test(win) ||
+              (/\b(?:bucket\.file|\.save|\.getMetadata|createWriteStream|Storage)\b/.test(win) &&
+                /\.digest\s*\(\s*['"]base64['"]\s*\)/.test(line));
+            if (isStorageChecksum) {
+              return false;
+            }
+          }
+        }
+
+        if (isOperationalScript) {
+          return {
+            severityOverride: 'low',
+            rootCauseOverride:
+              'scripts/ 配下のオフライン運用スクリプトにおける非暗号論的ハッシュ / 乱数の使用です（本番リクエスト経路ではないため Low へ重み付け分離しました）。',
+          };
+        }
+        return true;
+      });
+    },
     rootCause:
       '`Math.random()` は内部状態を予測可能であり、`MD5` / `SHA-1` は衝突耐性が破綻しているため、セッショントークン・Nonce・署名ダイジェストの偽造リスクがあります。',
     defensivePatch: `// 防御パッチ: CSPRNG (crypto.randomBytes / crypto.randomUUID) と SHA-256 以上を使用
@@ -433,29 +1169,13 @@ allow update: if request.auth != null
     appliesTo: (ctx) => JS_TS_EXTS.has(ctx.ext) && ctx.redactedContent.includes('firebase-functions'),
     evaluate: (ctx) => {
       if (!/\bonRequest\s*\(/.test(ctx.redactedContent)) return [];
-      const hasAuthVerification =
-        ctx.redactedContent.includes('verifyIdToken') ||
-        ctx.redactedContent.includes('verifySessionCookie') ||
-        ctx.redactedContent.includes('appCheck') ||
-        ctx.redactedContent.includes('enforceAppCheck');
-      if (hasAuthVerification) return [];
       return findMatchingLines(
         ctx,
         (line, idx, all) => {
           if (!/\bonRequest\s*\(/.test(line)) return false;
-          const windowText = all
-            .slice(Math.max(0, idx - 5), Math.min(all.length, idx + 45))
-            .join('\n');
-          if (
-            /(?:wellKnown|apple-app-site-association|assetlinks|verifyAndDecodeAppleJws|constructEvent|verifyWebhook|timingSafeEqual|createHmac|stripe-signature|svix-signature)/i.test(
-              windowText,
-            )
-          ) {
-            return false;
-          }
-          return true;
+          return !shouldPassOnRequest(ctx, idx, all);
         },
-        2,
+        4,
       );
     },
     rootCause:
@@ -807,32 +1527,67 @@ steps:
   },
 ];
 
+function findContainingOrphanDirectory(
+  relPath: string,
+  orphanDirs: ReadonlySet<string> | undefined,
+): string | undefined {
+  if (!orphanDirs || orphanDirs.size === 0) return undefined;
+  for (const dir of orphanDirs) {
+    if (relPath === dir || relPath.startsWith(`${dir}/`)) {
+      return dir;
+    }
+  }
+  return undefined;
+}
+
 export function evaluateFileRules(ctx: FileContext): SecurityFinding[] {
   if (ctx.skipSelfPatternDefinitions === true || isNonProductionOrTemplateFile(ctx)) {
     return [];
   }
   const safeFilePath = redactSecrets(ctx.relativePath).redactedText;
+  const orphanDir = findContainingOrphanDirectory(
+    safeFilePath,
+    ctx.repoContext?.orphanDirectories,
+  );
   const findings: SecurityFinding[] = [];
   for (const rule of STATIC_RULES) {
     if (!rule.appliesTo(ctx)) continue;
+    const isCredentialLeakRule =
+      rule.ruleId === 'LNG-SEC-001' ||
+      rule.ruleId === 'LNG-SEC-005' ||
+      rule.ruleId === 'LNG-TS-004';
     const matches = rule.evaluate(ctx);
     for (const match of matches) {
+      const baseSeverity = match.severityOverride ?? rule.severity;
+      const effectiveSeverity: SeverityLevel =
+        orphanDir && !isCredentialLeakRule ? 'low' : baseSeverity;
+      const baseRootCause = match.rootCauseOverride ?? rule.rootCause;
+      const effectiveRootCause = orphanDir
+        ? `【孤立資産 (Orphan Asset): \`${orphanDir}/\`】CI・firebase.json・デプロイ定義から未参照のディレクトリです。パッチ修正ではなく「未使用ディレクトリの削除可否確認」を優先してください。 — ${baseRootCause}`
+        : baseRootCause;
+      const basePatch = match.defensivePatchOverride ?? rule.defensivePatch;
+      const effectivePatch = orphanDir
+        ? `# [最優先推奨] 未使用ディレクトリの削除可否確認（${orphanDir}/）\n# CI・firebase.json・デプロイ定義から未参照のため、パッチ修正前に退役済み資産として削除可能か確認してください。\n\n${basePatch}`
+        : basePatch;
+      const isOrphan = Boolean(orphanDir || match.orphanAsset);
+
       findings.push({
         id: `${rule.ruleId}:${safeFilePath}:${match.line}`,
         ruleId: rule.ruleId,
         title: rule.title,
         stack: rule.stack,
-        severity: rule.severity,
+        severity: effectiveSeverity,
         stride: rule.stride,
         cwe: rule.cwe,
         owaspAsvs: rule.owaspAsvs,
         filePath: safeFilePath,
         line: match.line,
         snippetRedacted: match.snippet,
-        rootCause: rule.rootCause,
-        defensivePatch: rule.defensivePatch,
+        rootCause: effectiveRootCause,
+        defensivePatch: effectivePatch,
         verificationHint: rule.verificationHint,
         source: 'static-rule',
+        ...(isOrphan ? { orphanAsset: true } : {}),
       });
     }
   }

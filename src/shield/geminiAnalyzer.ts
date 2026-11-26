@@ -877,6 +877,58 @@ export function buildDeterministicThreatSynthesis(scan: StaticScanResult): {
   return { executiveSummary, strideMatrix, priorityRoadmap };
 }
 
+export const FIRST_PRINCIPLES_REMEDIATION_GUARD_JA =
+  '本番互換性・CDNキャッシュ効率・既存セキュリティ境界を損なう場合はコードを無理に変更せず False Positive として報告すること。';
+
+export function buildRemediationPrompt(params: {
+  repoName: string;
+  findings: readonly SecurityFinding[];
+}): string {
+  const safeRepoName = sanitizeDisplayLabel(params.repoName);
+  const orphanFindings = params.findings.filter((f) => f.orphanAsset === true);
+  const activeFindings = params.findings.filter((f) => f.orphanAsset !== true);
+
+  const lines: string[] = [
+    `# ${safeRepoName} セキュリティ修正・検証プロンプト（LONGINUS Shield）`,
+    '',
+    `⚠️ 第一原理ガード（必須）: ${FIRST_PRINCIPLES_REMEDIATION_GUARD_JA}`,
+    '- git commit / git push / 本番デプロイは明示の Go があるまで実行しないこと。',
+  ];
+
+  if (orphanFindings.length > 0) {
+    lines.push(
+      '',
+      '## 1. 【孤立資産・削除可否確認優先】未使用ディレクトリの棚卸し（パッチ修正より先）',
+      'CI・firebase.json・デプロイ定義から未参照の孤立ディレクトリが検出されました。パッチ修正ではなく「未使用ディレクトリの削除可否確認」を最優先で実施してください：',
+    );
+    for (const f of orphanFindings.slice(0, 15)) {
+      lines.push(`- [${f.severity.toUpperCase()}] ${f.filePath}:${f.line} (${f.ruleId}) — 未使用資産として削除可否を確認`);
+    }
+  }
+
+  lines.push(
+    '',
+    orphanFindings.length > 0
+      ? '## 2. 稼働コード指摘事項の検証・修正'
+      : '## 1. 指摘事項の検証・修正',
+  );
+  if (activeFindings.length === 0) {
+    lines.push('重大な稼働コード指摘はありません。CI ゲート継続監視を維持してください。');
+  } else {
+    for (const f of activeFindings.slice(0, 25)) {
+      lines.push(`- [${f.severity.toUpperCase()}] ${f.filePath}:${f.line} (${f.ruleId}) — ${f.title}`);
+    }
+  }
+
+  lines.push(
+    '',
+    '## 検証コマンド',
+    'node /Users/takayukimiyano/StudioProjects/Longinus/src/shield/cli.ts --audit . --deterministic --fail-on high',
+  );
+
+  return redactSecrets(lines.join('\n')).redactedText;
+}
+
 export async function executeDefensiveAudit(params: {
   targetPath: string;
   mode: AnalysisMode;
@@ -996,6 +1048,10 @@ export async function executeDefensiveAudit(params: {
       : Math.round(stackAvg * 0.65 + strideAvg * 0.35);
 
   const destructionCertificate = executeEphemeralFernetDoDCycle(scan.architectureDigest);
+  const remediationPrompt = buildRemediationPrompt({
+    repoName: scan.repoName,
+    findings: mergedFindings,
+  });
   const durationMs = Math.max(1, Math.round(performance.now() - startedAt));
 
   const report: AuditReport = {
@@ -1016,6 +1072,7 @@ export async function executeDefensiveAudit(params: {
     tokenEstimate,
     overallDefenseScore,
     executiveSummary,
+    remediationPrompt,
     priorityRoadmap,
     strideMatrix,
     stackSummaries,

@@ -32,6 +32,7 @@ interface ParsedCliOptions {
   emitSarif: boolean;
   emitBlueprint: boolean;
   emitPatch: boolean;
+  emitPrompt: boolean;
   lang: ReportLanguage;
   audience: ConsultingAudience;
   mode: AnalysisMode;
@@ -168,6 +169,16 @@ function formatUnifiedBlueprintAndShield(
     }
   }
 
+  sectionLines.push(
+    '',
+    isJa
+      ? '### AI エージェント用・第一原理修正プロンプト'
+      : '### AI Agent First-Principles Remediation Prompt',
+    '```text',
+    shieldReport.remediationPrompt,
+    '```',
+  );
+
   return `${sectionLines.join('\n')}\n`;
 }
 
@@ -178,6 +189,7 @@ function parseCliArgs(args: readonly string[]): ParsedCliOptions {
       emitSarif: false,
       emitBlueprint: false,
       emitPatch: false,
+      emitPrompt: false,
       lang: 'en',
       audience: 'enterprise',
       mode: 'gemini-3.8-flash',
@@ -189,6 +201,7 @@ function parseCliArgs(args: readonly string[]): ParsedCliOptions {
   let emitSarif = false;
   let emitBlueprint = false;
   let emitPatch = false;
+  let emitPrompt = false;
   let lang: ReportLanguage = 'en';
   let audience: ConsultingAudience = 'enterprise';
   let explicitMode: AnalysisMode | undefined;
@@ -233,6 +246,10 @@ function parseCliArgs(args: readonly string[]): ParsedCliOptions {
     }
     if (arg === '--emit-patch') {
       emitPatch = true;
+      continue;
+    }
+    if (arg === '--emit-prompt' || arg === '--prompt' || arg === '--format=prompt') {
+      emitPrompt = true;
       continue;
     }
     if (arg === '--lang') {
@@ -308,8 +325,8 @@ function parseCliArgs(args: readonly string[]): ParsedCliOptions {
     throw new Error('At most one target directory path may be specified.');
   }
 
-  if (hasPortfolio && (hasAudit || emitSarif || emitBlueprint)) {
-    throw new Error('--portfolio cannot be combined with --audit, --sarif, or --blueprint.');
+  if (hasPortfolio && (hasAudit || emitSarif || emitBlueprint || emitPrompt)) {
+    throw new Error('--portfolio cannot be combined with --audit, --sarif, --blueprint, or --emit-prompt.');
   }
 
   if (hasPortfolio) {
@@ -319,6 +336,7 @@ function parseCliArgs(args: readonly string[]): ParsedCliOptions {
       emitSarif: false,
       emitBlueprint: false,
       emitPatch: false,
+      emitPrompt: false,
       lang,
       audience,
       mode: 'deterministic',
@@ -326,22 +344,23 @@ function parseCliArgs(args: readonly string[]): ParsedCliOptions {
     };
   }
 
-  if (hasAudit || emitSarif || emitBlueprint || positionals.length === 1 || explicitMode !== undefined) {
+  if (hasAudit || emitSarif || emitBlueprint || emitPrompt || positionals.length === 1 || explicitMode !== undefined) {
     return {
       command: 'audit',
       ...(positionals[0] !== undefined ? { targetPath: positionals[0] } : {}),
       emitSarif,
       emitBlueprint,
       emitPatch,
+      emitPrompt,
       lang,
       audience,
-      mode: explicitMode ?? (emitBlueprint ? 'deterministic' : 'gemini-3.8-flash'),
+      mode: explicitMode ?? (emitBlueprint || emitPrompt ? 'deterministic' : 'gemini-3.8-flash'),
       ...(failOn !== undefined ? { failOn } : {}),
     };
   }
 
   throw new Error(
-    'Specify --audit [path], --blueprint [path], --sarif [path], or --portfolio [path] (or run with no arguments to start the 127.0.0.1 dashboard).',
+    'Specify --audit [path], --blueprint [path], --sarif [path], --emit-prompt [path], or --portfolio [path] (or run with no arguments to start the 127.0.0.1 dashboard).',
   );
 }
 
@@ -398,6 +417,8 @@ export async function runCli(args: readonly string[], io?: CliIoHooks): Promise<
       } else if (parsed.emitSarif) {
         const sarif = buildSarifReport(report);
         out(`${JSON.stringify(sarif, null, 2)}\n`);
+      } else if (parsed.emitPrompt) {
+        out(`${report.remediationPrompt}\n`);
       } else {
         out(`${JSON.stringify(report, null, 2)}\n`);
       }

@@ -3,7 +3,15 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { redactSecrets, redactSecretsPreserveLines } from './redactor.ts';
-import { classifyFileStack, evaluateFileRules, type FileContext } from './rules.ts';
+import {
+  classifyFileStack,
+  evaluateFileRules,
+  parseLocalJsImports,
+  resolveRelativeModulePath,
+  type FileContext,
+  type JsModuleRecord,
+  type RepoScanContext,
+} from './rules.ts';
 import type {
   EngineeringArchetypeId,
   EngineeringCraftProfile,
@@ -486,6 +494,10 @@ export async function runStaticRepositoryScan(
 
     const findings: SecurityFinding[] = [];
     const manifestSet = new Set<string>();
+    const pendingRuleContexts: FileContext[] = [];
+    const firebaseJsonContents: string[] = [];
+    const governanceRefTexts: string[] = [];
+    let hasDeployGovernance = false;
     const untestableHotspots: UntestableCodeHotspot[] = [];
     let productionCodeFiles = 0;
     let testFiles = 0;
@@ -848,8 +860,20 @@ export async function runStaticRepositoryScan(
             ...(isLonginusSelfPatternFile ? { skipSelfPatternDefinitions: true } : {}),
           };
 
-          const fileFindings = evaluateFileRules(ctx);
-          findings.push(...fileFindings);
+          if (safeRelPath === 'firebase.json' || entry.name === 'firebase.json') {
+            firebaseJsonContents.push(redaction.redactedText);
+            hasDeployGovernance = true;
+            governanceRefTexts.push(redaction.redactedText);
+          } else if (isDeployGovernanceFile(safeRelPath, entry.name)) {
+            hasDeployGovernance = true;
+            governanceRefTexts.push(redaction.redactedText);
+          } else if (isBuildMetadataFile(safeRelPath, entry.name)) {
+            governanceRefTexts.push(redaction.redactedText);
+          }
+
+          if (!ctx.skipSelfPatternDefinitions) {
+            pendingRuleContexts.push(ctx);
+          }
 
           evaluateEngineeringCraftSignals({
             ctx,
@@ -888,6 +912,18 @@ export async function runStaticRepositoryScan(
       if (rootDirFh) {
         await rootDirFh.close().catch(() => undefined);
       }
+    }
+
+    const repoContext = buildRepoScanContext({
+      pendingRuleContexts,
+      manifestSet,
+      firebaseJsonContents,
+      governanceRefTexts,
+      hasDeployGovernance,
+    });
+    for (const ctx of pendingRuleContexts) {
+      ctx.repoContext = repoContext;
+      findings.push(...evaluateFileRules(ctx));
     }
 
     checkLockfileHygiene(
@@ -988,6 +1024,219 @@ function formatByteBudgetLabel(bytes: number): string {
     return `${Math.round(bytes / (1024 * 1024))}MB`;
   }
   return `${bytes}B`;
+}
+
+const JS_TS_MODULE_EXTS = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']);
+const RETIRED_SEGMENT_RE =
+  /^(?:legacy|deprecated|retired|archive|archived|old|unused|orphan)$/i;
+const SUBDIR_RUNTIME_MANIFEST_RE =
+  /^(?:Dockerfile(?:\..*)?|mix\.exs|Cargo\.toml|go\.mod|pyproject\.toml|pom\.xml)$/;
+const TOP_LEVEL_RUNTIME_BUCKET_RE =
+  /^(?:servers?|services?|microservices?|legacy|deprecated|retired|archived?|old|unused|orphan)$/i;
+
+function isDeployGovernanceFile(relPath: string, baseName: string): boolean {
+  if (
+    relPath.includes('.github/workflows/') &&
+    (baseName.endsWith('.yml') || baseName.endsWith('.yaml'))
+  ) {
+    return true;
+  }
+  if (/^(?:cloudbuild[^/]*\.(?:ya?ml|json)|(?:docker-)?compose[^/]*\.ya?ml|apphosting[^/]*\.ya?ml)$/i.test(baseName)) {
+    return true;
+  }
+  if (
+    baseName === 'fly.toml' ||
+    baseName === 'render.yaml' ||
+    baseName === 'railway.json' ||
+    baseName === 'vercel.json' ||
+    baseName === 'netlify.toml' ||
+    baseName === 'wrangler.toml'
+  ) {
+    return true;
+  }
+  if (relPath === 'Dockerfile' || (relPath.indexOf('/') === -1 && baseName.startsWith('Dockerfile.'))) {
+    return true;
+  }
+  return false;
+}
+
+function isBuildMetadataFile(relPath: string, baseName: string): boolean {
+  if (relPath.includes('/')) return false;
+  return (
+    baseName === 'package.json' ||
+    baseName === 'pnpm-workspace.yaml' ||
+    baseName === 'turbo.json' ||
+    baseName === 'pubspec.yaml' ||
+    baseName === 'Makefile' ||
+    baseName === 'Procfile'
+  );
+}
+
+function escapeScannerRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function stripYamlComments(text: string): string {
+  return text.replace(/^[ \t]*#.*$/gm, '');
+}
+
+function corpusReferencesDir(corpus: string, dir: string, topDir: string, leafDir: string): boolean {
+  const escDir = escapeScannerRegex(dir);
+  if (new RegExp(`(?:^|[^A-Za-z0-9_-])(?:\\./)?${escDir}(?:$|[^A-Za-z0-9_-])`).test(corpus)) {
+    return true;
+  }
+  const escTop = escapeScannerRegex(topDir);
+  if (
+    new RegExp(
+      `(?:^|[^A-Za-z0-9_-])(?:\\./)?${escTop}/|(?:[:=]\\s*["']?(?:\\./)?|["']|\\b(?:cd|pushd|build|copy)\\s+(?:\\./)?)${escTop}(?:["'\\s/]|$)`,
+      'm',
+    ).test(corpus)
+  ) {
+    return true;
+  }
+  if (leafDir !== topDir) {
+    const escLeaf = escapeScannerRegex(leafDir);
+    if (
+      new RegExp(
+        `(?:^|[^A-Za-z0-9_-])(?:\\./)?${escLeaf}(?:$|[^A-Za-z0-9_-])`,
+      ).test(corpus)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function buildRepoScanContext(params: {
+  pendingRuleContexts: readonly FileContext[];
+  manifestSet: ReadonlySet<string>;
+  firebaseJsonContents: readonly string[];
+  governanceRefTexts: readonly string[];
+  hasDeployGovernance: boolean;
+}): RepoScanContext {
+  const jsModules = new Map<string, JsModuleRecord>();
+  const jsPathSet = new Set<string>();
+  for (const ctx of params.pendingRuleContexts) {
+    if (!JS_TS_MODULE_EXTS.has(ctx.ext)) continue;
+    jsPathSet.add(ctx.relativePath);
+    jsModules.set(ctx.relativePath, {
+      relativePath: ctx.relativePath,
+      redactedContent: ctx.redactedContent,
+      redactedLines: ctx.redactedLines,
+      localImports: parseLocalJsImports(ctx.redactedContent),
+    });
+  }
+  for (const mod of jsModules.values()) {
+    for (const edge of mod.localImports) {
+      const resolved = resolveRelativeModulePath(mod.relativePath, edge.rawSpecifier, jsPathSet);
+      if (resolved) {
+        edge.targetRelativePath = resolved;
+      }
+    }
+  }
+
+  const publicHostingRewriteFunctions = new Set<string>();
+  const activeProtectedTopDirs = new Set<string>();
+  for (const rawFb of params.firebaseJsonContents) {
+    try {
+      const fb = JSON.parse(rawFb) as Record<string, unknown>;
+      const hostingList = Array.isArray(fb.hosting)
+        ? fb.hosting
+        : fb.hosting && typeof fb.hosting === 'object'
+          ? [fb.hosting]
+          : [];
+      for (const h of hostingList) {
+        if (!h || typeof h !== 'object') continue;
+        const hObj = h as Record<string, unknown>;
+        if (typeof hObj.public === 'string' && hObj.public.trim()) {
+          const top = hObj.public.trim().replace(/^\.\//, '').split('/')[0];
+          if (top) activeProtectedTopDirs.add(top);
+        }
+        const rewrites = Array.isArray(hObj.rewrites) ? hObj.rewrites : [];
+        for (const rw of rewrites) {
+          if (!rw || typeof rw !== 'object') continue;
+          const fn = (rw as Record<string, unknown>).function;
+          if (typeof fn === 'string' && fn.trim()) {
+            publicHostingRewriteFunctions.add(fn.trim());
+          } else if (fn && typeof fn === 'object') {
+            const fnId = (fn as Record<string, unknown>).functionId;
+            if (typeof fnId === 'string' && fnId.trim()) {
+              publicHostingRewriteFunctions.add(fnId.trim());
+            }
+          }
+        }
+      }
+      const functionsList = Array.isArray(fb.functions)
+        ? fb.functions
+        : fb.functions && typeof fb.functions === 'object'
+          ? [fb.functions]
+          : [];
+      for (const fnItem of functionsList) {
+        if (!fnItem || typeof fnItem !== 'object') continue;
+        const src = (fnItem as Record<string, unknown>).source;
+        if (typeof src === 'string' && src.trim()) {
+          const top = src.trim().replace(/^\.\//, '').split('/')[0];
+          if (top) activeProtectedTopDirs.add(top);
+        }
+      }
+      if (fb.functions && functionsList.length === 0) {
+        activeProtectedTopDirs.add('functions');
+      }
+      if (fb.flutter) {
+        for (const dirName of ['lib', 'android', 'ios', 'macos', 'windows', 'linux', 'web', 'assets']) {
+          activeProtectedTopDirs.add(dirName);
+        }
+      }
+    } catch {
+      // Ignore malformed firebase.json safely
+    }
+  }
+
+  for (const mod of jsModules.values()) {
+    const fromTop = mod.relativePath.includes('/') ? mod.relativePath.split('/')[0] : '.';
+    for (const edge of mod.localImports) {
+      if (!edge.targetRelativePath || !edge.targetRelativePath.includes('/')) continue;
+      const targetTop = edge.targetRelativePath.split('/')[0];
+      if (targetTop && targetTop !== fromTop && !TOP_LEVEL_RUNTIME_BUCKET_RE.test(fromTop ?? '')) {
+        activeProtectedTopDirs.add(targetTop);
+      }
+    }
+  }
+
+  const orphanDirectories = new Set<string>();
+  if (params.hasDeployGovernance) {
+    const governanceCorpus = stripYamlComments(params.governanceRefTexts.join('\n'));
+    for (const relPath of params.manifestSet) {
+      const dir = path.posix.dirname(relPath);
+      if (dir === '.' || dir.startsWith('.github')) continue;
+      const baseName = path.posix.basename(relPath);
+      const segments = dir.split('/');
+      const topDir = segments[0] ?? '';
+      const leafDir = path.posix.basename(dir);
+      if (!topDir || activeProtectedTopDirs.has(topDir)) continue;
+
+      const retiredSegmentIdx = segments.findIndex((seg) => RETIRED_SEGMENT_RE.test(seg));
+      const isRuntimeManifest = SUBDIR_RUNTIME_MANIFEST_RE.test(baseName);
+      const isTopRuntimeBucket = TOP_LEVEL_RUNTIME_BUCKET_RE.test(topDir);
+      if (retiredSegmentIdx < 0 && !isRuntimeManifest && !isTopRuntimeBucket) continue;
+
+      if (corpusReferencesDir(governanceCorpus, dir, topDir, leafDir)) continue;
+
+      if (retiredSegmentIdx >= 0) {
+        orphanDirectories.add(segments.slice(0, retiredSegmentIdx + 1).join('/'));
+      } else if (isTopRuntimeBucket) {
+        orphanDirectories.add(topDir);
+      } else {
+        orphanDirectories.add(dir);
+      }
+    }
+  }
+
+  return {
+    jsModules,
+    publicHostingRewriteFunctions,
+    orphanDirectories,
+  };
 }
 
 function detectVerifiedControls(

@@ -466,6 +466,7 @@ function renderIndexHtml(nonce: string, csrfToken: string): string {
           <button type="button" class="chip" data-stack-filter="flutter-firebase">Flutter / Firebase</button>
           <button type="button" class="chip" data-stack-filter="python-go-cloud">Python / Go / Cloud</button>
           <button type="button" class="chip" data-stack-filter="supply-chain-secrets">Secrets / CI</button>
+          <button type="button" class="btn btn-outline btn-sm" id="copy-prompt-btn">修正プロンプトをコピー</button>
         </div>
       </div>
 

@@ -1139,4 +1139,353 @@ describe('Longinus Defensive Security Invariants', () => {
       await fs.rm(tmpFleet, { recursive: true, force: true });
     }
   });
+
+  it('LNG-FB-003 resolves 1-to-2 hop helpers, public hosting.rewrites GET/HEAD pages, and zero-IO stubs while catching unauth mutations', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'longinus-fb003-context-'));
+    try {
+      await fs.mkdir(path.join(tmpDir, 'functions', 'lib'), { recursive: true });
+      await fs.writeFile(
+        path.join(tmpDir, 'firebase.json'),
+        JSON.stringify({
+          functions: { source: 'functions' },
+          hosting: [
+            {
+              target: 'site',
+              public: 'public',
+              rewrites: [{ source: '/*/news/**', function: { functionId: 'publicNewsPage' } }],
+            },
+          ],
+        }),
+        'utf8',
+      );
+      await fs.writeFile(
+        path.join(tmpDir, 'functions', 'lib', 'crypto_equal.js'),
+        [
+          'const crypto = require("node:crypto");',
+          'exports.safeCompare = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));',
+        ].join('\n'),
+        'utf8',
+      );
+      await fs.writeFile(
+        path.join(tmpDir, 'functions', 'lib', 'guard.js'),
+        [
+          'const { safeCompare } = require("./crypto_equal");',
+          'exports.verifyWebhookAuth = (req, expected) => safeCompare(req.get("authorization") || "", expected);',
+        ].join('\n'),
+        'utf8',
+      );
+      await fs.writeFile(
+        path.join(tmpDir, 'functions', 'lib', 'news_handler.js'),
+        [
+          'const cache = new Map();',
+          'exports.createNewsHandler = () => (req, res) => {',
+          '  if (req.method !== "GET" && req.method !== "HEAD") { res.status(405).end(); return; }',
+          '  cache.delete("stale");',
+          '  res.status(200).send("<html>news</html>");',
+          '};',
+        ].join('\n'),
+        'utf8',
+      );
+      await fs.writeFile(
+        path.join(tmpDir, 'functions', 'lib', 'catalog_helpers.js'),
+        [
+          'exports.isPublished = (doc) => doc && doc.publishStatus === "published";',
+          'exports.unusedSyncWriter = (db, doc) => db.runTransaction(async (tx) => tx.set(doc, {}));',
+        ].join('\n'),
+        'utf8',
+      );
+      await fs.writeFile(
+        path.join(tmpDir, 'functions', 'lib', 'admob_ssv.js'),
+        [
+          'const crypto = require("node:crypto");',
+          'exports.verifyAdCallback = (content, pubKey, sig) => crypto.verify("sha256", content, pubKey, sig);',
+        ].join('\n'),
+        'utf8',
+      );
+      await fs.writeFile(
+        path.join(tmpDir, 'functions', 'webhook.js'),
+        [
+          'const { onRequest } = require("firebase-functions/v2/https");',
+          'const { verifyWebhookAuth } = require("./lib/guard");',
+          'const { verifyAdCallback } = require("./lib/admob_ssv");',
+          'async function handleWebhook(req, res) {',
+          '  if (!verifyWebhookAuth(req, process.env.WEBHOOK_SECRET)) { res.status(401).end(); return; }',
+          '  await db.collection("events").add(req.body);',
+          '  res.status(200).end();',
+          '}',
+          'exports.partnerWebhook = onRequest({ region: "europe-west1" }, handleWebhook);',
+          'exports.admobSsvCallback = onRequest({ region: "europe-west1" }, async (req, res) => {',
+          '  if (!verifyAdCallback(req.originalUrl, req.key, req.sig)) { res.status(400).end(); return; }',
+          '  await db.collection("ledger").add(req.query);',
+          '  res.status(200).send("OK");',
+          '});',
+        ].join('\n'),
+        'utf8',
+      );
+      await fs.writeFile(
+        path.join(tmpDir, 'functions', 'public_endpoints.js'),
+        [
+          'const { onRequest } = require("firebase-functions/v2/https");',
+          'const { createNewsHandler } = require("./lib/news_handler");',
+          'const { isPublished } = require("./lib/catalog_helpers");',
+          'const newsHandler = createNewsHandler();',
+          'const responseCache = new Map();',
+          'const seen = new Set();',
+          'exports.publicNewsPage = onRequest({ region: "asia-northeast1" }, newsHandler);',
+          'exports.publicCatalog = onRequest({ region: "asia-northeast1" }, async (req, res) => {',
+          '  if (req.method !== "GET" && req.method !== "HEAD") { res.status(405).end(); return; }',
+          '  responseCache.delete("old"); seen.add("item-1");',
+          '  res.set("Cache-Control", "public, max-age=60, s-maxage=300");',
+          '  const snap = await db.collection("catalog").get();',
+          '  res.json({ count: snap.docs.filter(isPublished).length });',
+          '});',
+          'exports.retiredStub = onRequest({ cors: true }, (req, res) => {',
+          '  res.set("Cache-Control", "no-store");',
+          '  res.status(410).json({ retired: true });',
+          '});',
+          'exports.unprotectedMutator = onRequest({ region: "asia-northeast1" }, async (req, res) => {',
+          '  await db.collection("orders").add(req.body);',
+          '  res.status(200).json({ ok: true });',
+          '});',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const scan = await runStaticRepositoryScan(tmpDir);
+      const fb003 = scan.findings.filter((f) => f.ruleId === 'LNG-FB-003');
+      assert.equal(fb003.length, 1, `Expected only unprotectedMutator to trigger LNG-FB-003, got: ${JSON.stringify(fb003)}`);
+      assert.equal(fb003[0]?.filePath, 'functions/public_endpoints.js');
+      assert.equal(fb003[0]?.severity, 'high');
+      assert.match(fb003[0]?.snippetRedacted ?? '', /unprotectedMutator/);
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('LNG-TS-003 restricts High to credentialed/stateful CORS, passes public cached GET/signed streams, and downgrades stateless *', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'longinus-ts003-cors-'));
+    try {
+      await fs.mkdir(path.join(tmpDir, 'src'), { recursive: true });
+      await fs.writeFile(
+        path.join(tmpDir, 'src', 'public_catalog.js'),
+        [
+          'export function handler(req, res) {',
+          '  if (req.method !== "GET") { res.status(405).end(); return; }',
+          '  res.set("Access-Control-Allow-Origin", "*");',
+          '  res.set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");',
+          '  res.set("Cache-Control", "public, max-age=60, s-maxage=300");',
+          '  res.json({ ok: true });',
+          '}',
+        ].join('\n'),
+        'utf8',
+      );
+      await fs.writeFile(
+        path.join(tmpDir, 'src', 'signed_stream.js'),
+        [
+          'function extractQueryTicket(req) { return req.query.t; }',
+          'function setHeaders(res) {',
+          '  res.set("Cross-Origin-Resource-Policy", "cross-origin");',
+          '  res.set("Access-Control-Allow-Origin", "*");',
+          '  res.set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");',
+          '  res.set("Access-Control-Allow-Headers", "Range");',
+          '}',
+        ].join('\n'),
+        'utf8',
+      );
+      await fs.writeFile(
+        path.join(tmpDir, 'src', 'stateless_misc.js'),
+        [
+          'export function ping(req, res) {',
+          '  res.set("Access-Control-Allow-Origin", "*");',
+          '  res.json({ pong: true });',
+          '}',
+        ].join('\n'),
+        'utf8',
+      );
+      await fs.writeFile(
+        path.join(tmpDir, 'src', 'credentialed_api.js'),
+        [
+          'export function privateProfile(req, res) {',
+          '  const sessionCookie = req.headers.cookie;',
+          '  res.set("Access-Control-Allow-Origin", "*");',
+          '  res.set("Access-Control-Allow-Credentials", "true");',
+          '  res.json({ hasCookie: Boolean(sessionCookie) });',
+          '}',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const scan = await runStaticRepositoryScan(tmpDir);
+      const ts003 = scan.findings.filter((f) => f.ruleId === 'LNG-TS-003');
+      assert.equal(ts003.some((f) => f.filePath.includes('public_catalog.js')), false);
+      assert.equal(ts003.some((f) => f.filePath.includes('signed_stream.js')), false);
+      const stateless = ts003.find((f) => f.filePath.includes('stateless_misc.js'));
+      assert.equal(stateless?.severity, 'low');
+      assert.doesNotMatch(stateless?.defensivePatch ?? '', /res\.setHeader\('Vary',\s*'Origin/);
+      const cred = ts003.find((f) => f.filePath.includes('credentialed_api.js'));
+      assert.equal(cred?.severity, 'high');
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('LNG-TS-007 exempts GCS transfer checksums and downgrades offline scripts/ below production High', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'longinus-ts007-md5-'));
+    try {
+      await fs.mkdir(path.join(tmpDir, 'functions', 'scripts'), { recursive: true });
+      await fs.mkdir(path.join(tmpDir, 'src'), { recursive: true });
+      await fs.writeFile(
+        path.join(tmpDir, 'functions', 'scripts', 'upload_banner.js'),
+        [
+          'const crypto = require("node:crypto");',
+          'async function upload(bucket, bytes) {',
+          '  const localMd5 = crypto.createHash("md5").update(bytes).digest("base64");',
+          '  const sha256 = crypto.createHash("sha256").update(bytes).digest("hex");',
+          '  await bucket.file("banner.png").save(bytes, { metadata: { md5Hash: localMd5, metadata: { sha256 } } });',
+          '}',
+        ].join('\n'),
+        'utf8',
+      );
+      await fs.writeFile(
+        path.join(tmpDir, 'functions', 'scripts', 'legacy_report.js'),
+        [
+          'const crypto = require("node:crypto");',
+          'export const reportId = (s) => crypto.createHash("md5").update(s).digest("hex");',
+        ].join('\n'),
+        'utf8',
+      );
+      await fs.writeFile(
+        path.join(tmpDir, 'src', 'session_digest.js'),
+        [
+          'const crypto = require("node:crypto");',
+          'export const tokenDigest = (s) => crypto.createHash("md5").update(s).digest("hex");',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const scan = await runStaticRepositoryScan(tmpDir);
+      const ts007 = scan.findings.filter((f) => f.ruleId === 'LNG-TS-007');
+      assert.equal(ts007.some((f) => f.filePath.includes('upload_banner.js')), false);
+      assert.equal(ts007.find((f) => f.filePath.includes('legacy_report.js'))?.severity, 'low');
+      assert.equal(ts007.find((f) => f.filePath.includes('session_digest.js'))?.severity, 'high');
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('LNG-TS-001 passes pure static innerHTML="", classifies escapeHtml-only templates as Low, and keeps raw interpolations High', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'longinus-ts001-xss-'));
+    try {
+      await fs.mkdir(path.join(tmpDir, 'web'), { recursive: true });
+      await fs.writeFile(
+        path.join(tmpDir, 'web', 'clear_dom.js'),
+        [
+          'export function resetView(area) {',
+          '  area.innerHTML = "";',
+          '}',
+        ].join('\n'),
+        'utf8',
+      );
+      await fs.writeFile(
+        path.join(tmpDir, 'web', 'escaped_chat.js'),
+        [
+          'export function appendMessage(list, text) {',
+          '  const time = new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });',
+          '  const el = document.createElement("div");',
+          '  el.innerHTML = `',
+          '    <div class="bubble">',
+          '      ${escapeHtml(text)}',
+          '      <span>${time}</span>',
+          '    </div>',
+          '  `;',
+          '  list.appendChild(el);',
+          '}',
+        ].join('\n'),
+        'utf8',
+      );
+      await fs.writeFile(
+        path.join(tmpDir, 'web', 'raw_sink.js'),
+        [
+          'export function renderUnsafe(node, rawText, a, rawB) {',
+          '  node.innerHTML = `<div>${rawText}</div>`;',
+          '  node.outerHTML = `<span>${escapeHtml(a) + rawB}</span>`;',
+          '}',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const scan = await runStaticRepositoryScan(tmpDir);
+      const ts001 = scan.findings.filter((f) => f.ruleId === 'LNG-TS-001');
+      assert.equal(ts001.some((f) => f.filePath.includes('clear_dom.js')), false);
+      assert.equal(ts001.find((f) => f.filePath.includes('escaped_chat.js'))?.severity, 'low');
+      const rawHits = ts001.filter((f) => f.filePath.includes('raw_sink.js'));
+      assert.equal(rawHits.length, 2);
+      assert.ok(rawHits.every((h) => h.severity === 'high'));
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('flags unreferenced server/ Dockerfiles as orphanAsset deletion candidates and emits the first-principles guard in remediation prompts', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'longinus-orphan-prompt-'));
+    try {
+      await fs.mkdir(path.join(tmpDir, 'server', 'arc_server'), { recursive: true });
+      await fs.mkdir(path.join(tmpDir, 'active_worker'), { recursive: true });
+      await fs.mkdir(path.join(tmpDir, '.github', 'workflows'), { recursive: true });
+      await fs.writeFile(
+        path.join(tmpDir, 'firebase.json'),
+        JSON.stringify({ functions: { source: 'functions' } }),
+        'utf8',
+      );
+      await fs.writeFile(
+        path.join(tmpDir, '.github', 'workflows', 'ci.yml'),
+        'name: CI\non: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: docker build ./active_worker\n',
+        'utf8',
+      );
+      await fs.writeFile(
+        path.join(tmpDir, 'server', 'arc_server', 'Dockerfile'),
+        'FROM elixir:1.19-slim\nWORKDIR /app\n',
+        'utf8',
+      );
+      await fs.writeFile(
+        path.join(tmpDir, 'active_worker', 'Dockerfile'),
+        'FROM node:22-alpine\nWORKDIR /app\n',
+        'utf8',
+      );
+
+      const report = await executeDefensiveAudit({
+        targetPath: tmpDir,
+        mode: 'deterministic',
+      });
+      const orphanFinding = report.findings.find((f) => f.filePath === 'server/arc_server/Dockerfile');
+      const activeFinding = report.findings.find((f) => f.filePath === 'active_worker/Dockerfile');
+      assert.equal(orphanFinding?.orphanAsset, true);
+      assert.equal(orphanFinding?.severity, 'low');
+      assert.match(orphanFinding?.rootCause ?? '', /未使用ディレクトリの削除可否確認/);
+      assert.equal(activeFinding?.orphanAsset, undefined);
+      assert.equal(activeFinding?.severity, 'high');
+
+      assert.match(
+        report.remediationPrompt,
+        /本番互換性・CDNキャッシュ効率・既存セキュリティ境界を損なう場合はコードを無理に変更せず False Positive として報告すること。/,
+      );
+      assert.match(report.remediationPrompt, /孤立資産・削除可否確認優先/);
+
+      let stdout = '';
+      const code = await runCli(['--audit', tmpDir, '--emit-prompt'], {
+        writeStdout: (chunk) => {
+          stdout += chunk;
+        },
+        writeStderr: () => undefined,
+      });
+      assert.equal(code, 0);
+      assert.match(
+        stdout,
+        /本番互換性・CDNキャッシュ効率・既存セキュリティ境界を損なう場合はコードを無理に変更せず False Positive として報告すること。/,
+      );
+      assert.match(stdout, /未使用ディレクトリの削除可否確認/);
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
+  });
 });
